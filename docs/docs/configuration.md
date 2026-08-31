@@ -1,6 +1,6 @@
 ---
 title: Configuration
-description: TOML, environment variables, and CLI flags for RavenGuard.
+description: TOML, environment variables, and CLI flags.
 ---
 
 # Configuration
@@ -12,7 +12,7 @@ Precedence (highest wins):
 3. TOML file (`-config` / `RG_CONFIG`)
 4. Built-in defaults
 
-See [`configs/ravenguard.toml`](https://github.com/Quad4-Software/ravenguard/blob/main/configs/ravenguard.toml) for a full example.
+Full example: [`configs/ravenguard.toml`](https://github.com/Quad4-Software/ravenguard/blob/main/configs/ravenguard.toml).
 
 ## Common flags
 
@@ -42,7 +42,7 @@ http = ":8080"
 # key_file = "/certs/privkey.pem"
 ```
 
-Most deployments keep RavenGuard on plain HTTP behind the reverse proxy and leave TLS at the edge.
+Typical layout: RavenGuard on plain HTTP behind the reverse proxy, TLS at the edge.
 
 ## Upstream
 
@@ -62,7 +62,7 @@ interval = "10s"
 timeout = "3s"
 ```
 
-Env helpers: `RG_UPSTREAM_URL`, `RG_UPSTREAM_HEALTH_ENABLED`, `RG_UPSTREAM_HEALTH_PATH`.
+Env: `RG_UPSTREAM_URL`, `RG_UPSTREAM_HEALTH_ENABLED`, `RG_UPSTREAM_HEALTH_PATH`.
 
 ## Trust
 
@@ -111,7 +111,7 @@ per_path = false
 challenge_over = true
 ```
 
-When `challenge_over` is true, over-limit clients can be sent through the challenge path instead of an immediate hard reject, depending on challenge settings.
+When `challenge_over` is true, over-limit clients may receive a challenge instead of an immediate reject, depending on challenge settings.
 
 ## Protect
 
@@ -130,11 +130,11 @@ attack_score = 90
 write_method_cost = 3
 ```
 
-Blocks common path and query exploit probes, caps body/URL/header size, limits concurrency, charges POST/PUT/PATCH/DELETE more against the rate limiter, and temp-bans clients after repeated strikes.
+Blocks common path and query exploit probes. Caps body, URL, and header size. Limits concurrency. Charges POST/PUT/PATCH/DELETE more against the rate limiter. Temp-bans clients after repeated strikes.
 
 ## Detect
 
-HTTP scoring adds points for scanner and AI User-Agents, missing browser headers, probe paths, soft behavior bursts and path fan-out, and optional proxy bot-score headers. Scores at `challenge_score` trigger the JS challenge. `block_score` or repeated challenge strikes hard-block.
+HTTP scoring adds points for scanner and AI User-Agents, missing browser headers, probe paths, behavior bursts, path fan-out, and optional proxy bot-score headers. Scores at `challenge_score` trigger the JS challenge. `block_score` or repeated challenge strikes hard-block.
 
 ```toml
 [detect]
@@ -211,7 +211,7 @@ See [Privacy](./privacy.md).
 
 ## Sandbox (Landlock + seccomp-bpf)
 
-Linux-only process hardening. Default is `best_effort` so older kernels keep running.
+Linux-only. Default is `best_effort` so older kernels keep running.
 
 ```toml
 [sandbox]
@@ -233,10 +233,10 @@ deny_action = "errno"  # errno | kill_thread | kill_process | trap | log
 | Mode | Behavior |
 |------|----------|
 | `off` | Disabled |
-| `try` | Apply with graceful ABI degrade; any failure is logged and ignored |
-| `best_effort` | Same soft-fail, Landlock uses `BestEffort()` so missing LSM still succeeds |
+| `try` | Apply with graceful ABI degrade. Failure is logged and ignored |
+| `best_effort` | Soft-fail. Landlock uses `BestEffort()` so missing LSM still succeeds |
 | `enforce` | Hard-fail startup if Landlock ABI or seccomp cannot be applied |
 
 Env: `RG_SANDBOX_MODE`, `RG_SANDBOX_LANDLOCK_MODE`, `RG_SANDBOX_SECCOMP_MODE`, `RG_SANDBOX_SECCOMP_DENY_ACTION`, `RG_SANDBOX_LANDLOCK_RESTRICT_NET`, `RG_SANDBOX_LANDLOCK_RESTRICT_SCOPED`, `RG_SANDBOX_LANDLOCK_IGNORE_MISSING`.
 
-When Landlock network rules are enabled, listeners use classic TCP (not Multipath TCP) so bind/connect rules can take effect.
+When Landlock network rules are enabled, listeners use classic TCP (not Multipath TCP) so bind/connect rules apply.

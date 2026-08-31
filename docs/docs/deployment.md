@@ -1,21 +1,19 @@
 ---
 title: Deployment
-description: Place RavenGuard behind a reverse proxy and in front of your origin.
+description: Reverse proxy placement, Docker, and real-IP trust settings.
 ---
 
 # Deployment
 
 ## Topology
 
-Terminate TLS at your reverse proxy, forward to RavenGuard on loopback or a private network, then to the origin:
+Terminate TLS at the reverse proxy. Forward to RavenGuard on loopback or a private network, then to the origin:
 
 ```text
 Client -> nginx / Caddy / Traefik -> RavenGuard -> app
 ```
 
-Publish TCP `80`/`443` and UDP `443` on the reverse proxy, not necessarily on RavenGuard itself.
-
-Set:
+Publish TCP `80`/`443` and UDP `443` on the reverse proxy. RavenGuard does not need public listeners.
 
 ```toml
 [trust]
@@ -26,7 +24,7 @@ proto_header = "X-Forwarded-Proto"
 proxy_protocol = false
 ```
 
-Use `proto_header` so clearance cookies get the Secure flag when TLS ends at the proxy.
+`proto_header` sets the clearance cookie Secure flag when TLS ends at the proxy.
 
 ## Binary
 
@@ -36,8 +34,6 @@ make build
   -upstream http://127.0.0.1:8000 \
   -challenge-secret "$RG_CHALLENGE_SECRET"
 ```
-
-Suggested layout:
 
 | Path | Purpose |
 |------|---------|
@@ -54,25 +50,23 @@ cd deploy
 docker compose up --build
 ```
 
-Mount config and blocklists, set `RG_CHALLENGE_SECRET` and `QFEEDS_API_TOKEN` when needed, and point `upstream.url` at your app service. The sample stack exposes RavenGuard on `8080` and includes TCP/UDP `8443` for optional TLS or QUIC listeners.
+Mount config and blocklists. Set `RG_CHALLENGE_SECRET` and `QFEEDS_API_TOKEN` when needed. Point `upstream.url` at the app service. The sample stack exposes RavenGuard on `8080` and includes TCP/UDP `8443` for optional TLS or QUIC.
 
-The compose file enables Landlock and in-process seccomp-bpf via `[sandbox]` (default `best_effort`), drops all capabilities, sets `no-new-privileges`, mounts a read-only root with `/tmp` tmpfs, and applies [`deploy/seccomp-ravenguard.json`](https://github.com/Quad4-Software/ravenguard/blob/main/deploy/seccomp-ravenguard.json) so the container seccomp profile allows `landlock_*` and `seccomp` for the in-process filters.
+The compose file enables Landlock and in-process seccomp-bpf via `[sandbox]` (default `best_effort`), drops all capabilities, sets `no-new-privileges`, mounts a read-only root with `/tmp` tmpfs, and applies [`deploy/seccomp-ravenguard.json`](https://github.com/Quad4-Software/ravenguard/blob/main/deploy/seccomp-ravenguard.json) so the container seccomp profile allows `landlock_*` and `seccomp`.
 
-Override with `RG_SANDBOX_MODE=try` or `enforce` as needed. Host kernels without Landlock still start under `try` / `best_effort`.
+Override with `RG_SANDBOX_MODE=try` or `enforce` as needed. Hosts without Landlock still start under `try` / `best_effort`.
 
 ## PROXY protocol and real IP
 
-Behind a load balancer, set `trust.mode = "behind_proxy"`, list every hop in `trust.trusted_proxies`, and choose one of:
+Set `trust.mode = "behind_proxy"`, list every hop in `trust.trusted_proxies`, and choose one of:
 
-- `trust.real_ip_header = "X-Real-IP"` (recommended for one trusted hop)
+- `trust.real_ip_header = "X-Real-IP"` (one trusted hop)
 - `trust.real_ip_header = "X-Forwarded-For"` (rightmost untrusted hop)
 - `trust.proxy_protocol = true`
 
-Mixing untrusted forwarded headers without a tight `trusted_proxies` list lets clients spoof identity. RavenGuard will not start in `behind_proxy` mode without that list.
+Untrusted forwarded headers without a tight `trusted_proxies` list allow client IP spoofing. RavenGuard will not start in `behind_proxy` mode without that list.
 
 ## Unix upstream
-
-Forward to a local socket instead of TCP:
 
 ```toml
 [upstream]
@@ -82,8 +76,6 @@ response_header_timeout = "30s"
 ```
 
 ## Upstream health
-
-Optional active checks before sending traffic:
 
 ```toml
 [upstream.health]
@@ -97,6 +89,6 @@ timeout = "3s"
 
 - Replace the example challenge secret
 - Keep `ui.test_mode = false`
-- Hash client IPs unless you have a reason not to
-- Reload-friendly blocklist paths on durable storage
-- Confirm the proxy forwards `X-Forwarded-Proto` (or your configured proto header)
+- Keep `privacy.hash_client_ip = true` unless raw addresses are required
+- Store blocklist files on durable storage
+- Confirm the proxy forwards `X-Forwarded-Proto` (or the configured proto header)

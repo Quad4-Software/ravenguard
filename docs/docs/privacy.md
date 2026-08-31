@@ -1,11 +1,11 @@
 ---
 title: Privacy
-description: Client IP hashing, log redaction, and retention controls.
+description: Client IP hashing, log redaction, and retention.
 ---
 
 # Privacy
 
-RavenGuard defaults to privacy-friendly client identity handling. These are engineering controls, not a legal certification.
+By default, RavenGuard hashes client IPs for rate limits, behavior state, and logs.
 
 ## Defaults
 
@@ -20,18 +20,18 @@ retention = "30m"
 
 With hashing on:
 
-- Rate limits, 404 tracking, behavior windows, and clearance binding use a pseudonymous key
-- Logs prefer a hash instead of the raw address when `log_ip = "hash"`
-- Soft in-memory state is bounded by `retention`
+- Rate limits, 404 tracking, behavior windows, and clearance binding use a hashed key
+- Logs use a hash instead of the raw address when `log_ip = "hash"`
+- In-memory soft state is bounded by `retention`
 
 ## Secrets
 
-If `ip_hash_secret` is empty, RavenGuard derives hashing material from `challenge.secret`. In production:
+If `ip_hash_secret` is empty, hashing material is derived from `challenge.secret`. In production:
 
 1. Set a strong `RG_CHALLENGE_SECRET`
-2. Optionally set a dedicated `RG_PRIVACY_IP_HASH_SECRET` if you want hash rotation independent of challenge cookies
+2. Optionally set `RG_PRIVACY_IP_HASH_SECRET` to rotate hashes independently of challenge cookies
 
-Rotating either secret invalidates derived identities and existing clearance cookies that depended on them.
+Rotating either secret invalidates derived identities and clearance cookies that depended on them.
 
 ## Log IP modes
 
@@ -41,16 +41,16 @@ Rotating either secret invalidates derived identities and existing clearance coo
 | `hash` | Log the privacy hash (default) |
 | `full` | Log the resolved client IP |
 
-Prefer `hash` or `off` unless debugging requires raw addresses.
+Use `hash` or `off` unless debugging requires raw addresses.
 
 ## Challenge page notice
-
-Set `privacy_notice_url` to surface a link on the challenge interstitial:
 
 ```toml
 [privacy]
 privacy_notice_url = "https://example.com/privacy"
 ```
+
+When set, the challenge page includes a link to that URL.
 
 ## Env vars
 

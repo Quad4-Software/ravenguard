@@ -1,24 +1,24 @@
 ---
 sidebar_position: 1
 title: Getting started
-description: Install RavenGuard and put it between your reverse proxy and origin.
+description: Build RavenGuard and place it between a reverse proxy and an origin.
 ---
 
 # Getting started
 
-RavenGuard is an application guard for HTTP origins. Typical topology:
+RavenGuard is an HTTP application guard. Topology:
 
 ```text
 Client -> reverse proxy (TLS) -> RavenGuard -> origin
 ```
 
-It sits behind nginx, Caddy, Traefik, or a similar edge, uses the real client IP your proxy sends, and forwards allowed traffic to your app over HTTP or a unix socket.
+It reads the client IP from trusted proxy headers and forwards allowed requests to an HTTP or unix-socket upstream.
 
 ## Requirements
 
 - Go 1.26.6 or newer to build from source
 - A reverse proxy that terminates TLS and forwards the client address
-- An upstream origin listening on TCP or a unix socket
+- An upstream origin on TCP or a unix socket
 
 ## Build and run
 
@@ -29,7 +29,7 @@ make build
 ./bin/ravenguard -config configs/ravenguard.toml
 ```
 
-Point `upstream.url` at your app and set a production challenge secret:
+Set `upstream.url` and a production challenge secret:
 
 ```bash
 ./bin/ravenguard \
@@ -45,17 +45,17 @@ cd deploy
 docker compose up --build
 ```
 
-The compose file builds RavenGuard, mounts an example config and blocklists, and proxies to a sample `whoami` origin on port `8080`.
+The compose file builds RavenGuard, mounts sample config and blocklists, and proxies to a `whoami` origin on port `8080`.
 
 ## First checks
 
-1. Confirm `trust.mode = "behind_proxy"` and list every trusted hop in `trust.trusted_proxies`.
+1. Set `trust.mode = "behind_proxy"` and list every trusted hop in `trust.trusted_proxies`.
 2. Prefer `real_ip_header = "X-Real-IP"` when the proxy sets a single client address.
 3. Set `RG_CHALLENGE_SECRET` (min 16 characters, not `change-me*`) before exposing the challenge path.
-4. Leave `ui.test_mode` off in production. Use it locally to preview challenge and block pages.
+4. Keep `ui.test_mode` off outside local preview use.
 
-## What to read next
+## Next
 
 - [Architecture](./architecture.md) for the request pipeline
 - [Deployment](./deployment.md) for proxy and Docker layouts
-- [Configuration](./configuration.md) for the full TOML and env surface
+- [Configuration](./configuration.md) for TOML, env, and flags

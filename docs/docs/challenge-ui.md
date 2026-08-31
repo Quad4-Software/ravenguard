@@ -1,17 +1,17 @@
 ---
 title: Challenge and UI
-description: Browser proof-of-work, clearance cookies, and interstitial pages.
+description: Proof-of-work, clearance cookies, and interstitial pages.
 ---
 
 # Challenge and UI
 
-RavenGuard can present a dark interstitial page that runs a JavaScript proof-of-work puzzle and a compact browser environment probe before issuing a clearance cookie.
+When enabled, RavenGuard serves an interstitial that runs a JavaScript proof-of-work puzzle and a browser environment probe, then issues a clearance cookie.
 
 ## Modes
 
 | Mode | Behavior |
 |------|----------|
-| `detect` | Challenge when heuristics, rate-limit policy, or high-404 policy say so |
+| `detect` | Challenge when heuristics, rate-limit policy, or high-404 policy require it |
 | `always` | Challenge every request that lacks a valid clearance cookie |
 
 ```toml
@@ -38,13 +38,13 @@ When TLS terminates upstream, `trust.proto_header` (default `X-Forwarded-Proto`)
 
 ## Environment probe
 
-The challenge page also sends a compact environment report covering:
+The challenge page reports:
 
 - `navigator.webdriver` and related automation markers
-- Playwright / automation fingerprints the page can observe
-- Interaction and solve timing signals
+- Playwright / automation fingerprints observable from the page
+- Interaction and solve timing
 
-Automation-positive reports are refused clearance. Sophisticated spoofing can still lie in JavaScript. Treat the challenge as friction, not a cryptographic guarantee.
+Automation-positive reports are refused clearance. Client-side checks can be spoofed.
 
 ## Optional captcha hook
 
@@ -87,7 +87,7 @@ Configured under `[site]`:
 |-----|---------|
 | `public_url` | Canonical and Open Graph base |
 | `description` | Meta description |
-| `og_image` | Social image (defaults relative to public URL + raven asset) |
+| `og_image` | Social image (defaults to public URL + raven asset) |
 | `theme_color` | Browser theme color (`#050505` by default) |
 | `robots` | Robots meta |
 | `lang` | HTML lang |
@@ -99,4 +99,4 @@ Served assets:
 - `/_rg/static/favicon.ico` and PNG icons
 - `/_rg/static/raven.png`
 
-Default robots meta is `noindex, nofollow` because these pages are guard interstitials, not marketing content.
+Default robots meta is `noindex, nofollow`.

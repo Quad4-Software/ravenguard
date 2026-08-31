@@ -5,7 +5,7 @@ description: Heuristic scoring, behavior windows, and proxy bot signals.
 
 # Detection
 
-The detect stage scores suspicious HTTP clients and either challenges or blocks them before the origin sees the request.
+The detect stage scores HTTP clients. Scores at or above the configured thresholds challenge or block before the origin.
 
 ## Score thresholds
 
@@ -16,31 +16,27 @@ challenge_score = 40
 block_score = 90
 ```
 
-- Reach `challenge_score` to send the browser challenge (when challenge is enabled)
-- Reach `block_score`, or accumulate repeated challenge strikes, to hard-block
+- At `challenge_score`, send the browser challenge (when challenge is enabled)
+- At `block_score`, or after repeated challenge strikes, hard-block
 
 ## HTTP heuristics
 
-Points can be added for:
-
-| Signal | Config key | Default idea |
-|--------|------------|--------------|
-| Missing User-Agent | `missing_ua_score` | Empty UA looks non-browser |
+| Signal | Config key | Default |
+|--------|------------|---------|
+| Missing User-Agent | `missing_ua_score` | Empty UA |
 | Scanner UA | `scanner_ua_score` | Known scanner / tool strings |
 | AI crawler UA | `ai_ua_score` | Common AI fetch agents |
 | Probe paths | `probe_path_score` | Exploit and recon URLs |
-| Odd methods | `odd_method_score` | Unusual verbs for a site |
-| Missing Accept | `missing_accept_score` | Incomplete browser profile |
-| Missing Accept-Language | `missing_accept_lang_score` | Incomplete browser profile |
+| Odd methods | `odd_method_score` | Unusual HTTP methods |
+| Missing Accept | `missing_accept_score` | Incomplete browser headers |
+| Missing Accept-Language | `missing_accept_lang_score` | Incomplete browser headers |
 | Missing Sec-Fetch | `missing_sec_fetch_score` | Missing modern browser hints |
 | Sec-CH-UA mismatch | `sec_ch_ua_mismatch_score` | Client hints disagree |
 | `*/*` Accept as browser | `star_accept_browser_score` | Overly generic Accept |
 
-Tune scores to your traffic. Raising `challenge_score` reduces friction. Lowering it challenges earlier.
+Raise `challenge_score` to challenge less often. Lower it to challenge earlier.
 
 ## Behavior windows
-
-Short-window trackers catch soft abuse that single-request heuristics miss:
 
 ```toml
 [detect]
@@ -57,7 +53,7 @@ behavior_strike_score = 25
 - **Path fan-out** scores clients that hit many distinct paths quickly
 - **Strikes** escalate clients that keep tripping soft signals
 
-Privacy hashing applies to these trackers when enabled, and `privacy.retention` bounds how long soft state is kept.
+Privacy hashing applies when enabled. `privacy.retention` bounds how long this state is kept.
 
 ## High 404 policy
 
@@ -68,11 +64,9 @@ high_404_window = "1m"
 high_404_action = "challenge"   # or "block" / "off"
 ```
 
-Clients that generate many origin 404s in a short window can be challenged or blocked. Useful against content scrapers and blind path scanners.
+Clients that produce many origin 404s in the window can be challenged or blocked.
 
 ## Proxy bot signals
-
-If your edge already computes bot reputation, forward it:
 
 ```toml
 [detect.proxy_signals]
@@ -82,15 +76,15 @@ ja4_header = "X-JA4"
 low_score_points = 40
 ```
 
-TLS fingerprints are not reconstructed after the reverse proxy. Headers like `X-JA4` or Cloudflare bot scores are the practical way to reuse edge signals.
+TLS fingerprints are not reconstructed after the reverse proxy. Forward edge headers such as `X-JA4` or Cloudflare bot scores to reuse them.
 
 ## Combined with protect
 
-Protect still handles size caps, concurrency, exploit probes, and temp bans independently. Detection is about likelihood scoring. Protect is about hard resource and attack constraints. Use both.
+Protect handles size caps, concurrency, exploit probes, and temp bans. Detection handles likelihood scoring. Both stages run independently.
 
-## Realistic expectations
+## Limits
 
-- Obvious scanners and scrapers are caught cheaply
-- Automation that fails the challenge env probe is blocked at the gate
-- Fully browser-like agents that solve PoW can still pass
-- Keep allowlisting of verified search bots as a future ops concern. Do not assume UA strings alone prove legitimacy
+- Obvious scanners and scrapers are scored and challenged or blocked
+- Automation that fails the challenge env probe is denied clearance
+- Browser-like agents that solve PoW can pass
+- Verified search-bot allowlisting is not implemented. Do not treat User-Agent strings alone as proof of legitimacy

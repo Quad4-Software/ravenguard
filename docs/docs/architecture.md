@@ -1,31 +1,27 @@
 ---
 title: Architecture
-description: How RavenGuard resolves clients, filters abuse, and forwards to origin.
+description: Client resolution, filter stages, and upstream forwarding.
 ---
 
 # Architecture
-
-Primary path:
 
 ```text
 Client -> reverse proxy (TLS termination) -> RavenGuard -> origin
 ```
 
-RavenGuard owns application-layer controls after TLS ends. Volumetric DDoS still belongs at the edge or CDN.
+RavenGuard applies application-layer controls after TLS termination. Volumetric DDoS mitigation belongs at the edge or CDN.
 
 ## Request pipeline
 
-Every request walks this ordered path:
-
 1. **Client IP** from trusted `X-Real-IP`, an `X-Forwarded-For` walk, or PROXY protocol
 2. **IP / DNS / UA blocklists** loaded from files and reloaded on an interval
-3. **Optional Q-Feeds cache** for malware IP and domain intel
-4. **Rate limit** keyed by a privacy-safe client identity (hashed IP by default). Write methods cost more
-5. **Protect** size limits, concurrency shedding, attack signatures, and temp bans
+3. **Optional Q-Feeds cache** for malware IP and domain entries
+4. **Rate limit** keyed by privacy client identity (hashed IP by default). Write methods cost more
+5. **Protect** size limits, concurrency caps, attack signatures, and temp bans
 6. **Detect** HTTP heuristics, short-window behavior, and optional proxy bot-score headers
 7. **Challenge or block**, otherwise **proxy** to the origin
 
-Upstream forwarding sets `X-Real-IP` and rebuilds `X-Forwarded-For` from the resolved client IP. It does not append onto client-spoofed prior values.
+Upstream forwarding sets `X-Real-IP` and rebuilds `X-Forwarded-For` from the resolved client IP. It does not append client-supplied prior values.
 
 ## Packages
 
@@ -48,13 +44,13 @@ Upstream forwarding sets `X-Real-IP` and rebuilds `X-Forwarded-For` from the res
 
 ## Detection limits
 
-Scanners and scrapers with obvious User-Agents or missing browser headers are scored and challenged or blocked. Browser-automated agents that set `navigator.webdriver` or skip interaction fail the challenge environment probe.
+Requests with known scanner User-Agents or missing browser headers are scored and may be challenged or blocked. Agents that set `navigator.webdriver` or skip interaction fail the challenge environment probe.
 
-Motivated agents that fully spoof a real browser and solve proof-of-work can still pass. TLS JA3 is not available after the reverse proxy unless the proxy forwards reputation headers such as `CF-Bot-Score`, `X-Bot-Score`, or `X-JA4`.
+Agents that spoof a full browser profile and solve proof-of-work can pass. TLS JA3 is not available after the reverse proxy unless the proxy forwards reputation headers such as `CF-Bot-Score`, `X-Bot-Score`, or `X-JA4`.
 
 ## Trust modes
 
-- `behind_proxy` (recommended for the primary topology) refuses to start without `trusted_proxies`
-- `edge` is for deployments where RavenGuard itself is the first hop
+- `behind_proxy` refuses to start without `trusted_proxies`. Use this for the primary topology.
+- `edge` is for deployments where RavenGuard is the first hop.
 
-See [Deployment](./deployment.md) for PROXY protocol and real-IP header choices.
+See [Deployment](./deployment.md) for PROXY protocol and real-IP header options.

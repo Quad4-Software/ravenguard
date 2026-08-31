@@ -1,11 +1,11 @@
 ---
 title: Blocklists and feeds
-description: IP, hostname, and User-Agent lists plus optional Q-Feeds threat intel.
+description: IP, hostname, and User-Agent lists plus optional Q-Feeds.
 ---
 
 # Blocklists and feeds
 
-RavenGuard can deny clients before rate limits and detection scoring run.
+Blocklists deny clients before rate limits and detection run.
 
 ## File-based blocklists
 
@@ -17,7 +17,7 @@ ua_files = ["/etc/ravenguard/blocklists/ua.txt"]
 reload_interval = "30s"
 ```
 
-Lists reload on `reload_interval` without restarting the process. Keep files on durable storage and update them in place.
+Lists reload on `reload_interval` without restarting. Update files in place on durable storage.
 
 ### IP lists
 
@@ -31,7 +31,7 @@ One IPv4/IPv6 address or CIDR per line. Blank lines and `#` comments are ignored
 
 ### Hostname lists
 
-One hostname or domain suffix per line. Matching is normalized (lowercase, trailing-dot stripped).
+One hostname or domain suffix per line. Matching is lowercase with trailing dots stripped.
 
 ```text
 evil.example
@@ -40,18 +40,18 @@ evil.example
 
 ### User-Agent lists
 
-Substring matches against the request User-Agent. Use this to hard-block known scrapers and unwanted AI crawlers.
+Substring match against the request User-Agent.
 
 ```text
 SomeBadBot
 Bytespider
 ```
 
-Sample files live under [`testdata/blocklists/`](https://github.com/Quad4-Software/ravenguard/tree/main/testdata/blocklists).
+Sample files: [`testdata/blocklists/`](https://github.com/Quad4-Software/ravenguard/tree/main/testdata/blocklists).
 
 ## Q-Feeds
 
-Optional threat-intel feeds merge into the same denial path:
+Optional threat-intel feeds merge into the same deny path:
 
 ```toml
 [qfeeds]
@@ -67,15 +67,15 @@ on_error = "fail_open"
 | Setting | Meaning |
 |---------|---------|
 | `feeds` | Feed names to pull |
-| `refresh` | How often to refresh the in-memory cache |
-| `on_error` | `fail_open` keeps serving if a refresh fails. Prefer this unless you explicitly want outages on feed errors |
+| `refresh` | In-memory cache refresh interval |
+| `on_error` | `fail_open` continues serving if refresh fails. `fail_closed` denies on feed errors |
 | `limit` | Optional cap on cached entries |
 
 Env: `RG_QFEEDS_ENABLED`, `RG_QFEEDS_API_TOKEN`, or `QFEEDS_API_TOKEN`.
 
-## Operational tips
+## Notes
 
-- Start with UA and IP lists for known abusive sources
-- Prefer challenge/detect scoring for ambiguous traffic instead of huge brittle UA deny lists
-- Legitimate search bots are not DNS-verified yet. Avoid blanket blocking of well-known crawler names unless you intend to
-- Keep reload intervals short enough for ops response, long enough to avoid disk thrash
+- Use UA and IP lists for known abusive sources
+- Use detect scoring for ambiguous traffic rather than large UA deny lists
+- Search-bot User-Agents are not DNS-verified. Do not blanket-block known crawler names unless that is intentional
+- Choose `reload_interval` for ops response time without excessive disk reads
