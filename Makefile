@@ -4,7 +4,7 @@ GOBIN ?= $(shell $(GO) env GOPATH)/bin
 export PATH := $(GOBIN):$(PATH)
 
 # Tool module versions (pin for reproducible installs).
-GOLANGCI_LINT_VERSION ?= v1.64.8
+GOLANGCI_LINT_VERSION ?= v2.13.2
 GOSEC_VERSION ?= latest
 STATICCHECK_VERSION ?= latest
 REVIVE_VERSION ?= latest
@@ -54,7 +54,7 @@ tools:
 	$(GO) install honnef.co/go/tools/cmd/staticcheck@$(STATICCHECK_VERSION)
 	$(GO) install github.com/mgechev/revive@$(REVIVE_VERSION)
 	$(GO) install github.com/securego/gosec/v2/cmd/gosec@$(GOSEC_VERSION)
-	$(GO) install github.com/golangci/golangci-lint/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
+	$(GO) install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
 
 fmt:
 	gofmt -w -s .

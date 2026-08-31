@@ -59,8 +59,16 @@ func Init(cfg config.SentryConfig) (*Reporter, error) {
 		EnableTracing:    cfg.TracesSampleRate > 0,
 		Debug:            cfg.Debug,
 		AttachStacktrace: cfg.AttachStacktrace,
-		SendDefaultPII:   cfg.SendDefaultPII,
 		BeforeSend:       scrubEvent,
+	}
+	if cfg.SendDefaultPII {
+		opts.DataCollection = &sdk.DataCollection{
+			UserInfo: sdk.Set(true),
+		}
+	} else {
+		opts.DataCollection = &sdk.DataCollection{
+			UserInfo: sdk.Set(false),
+		}
 	}
 	if opts.SampleRate <= 0 {
 		opts.SampleRate = 1.0

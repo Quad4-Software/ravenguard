@@ -10,7 +10,7 @@ import (
 	"github.com/Quad4-Software/ravenguard/internal/faststr"
 )
 
-var lowerBufPool = lowerPool
+var lowerBufPool = &lowerPool
 
 // AttackMatch inspects path and query for common exploit probes.
 // Returns a reason code when matched.

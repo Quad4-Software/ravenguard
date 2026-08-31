@@ -13,6 +13,15 @@ strictDepBuilds: true
 trustLockfile: false
 dangerouslyAllowAllBuilds: false
 
+# Force patched transitive deps pulled by Docusaurus tooling.
+overrides:
+  uuid: ^14.0.0
+  serialize-javascript: ^7.0.5
+
+minimumReleaseAgeExclude:
+  - uuid
+  - serialize-javascript
+
 # Explicit lifecycle script allowlist only.
 allowBuilds:
   '@swc/core': true

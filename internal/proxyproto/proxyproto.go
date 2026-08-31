@@ -63,18 +63,18 @@ func (c *conn) ensure() error {
 	if c.inited.Load() {
 		return nil
 	}
-	if err := c.Conn.SetReadDeadline(time.Now().Add(c.timeout)); err != nil {
+	if err := c.SetReadDeadline(time.Now().Add(c.timeout)); err != nil {
 		return err
 	}
 	c.br = bufio.NewReader(c.Conn)
 	hdr, err := c.br.Peek(6)
 	if err != nil {
-		_ = c.Conn.SetReadDeadline(time.Time{})
+		_ = c.SetReadDeadline(time.Time{})
 		return err
 	}
 	if bytes.HasPrefix(hdr, []byte("PROXY ")) {
 		line, err := c.br.ReadString('\n')
-		_ = c.Conn.SetReadDeadline(time.Time{})
+		_ = c.SetReadDeadline(time.Time{})
 		if err != nil {
 			return err
 		}
@@ -88,7 +88,7 @@ func (c *conn) ensure() error {
 		c.inited.Store(true)
 		return nil
 	}
-	_ = c.Conn.SetReadDeadline(time.Time{})
+	_ = c.SetReadDeadline(time.Time{})
 	c.inited.Store(true)
 	return nil
 }

@@ -56,18 +56,30 @@ func New(cfg Config) *httputil.ReverseProxy {
 	target := normalizeTarget(cfg.Target)
 	setHeaders := cfg.SetHeaders
 	rp := &httputil.ReverseProxy{
-		Director: func(req *http.Request) {
-			req.URL.Scheme = target.Scheme
-			req.URL.Host = target.Host
+		Rewrite: func(pr *httputil.ProxyRequest) {
+			out := pr.Out
+			// Rewrite strips X-Forwarded-* from Out. Restore identity headers
+			// the pipeline already set on the inbound request.
+			if v := pr.In.Header.Get("X-Real-IP"); v != "" {
+				out.Header.Set("X-Real-IP", v)
+			}
+			if v := pr.In.Header.Get("X-Forwarded-For"); v != "" {
+				out.Header.Set("X-Forwarded-For", v)
+			}
+			if v := pr.In.Header.Get("X-Forwarded-Proto"); v != "" {
+				out.Header.Set("X-Forwarded-Proto", v)
+			}
+			out.URL.Scheme = target.Scheme
+			out.URL.Host = target.Host
 			if IsUnix(cfg.Target) {
-				req.URL.Scheme = "http"
-				req.URL.Host = "localhost"
-				req.Host = "localhost"
+				out.URL.Scheme = "http"
+				out.URL.Host = "localhost"
+				out.Host = "localhost"
 			} else {
-				req.Host = target.Host
+				out.Host = target.Host
 			}
 			for k, v := range setHeaders {
-				req.Header.Set(k, v)
+				out.Header.Set(k, v)
 			}
 		},
 		Transport:     transport,
