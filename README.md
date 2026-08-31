@@ -1,33 +1,33 @@
 # RavenGuard
 
 > [!WARNING]
-> This project is still alpha level software and being actively developed. Not ready for production use.
+> Alpha software under active development. Not ready for production.
 
-Application guard for HTTP origins sitting behind your reverse proxy.
+HTTP application guard. Place it between a reverse proxy and the origin:
 
-**Typical topology:**
-
+```text
 Client -> reverse proxy (TLS) -> RavenGuard -> origin
+```
 
 ## Features
 
-- Sits behind nginx, Caddy, Traefik, or similar (uses the real client IP your proxy sends)
-- Forwards traffic to your app over HTTP or a unix socket
-- Block bad IPs, hostnames, and User-Agents (lists reload without a restart)
-- Slow down or stop abusive clients with rate limits
-- Spot scanners, scrapers, and many AI crawlers before they hammer your app
-- Soft DoS protection: limit how many requests run at once, cap request size, temp-ban repeat offenders
-- Block common exploit probes in URLs (path tricks, injection-style junk)
-- Optional browser check page (JavaScript puzzle) so bots have a harder time
-- Keeps client IPs hashed in memory/logs by default for privacy-friendly ops
-- Optional threat-intel feeds (Q-Feeds)
-- Checks if your upstream app is healthy before sending traffic
-- Optional Sentry / GlitchTip error reporting (panics, slog errors, optional upstream failures)
-- Linux Landlock LSM + seccomp-bpf sandboxing (`try` / `best_effort` / `enforce`)
-- Simple dark block/challenge pages, plus a local preview mode for testing
-- Config with a TOML file, environment variables, or CLI flags
+- Runs behind nginx, Caddy, Traefik, or similar. Uses the client IP from trusted proxy headers
+- Proxies to HTTP or unix-socket upstreams
+- IP, hostname, and User-Agent blocklists with periodic reload
+- Per-client rate limits
+- Heuristic detection for scanners, scrapers, and common AI crawler User-Agents
+- Concurrency limits, request size caps, temporary bans for repeat offenders
+- Blocks common path and query exploit probes
+- Optional JavaScript proof-of-work challenge with clearance cookie
+- Client IPs hashed in memory and logs by default
+- Optional Q-Feeds threat-intel integration
+- Optional upstream health checks
+- Optional Sentry / GlitchTip error reporting
+- Linux Landlock LSM and seccomp-bpf sandbox (`try` / `best_effort` / `enforce`)
+- Block and challenge HTML pages. Local UI preview via test mode
+- Configured via TOML, environment variables, or CLI flags
 
-## Install / build from source
+## Build
 
 Requires Go 1.26.6+.
 
@@ -46,7 +46,7 @@ cd deploy && docker compose up --build
 
 ## Docs
 
-Site source lives in [`docs/`](docs/) (Docusaurus).
+Docusaurus site in [`docs/`](docs/).
 
 ```bash
 cd docs
