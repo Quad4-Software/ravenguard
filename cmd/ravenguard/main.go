@@ -26,8 +26,8 @@ import (
 	"github.com/Quad4-Software/ravenguard/internal/proxy"
 	"github.com/Quad4-Software/ravenguard/internal/qfeeds"
 	"github.com/Quad4-Software/ravenguard/internal/ratelimit"
-	rgsentry "github.com/Quad4-Software/ravenguard/internal/sentry"
 	"github.com/Quad4-Software/ravenguard/internal/sandbox"
+	rgsentry "github.com/Quad4-Software/ravenguard/internal/sentry"
 	"github.com/Quad4-Software/ravenguard/internal/ui"
 )
 

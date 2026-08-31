@@ -28,6 +28,32 @@ func TestParseUnixURL(t *testing.T) {
 	}
 }
 
+func TestNormalizeUpstreamSchemes(t *testing.T) {
+	cases := []struct {
+		raw        string
+		wantScheme string
+		wantHost   string
+	}{
+		{"ws://127.0.0.1:8000/socket", "http", "127.0.0.1:8000"},
+		{"wss://origin.example:9443", "https", "origin.example:9443"},
+		{"https://origin.example", "https", "origin.example"},
+		{"http://127.0.0.1:8000", "http", "127.0.0.1:8000"},
+	}
+	for _, tc := range cases {
+		u, err := proxy.ParseUpstreamURL(tc.raw)
+		if err != nil {
+			t.Fatalf("%s: parse: %v", tc.raw, err)
+		}
+		n := proxy.NormalizeTarget(u)
+		if n.Scheme != tc.wantScheme {
+			t.Fatalf("%s: scheme=%q want %q", tc.raw, n.Scheme, tc.wantScheme)
+		}
+		if n.Host != tc.wantHost {
+			t.Fatalf("%s: host=%q want %q", tc.raw, n.Host, tc.wantHost)
+		}
+	}
+}
+
 func TestUnixDial(t *testing.T) {
 	dir := t.TempDir()
 	sock := filepath.Join(dir, "app.sock")

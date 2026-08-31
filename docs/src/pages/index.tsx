@@ -10,46 +10,46 @@ import styles from './index.module.css';
 const features = [
   {
     title: 'Blocklists',
-    body: 'Load IP, hostname, and User-Agent deny lists from files. RavenGuard reloads them on a timer without restarting.',
+    body: 'IP, hostname, and User-Agent deny lists from files. Reloaded on an interval without restart.',
   },
   {
     title: 'Rate limits and size caps',
-    body: 'Limit requests per client, concurrent work, and body/header/URL size. Repeat offenders get a temporary ban.',
+    body: 'Per-client request limits, concurrency caps, and body/header/URL size limits. Temporary bans after repeated strikes.',
   },
   {
     title: 'Scanner scoring',
-    body: 'Scores requests for scanner User-Agents, missing browser headers, probe paths, and short-window path fan-out. High scores challenge or block.',
+    body: 'Scores scanner User-Agents, missing browser headers, probe paths, and short-window path fan-out. High scores challenge or block.',
   },
   {
     title: 'Browser challenge',
-    body: 'Optional JavaScript proof-of-work plus an environment probe. Clearance is an HMAC cookie bound to the client key.',
+    body: 'Optional JavaScript proof-of-work and environment probe. Clearance is an HMAC cookie bound to the client key.',
   },
   {
     title: 'Hashed client IPs',
-    body: 'Rate limits, behavior state, and logs use a hashed client key by default. Raw addresses stay out of memory unless you turn that off.',
+    body: 'Rate limits, behavior state, and logs use a hashed client key by default.',
   },
   {
     title: 'Q-Feeds',
-    body: 'Optional malware IP and domain feeds from Q-Feeds refresh into the same deny path as local blocklists.',
+    body: 'Optional malware IP and domain feeds merge into the same deny path as local blocklists.',
   },
 ];
 
 const pipeline = [
   {
     title: 'Client IP',
-    body: 'Take the address from trusted proxies via X-Real-IP, X-Forwarded-For, or PROXY protocol.',
+    body: 'Resolve from trusted X-Real-IP, X-Forwarded-For, or PROXY protocol.',
   },
   {
     title: 'Deny and throttle',
-    body: 'Apply blocklists, optional feeds, rate limits, size caps, and attack signatures.',
+    body: 'Blocklists, optional feeds, rate limits, size caps, and attack signatures.',
   },
   {
     title: 'Detect',
-    body: 'Score the request. Challenge or hard-block before the origin sees it.',
+    body: 'Score the request. Challenge or hard-block before the origin.',
   },
   {
     title: 'Proxy',
-    body: 'Forward allowed traffic to HTTP or unix upstreams. Rebuild X-Real-IP and X-Forwarded-For from the resolved client.',
+    body: 'Forward to HTTP or unix upstreams. Rebuild X-Real-IP and X-Forwarded-For from the resolved client.',
   },
 ];
 
@@ -74,12 +74,12 @@ function HomepageHeader(): ReactNode {
             {siteConfig.title}
           </Heading>
           <p className={styles.headline}>
-            Sits behind your reverse proxy and in front of the origin.
+            HTTP guard between reverse proxy and origin.
           </p>
           <p className={styles.lede}>
-            Terminates nothing. Checks the request, then forwards HTTP or unix
+            No TLS termination. Filters requests, then proxies to HTTP or unix
             upstream. Blocklists, rate limits, attack filters, detect scoring,
-            and an optional browser challenge.
+            optional browser challenge.
           </p>
           <div className={styles.actions}>
             <Link className="button button--primary button--lg" to="/docs/intro">
@@ -115,7 +115,7 @@ export default function Home(): ReactNode {
   return (
     <Layout
       title="Docs"
-      description="RavenGuard: application guard between reverse proxy and HTTP origin. Blocklists, rate limits, detect scoring, browser challenge.">
+      description="HTTP application guard between reverse proxy and origin. Blocklists, rate limits, detect scoring, optional browser challenge.">
       <HomepageHeader />
       <main>
         <section className={styles.section}>
@@ -125,8 +125,8 @@ export default function Home(): ReactNode {
                 What it does
               </Heading>
               <p className={styles.sectionCopy}>
-                TLS stays on nginx, Caddy, or Traefik. RavenGuard runs on the
-                private hop and decides what reaches the app.
+                TLS terminates at nginx, Caddy, or Traefik. RavenGuard runs on
+                the private hop and filters what reaches the origin.
               </p>
             </div>
             <div className={styles.featureGrid}>
@@ -149,7 +149,7 @@ export default function Home(): ReactNode {
                 Request order
               </Heading>
               <p className={styles.sectionCopy}>
-                Every request hits the same stages in order.
+                Stages run in fixed order for every request.
               </p>
             </div>
             <div className={styles.pipeline}>
@@ -175,9 +175,9 @@ export default function Home(): ReactNode {
                 Build and run
               </Heading>
               <p className={styles.ctaCopy}>
-                Run make build, or docker compose up --build from the deploy
-                directory. Point upstream.url at the app and set
-                RG_CHALLENGE_SECRET before you expose the challenge path.
+                make build, or docker compose up --build from deploy/. Set
+                upstream.url and RG_CHALLENGE_SECRET before exposing the
+                challenge path.
               </p>
             </div>
             <div className={styles.actions}>

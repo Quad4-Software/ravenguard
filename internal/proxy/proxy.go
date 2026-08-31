@@ -40,7 +40,7 @@ func New(cfg Config) *httputil.ReverseProxy {
 	transport := &http.Transport{
 		Proxy:                 http.ProxyFromEnvironment,
 		DialContext:           dial,
-		ForceAttemptHTTP2:     !IsUnix(cfg.Target),
+		ForceAttemptHTTP2:     false,
 		MaxIdleConns:          maxIdle,
 		MaxIdleConnsPerHost:   perHost,
 		MaxConnsPerHost:       maxConns,
@@ -53,7 +53,7 @@ func New(cfg Config) *httputil.ReverseProxy {
 		ReadBufferSize:        32 << 10,
 	}
 
-	target := normalizeTarget(cfg.Target)
+	target := NormalizeTarget(cfg.Target)
 	setHeaders := cfg.SetHeaders
 	rp := &httputil.ReverseProxy{
 		Rewrite: func(pr *httputil.ProxyRequest) {
@@ -129,16 +129,21 @@ func DialFunc(target *url.URL, timeout time.Duration) func(ctx context.Context, 
 	return d.DialContext
 }
 
-func normalizeTarget(u *url.URL) *url.URL {
+func NormalizeTarget(u *url.URL) *url.URL {
 	if u == nil {
 		return &url.URL{Scheme: "http", Host: "127.0.0.1"}
 	}
 	out := *u
-	if out.Scheme == "unix" {
+	switch strings.ToLower(out.Scheme) {
+	case "unix":
 		out.Scheme = "http"
 		out.Host = "localhost"
 		out.Path = ""
 		out.Opaque = ""
+	case "ws":
+		out.Scheme = "http"
+	case "wss":
+		out.Scheme = "https"
 	}
 	return &out
 }

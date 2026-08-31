@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/Quad4-Software/ravenguard/internal/sandbox"
@@ -89,6 +90,22 @@ func TestDeriveUnixUpstream(t *testing.T) {
 	}
 }
 
+func TestDeriveWSSUpstream(t *testing.T) {
+	cfg := sandbox.Config{Mode: sandbox.ModeTry, Landlock: sandbox.LandlockConfig{RestrictNet: true}}
+	sandbox.DerivePaths(&cfg, "", ":8080", "", "", "wss://origin.example:9443", "", "", nil)
+	if !contains16(cfg.Landlock.ConnectTCP, 9443) {
+		t.Fatalf("connect_tcp=%v want 9443", cfg.Landlock.ConnectTCP)
+	}
+}
+
+func TestDeriveWSDefaultPort(t *testing.T) {
+	cfg := sandbox.Config{Mode: sandbox.ModeTry, Landlock: sandbox.LandlockConfig{RestrictNet: true}}
+	sandbox.DerivePaths(&cfg, "", ":8080", "", "", "ws://origin.example", "", "", nil)
+	if !contains16(cfg.Landlock.ConnectTCP, 80) {
+		t.Fatalf("connect_tcp=%v want 80", cfg.Landlock.ConnectTCP)
+	}
+}
+
 func TestApplyOff(t *testing.T) {
 	res, err := sandbox.Apply(sandbox.Config{Mode: sandbox.ModeOff}, slog.Default())
 	if err != nil {
@@ -144,19 +161,9 @@ func TestNeedsClassicTCP(t *testing.T) {
 }
 
 func contains16(list []uint16, want uint16) bool {
-	for _, v := range list {
-		if v == want {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(list, want)
 }
 
 func containsStr(list []string, want string) bool {
-	for _, v := range list {
-		if v == want {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(list, want)
 }

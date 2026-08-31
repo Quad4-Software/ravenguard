@@ -4,7 +4,9 @@
 package pipeline
 
 import (
+	"bufio"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
@@ -303,6 +305,10 @@ func (h *Handler) guard(w http.ResponseWriter, r *http.Request) {
 			if h.prot != nil && h.prot.Enabled() {
 				h.prot.Strike(bindID)
 			}
+			if isWebSocketUpgrade(r) {
+				http.Error(w, "rate limited", http.StatusTooManyRequests)
+				return
+			}
 			if h.cfg.RateLimit.ChallengeOver && h.cfg.Challenge.Enabled && h.chal != nil {
 				h.serveChallenge(w, r, ray, bindID)
 				return
@@ -310,6 +316,15 @@ func (h *Handler) guard(w http.ResponseWriter, r *http.Request) {
 			h.pages.RenderRateLimit(w, ray)
 			return
 		}
+	}
+
+	if isWebSocketUpgrade(r) {
+		if h.cfg.Challenge.Enabled && h.chal != nil && !h.chal.HasClearance(r, bindID) {
+			http.Error(w, "clearance required", http.StatusForbidden)
+			return
+		}
+		h.proxy(w, r, ray, clientIP, ipStr, bindID)
+		return
 	}
 
 	needChallenge := false
@@ -381,7 +396,7 @@ func (h *Handler) proxy(w http.ResponseWriter, r *http.Request, ray string, clie
 	}
 	r.Header.Set("X-RavenGuard-Ray", ray)
 
-	if h.nf == nil || !h.cfg.Detect.Enabled {
+	if isWebSocketUpgrade(r) || h.nf == nil || !h.cfg.Detect.Enabled {
 		h.upstream.ServeHTTP(w, r)
 		return
 	}
@@ -407,6 +422,35 @@ func (s *statusRecorder) WriteHeader(code int) {
 
 func (s *statusRecorder) Unwrap() http.ResponseWriter {
 	return s.ResponseWriter
+}
+
+func (s *statusRecorder) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	h, ok := s.ResponseWriter.(http.Hijacker)
+	if !ok {
+		return nil, nil, fmt.Errorf("ResponseWriter does not support hijacking")
+	}
+	return h.Hijack()
+}
+
+func (s *statusRecorder) Flush() {
+	if f, ok := s.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
+func isWebSocketUpgrade(r *http.Request) bool {
+	if r == nil {
+		return false
+	}
+	if !strings.EqualFold(r.Header.Get("Upgrade"), "websocket") {
+		return false
+	}
+	for part := range strings.SplitSeq(r.Header.Get("Connection"), ",") {
+		if strings.EqualFold(strings.TrimSpace(part), "upgrade") {
+			return true
+		}
+	}
+	return false
 }
 
 func (h *Handler) serveChallenge(w http.ResponseWriter, r *http.Request, ray, bindID string) {

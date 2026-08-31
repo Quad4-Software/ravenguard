@@ -49,7 +49,7 @@ const config: Config = {
       {
         name: 'description',
         content:
-          'RavenGuard sits behind your reverse proxy and protects origins with blocklists, rate limits, attack detection, and browser challenges.',
+          'HTTP application guard between reverse proxy and origin. Blocklists, rate limits, detect scoring, optional browser challenge.',
       },
       {name: 'theme-color', content: '#050505'},
     ],

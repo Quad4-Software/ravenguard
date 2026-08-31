@@ -47,6 +47,12 @@ func New(cfg Config) *Checker {
 	probe := "http://localhost" + cfg.Path
 	if cfg.URL != nil && cfg.URL.Scheme != "unix" {
 		u := *cfg.URL
+		switch u.Scheme {
+		case "ws":
+			u.Scheme = "http"
+		case "wss":
+			u.Scheme = "https"
+		}
 		u.Path = cfg.Path
 		u.RawQuery = ""
 		probe = u.String()

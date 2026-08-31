@@ -6,6 +6,7 @@ package config
 import (
 	"flag"
 	"fmt"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -36,7 +37,7 @@ type Config struct {
 // SandboxConfig controls Linux Landlock and seccomp-bpf hardening.
 // Modes: off, try, best_effort, enforce.
 type SandboxConfig struct {
-	Mode     string               `toml:"mode"`
+	Mode     string                `toml:"mode"`
 	Landlock SandboxLandlockConfig `toml:"landlock"`
 	Seccomp  SandboxSeccompConfig  `toml:"seccomp"`
 }
@@ -350,9 +351,9 @@ func Default() Config {
 		Sandbox: SandboxConfig{
 			Mode: "best_effort",
 			Landlock: SandboxLandlockConfig{
-				RestrictNet:    boolPtr(true),
-				RestrictScoped: boolPtr(true),
-				IgnoreMissing:  boolPtr(true),
+				RestrictNet:    new(true),
+				RestrictScoped: new(true),
+				IgnoreMissing:  new(true),
 			},
 			Seccomp: SandboxSeccompConfig{
 				DenyAction: "errno",
@@ -360,8 +361,6 @@ func Default() Config {
 		},
 	}
 }
-
-func boolPtr(v bool) *bool { return &v }
 
 type Flags struct {
 	ConfigPath  string
@@ -384,7 +383,7 @@ func ParseFlags(args []string) (Flags, error) {
 	fs.StringVar(&f.ListenHTTP, "listen-http", "", "HTTP listen address (overrides config/env)")
 	fs.StringVar(&f.ListenHTTPS, "listen-https", "", "HTTPS listen address")
 	fs.StringVar(&f.ListenQUIC, "listen-quic", "", "QUIC/HTTP3 listen address")
-	fs.StringVar(&f.Upstream, "upstream", "", "upstream URL (http://, https://, or unix://)")
+	fs.StringVar(&f.Upstream, "upstream", "", "upstream URL (http://, https://, ws://, wss://, or unix://)")
 	fs.StringVar(&f.Secret, "challenge-secret", "", "challenge HMAC secret")
 	fs.StringVar(&f.PublicURL, "public-url", "", "public site URL for SEO canonical/OG")
 	fs.StringVar(&f.LogLevel, "log-level", "", "debug|info|warn|error")
@@ -595,13 +594,13 @@ func normalize(c *Config) {
 		c.Sandbox.Mode = "best_effort"
 	}
 	if c.Sandbox.Landlock.RestrictNet == nil {
-		c.Sandbox.Landlock.RestrictNet = boolPtr(true)
+		c.Sandbox.Landlock.RestrictNet = new(true)
 	}
 	if c.Sandbox.Landlock.RestrictScoped == nil {
-		c.Sandbox.Landlock.RestrictScoped = boolPtr(true)
+		c.Sandbox.Landlock.RestrictScoped = new(true)
 	}
 	if c.Sandbox.Landlock.IgnoreMissing == nil {
-		c.Sandbox.Landlock.IgnoreMissing = boolPtr(true)
+		c.Sandbox.Landlock.IgnoreMissing = new(true)
 	}
 	if c.Sandbox.Seccomp.DenyAction == "" {
 		c.Sandbox.Seccomp.DenyAction = "errno"
@@ -620,9 +619,34 @@ func weakChallengeSecret(secret string) bool {
 	return len(s) < 16
 }
 
+func validateUpstreamURL(raw string) error {
+	raw = strings.TrimSpace(raw)
+	if strings.HasPrefix(raw, "unix://") || strings.HasPrefix(raw, "unix:") {
+		return nil
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		return fmt.Errorf("upstream.url: %w", err)
+	}
+	switch strings.ToLower(u.Scheme) {
+	case "http", "https", "ws", "wss":
+		if u.Host == "" {
+			return fmt.Errorf("upstream.url must include a host")
+		}
+		return nil
+	case "unix":
+		return nil
+	default:
+		return fmt.Errorf("upstream.url scheme must be http, https, ws, wss, or unix")
+	}
+}
+
 func (c Config) Validate() error {
 	if c.Upstream.URL == "" {
 		return fmt.Errorf("upstream.url is required")
+	}
+	if err := validateUpstreamURL(c.Upstream.URL); err != nil {
+		return err
 	}
 	if c.Listen.HTTP == "" && c.Listen.HTTPS == "" && c.Listen.QUIC == "" {
 		return fmt.Errorf("at least one of listen.http, listen.https, listen.quic is required")

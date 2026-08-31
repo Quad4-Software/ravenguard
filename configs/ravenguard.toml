@@ -12,6 +12,9 @@ http = ":8080"
 
 [upstream]
 url = "http://127.0.0.1:8000"
+# url = "https://127.0.0.1:8443"
+# url = "ws://127.0.0.1:8000"   # alias for http:// (WebSocket upgrade on same origin)
+# url = "wss://127.0.0.1:8443"  # alias for https://
 # url = "unix:///var/run/app.sock"
 connect_timeout = "5s"
 response_header_timeout = "30s"

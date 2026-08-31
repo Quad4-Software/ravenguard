@@ -96,6 +96,32 @@ func TestValidateRequiresListen(t *testing.T) {
 	}
 }
 
+func TestValidateUpstreamSchemes(t *testing.T) {
+	cfg := config.Default()
+	cfg.Challenge.Secret = "test-secret-16chars"
+	cfg.Trust.Mode = "edge"
+	for _, url := range []string{
+		"http://127.0.0.1:8000",
+		"https://origin.example",
+		"ws://127.0.0.1:8000/ws",
+		"wss://origin.example/socket",
+		"unix:///var/run/app.sock",
+	} {
+		cfg.Upstream.URL = url
+		if err := cfg.Validate(); err != nil {
+			t.Fatalf("%s: %v", url, err)
+		}
+	}
+	cfg.Upstream.URL = "ftp://origin.example"
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected scheme error for ftp")
+	}
+	cfg.Upstream.URL = "https://"
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected host error")
+	}
+}
+
 func TestEnvOverrides(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "c.toml")

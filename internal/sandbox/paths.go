@@ -97,12 +97,13 @@ func DerivePaths(cfg *Config, configPath string, listenHTTP, listenHTTPS, listen
 				addUnique(&cfg.Landlock.RWFiles, sock)
 				addUnique(&cfg.Landlock.RODirs, filepath.Dir(sock))
 			}
-		case "http", "https":
+		case "http", "https", "ws", "wss":
 			port := u.Port()
 			if port == "" {
-				if u.Scheme == "https" {
+				switch strings.ToLower(u.Scheme) {
+				case "https", "wss":
 					port = "443"
-				} else {
+				default:
 					port = "80"
 				}
 			}

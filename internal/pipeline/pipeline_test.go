@@ -308,6 +308,102 @@ func TestChallengeAlways(t *testing.T) {
 	}
 }
 
+func wsUpgradeRequest(path, remote string) *http.Request {
+	req := httptest.NewRequest(http.MethodGet, path, nil)
+	req.Header.Set("Connection", "Upgrade")
+	req.Header.Set("Upgrade", "websocket")
+	req.Header.Set("Sec-WebSocket-Version", "13")
+	req.Header.Set("Sec-WebSocket-Key", "dGhlIHNhbXBsZSBub25jZQ==")
+	req.Header.Set("User-Agent", "Mozilla/5.0")
+	req.RemoteAddr = remote
+	return req
+}
+
+func TestWebSocketRequiresClearance(t *testing.T) {
+	h := testHandler(t, func(cfg *config.Config) {
+		cfg.Detect.Enabled = false
+	})
+	req := wsUpgradeRequest("/ws", "192.0.2.40:1")
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("code=%d body=%s", rr.Code, rr.Body.String())
+	}
+	if !strings.Contains(rr.Body.String(), "clearance required") {
+		t.Fatalf("body=%q", rr.Body.String())
+	}
+}
+
+func TestWebSocketWithClearance(t *testing.T) {
+	var sawUpgrade string
+	cfg := config.Default()
+	cfg.Challenge.Secret = testSecret
+	cfg.Challenge.Difficulty = 8
+	cfg.Detect.Enabled = false
+	cfg.RateLimit.Enabled = false
+	cfg.Trust.Mode = "edge"
+	cfg.Privacy.HashClientIP = false
+	root := filepath.Join("..", "..")
+	lists := blocklist.New()
+	_ = lists.Load(
+		[]string{filepath.Join(root, "testdata/blocklists/ips.txt")},
+		[]string{filepath.Join(root, "testdata/blocklists/domains.txt")},
+		[]string{filepath.Join(root, "testdata/blocklists/ua.txt")},
+	)
+	pages, err := ui.New(ui.Site{
+		Brand:      cfg.UI.Brand,
+		StatusText: cfg.UI.StatusText,
+		Prefix:     cfg.Challenge.PathPrefix,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	chal := &challenge.Manager{
+		Secret:     []byte(cfg.Challenge.Secret),
+		Difficulty: cfg.Challenge.Difficulty,
+		CookieName: cfg.Challenge.CookieName,
+		CookieTTL:  time.Hour,
+	}
+	upstream := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sawUpgrade = r.Header.Get("Upgrade")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ws-ok"))
+	})
+	h := pipeline.New(cfg, lists, nil, nil, chal, pages, upstream, nil, nil, nil, testPriv(cfg), nil, nil)
+
+	bindID := "192.0.2.41"
+	cookie := chal.ClearanceCookie(bindID, "ray-ws", false)
+	req := wsUpgradeRequest("/ws", "192.0.2.41:1")
+	req.AddCookie(cookie)
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("code=%d body=%s", rr.Code, rr.Body.String())
+	}
+	if sawUpgrade != "websocket" {
+		t.Fatalf("upgrade=%q", sawUpgrade)
+	}
+	if rr.Body.String() != "ws-ok" {
+		t.Fatalf("body=%q", rr.Body.String())
+	}
+}
+
+func TestWebSocketChallengeDisabled(t *testing.T) {
+	h := testHandler(t, func(cfg *config.Config) {
+		cfg.Challenge.Enabled = false
+		cfg.Detect.Enabled = false
+	})
+	req := wsUpgradeRequest("/ws", "192.0.2.42:1")
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("code=%d body=%s", rr.Code, rr.Body.String())
+	}
+	if rr.Body.String() != "ok" {
+		t.Fatalf("body=%q", rr.Body.String())
+	}
+}
+
 func TestHigh404Block(t *testing.T) {
 	cfg := config.Default()
 	cfg.Challenge.Enabled = false
