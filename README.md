@@ -3,7 +3,7 @@
 > [!WARNING]
 > Alpha software under active development. Not ready for production.
 
-HTTP application guard. Place it between a reverse proxy and the origin:
+HTTP application guard for HTTP, HTTPS, and WebSocket origins. Place it between a reverse proxy and the origin:
 
 ```text
 Client -> reverse proxy (TLS) -> RavenGuard -> origin
@@ -12,13 +12,14 @@ Client -> reverse proxy (TLS) -> RavenGuard -> origin
 ## Features
 
 - Runs behind nginx, Caddy, Traefik, or similar. Uses the client IP from trusted proxy headers
-- Proxies to HTTP or unix-socket upstreams
+- Proxies to HTTP, HTTPS, WebSocket (`ws`/`wss` URL aliases), or unix-socket upstreams
 - IP, hostname, and User-Agent blocklists with periodic reload
 - Per-client rate limits
 - Heuristic detection for scanners, scrapers, and common AI crawler User-Agents
 - Concurrency limits, request size caps, temporary bans for repeat offenders
 - Blocks common path and query exploit probes
 - Optional JavaScript proof-of-work challenge with clearance cookie
+- WebSocket upgrades require an existing clearance cookie when challenge is enabled
 - Client IPs hashed in memory and logs by default
 - Optional Q-Feeds threat-intel integration
 - Optional upstream health checks
