@@ -68,6 +68,7 @@ const config: Config = {
     },
     navbar: {
       title: 'RavenGuard',
+      hideOnScroll: false,
       logo: {
         alt: 'RavenGuard',
         src: 'img/raven.png',
@@ -96,43 +97,7 @@ const config: Config = {
     },
     footer: {
       style: 'dark',
-      links: [
-        {
-          title: 'Docs',
-          items: [
-            {label: 'Getting started', to: '/docs/intro'},
-            {label: 'Architecture', to: '/docs/architecture'},
-            {label: 'Configuration', to: '/docs/configuration'},
-            {label: 'Deployment', to: '/docs/deployment'},
-          ],
-        },
-        {
-          title: 'Guides',
-          items: [
-            {label: 'Challenge and UI', to: '/docs/challenge-ui'},
-            {label: 'Detection', to: '/docs/detection'},
-            {label: 'Privacy', to: '/docs/privacy'},
-            {label: 'Testing', to: '/docs/testing'},
-          ],
-        },
-        {
-          title: 'Project',
-          items: [
-            {
-              label: 'A Quad4 Software Project',
-              href: 'https://github.com/Quad4-Software',
-            },
-            {
-              label: 'GitHub',
-              href: 'https://github.com/Quad4-Software/ravenguard',
-            },
-            {
-              label: 'License (0BSD)',
-              href: 'https://github.com/Quad4-Software/ravenguard/blob/main/LICENSE',
-            },
-          ],
-        },
-      ],
+      links: [],
       copyright: `Copyright © ${new Date().getFullYear()} Quad4. RavenGuard is licensed under 0BSD.`,
     },
     prism: {

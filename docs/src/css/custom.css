@@ -19,15 +19,12 @@
   --ifm-background-color: var(--rg-bg);
   --ifm-navbar-background-color: rgba(244, 244, 242, 0.88);
   --ifm-footer-background-color: var(--rg-bg);
-  --ifm-footer-color: var(--rg-muted);
-  --ifm-footer-link-color: var(--rg-fg);
-  --ifm-footer-title-color: var(--rg-fg);
   --ifm-code-font-size: 92%;
   --ifm-font-family-base: "IBM Plex Sans", "Segoe UI", sans-serif;
   --ifm-font-family-monospace: "IBM Plex Mono", Consolas, monospace;
   --ifm-heading-font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
   --ifm-heading-font-weight: 500;
-  --ifm-navbar-height: 4rem;
+  --ifm-navbar-height: 3.5rem;
   --ifm-global-radius: 0;
   --ifm-button-border-radius: 0;
   --ifm-code-border-radius: 0;
@@ -55,9 +52,6 @@
   --ifm-background-surface-color: #0d0d0d;
   --ifm-hover-overlay: rgba(255, 255, 255, 0.04);
   --ifm-footer-background-color: var(--rg-bg);
-  --ifm-footer-color: var(--rg-muted);
-  --ifm-footer-link-color: var(--rg-fg);
-  --ifm-footer-title-color: var(--rg-fg);
   --docusaurus-highlighted-code-line-bg: rgba(255, 255, 255, 0.06);
 }
 
@@ -88,59 +82,21 @@ body {
   color: #3a3a3a !important;
 }
 
-.navbar {
-  border-bottom: 1px solid var(--rg-line);
-  backdrop-filter: blur(12px);
+.navbar-sidebar {
+  background: var(--rg-bg);
   box-shadow: none;
+  border-right: 1px solid var(--rg-line);
 }
 
-.navbar__title {
-  font-weight: 600;
-  letter-spacing: -0.03em;
+.navbar-sidebar__brand {
+  border-bottom: 1px solid var(--rg-line);
+  box-shadow: none;
+  background: var(--rg-bg);
 }
 
-.navbar__logo {
-  height: 1.75rem;
-  width: auto;
-  margin-right: 0.55rem;
-}
-
-.navbar__logo img {
-  height: 1.75rem;
-  width: 1.75rem;
-  object-fit: contain;
-}
-
-.footer {
-  border-top: 1px solid var(--rg-line);
-  background: var(--rg-bg) !important;
-  color: var(--rg-muted);
-}
-
-.footer--dark {
-  --ifm-footer-background-color: var(--rg-bg);
-  --ifm-footer-color: var(--rg-muted);
-  --ifm-footer-link-color: var(--rg-muted);
-  --ifm-footer-title-color: var(--rg-fg);
-  background: var(--rg-bg) !important;
-}
-
-.footer__title {
-  color: var(--rg-fg);
-}
-
-.footer__copyright {
-  color: var(--rg-muted);
-  font-size: 0.85rem;
-}
-
-.footer__link-item {
-  color: var(--rg-muted);
-}
-
-.footer__link-item:hover {
-  color: var(--rg-fg);
-  text-decoration: none;
+.navbar-sidebar .menu__link {
+  border-radius: 0;
+  font-size: 0.9rem;
 }
 
 .theme-doc-sidebar-container {
@@ -183,15 +139,6 @@ body {
   background: var(--rg-fg);
   border-color: var(--rg-fg);
   color: var(--rg-bg);
-}
-
-.navbar__link {
-  color: var(--rg-fg);
-}
-
-.navbar__link:hover,
-.navbar__link--active {
-  color: var(--rg-accent);
 }
 
 .menu__link:hover {
@@ -240,7 +187,6 @@ body {
 code {
   border-radius: 0;
 }
-
 
 pre {
   border: 1px solid var(--rg-line);

@@ -1,0 +1,149 @@
+.bar {
+  display: block;
+  height: var(--ifm-navbar-height);
+  padding: 0;
+  border-bottom: 1px solid var(--rg-line);
+  background: var(--ifm-navbar-background-color);
+  backdrop-filter: blur(12px);
+  box-shadow: none;
+}
+
+.inner {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  width: min(1120px, calc(100% - 2rem));
+  height: 100%;
+  margin: 0 auto;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  color: var(--rg-fg);
+  text-decoration: none;
+  flex-shrink: 0;
+}
+
+.brand:hover {
+  color: var(--rg-fg);
+  text-decoration: none;
+}
+
+.mark {
+  display: block;
+  width: 1.65rem;
+  height: 1.65rem;
+  object-fit: contain;
+}
+
+.name {
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1;
+}
+
+.nav {
+  display: none;
+  align-items: center;
+  gap: 0.15rem;
+  margin-left: 0.5rem;
+}
+
+.link {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.35rem 0.65rem;
+  color: var(--rg-muted);
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  text-decoration: none;
+  text-transform: uppercase;
+}
+
+.link:hover {
+  color: var(--rg-fg);
+  text-decoration: none;
+}
+
+.linkActive {
+  color: var(--rg-fg);
+  box-shadow: inset 0 -2px 0 var(--rg-fg);
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-left: auto;
+}
+
+.modeToggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border: 1px solid var(--rg-line);
+  background: transparent;
+  color: var(--rg-muted);
+  cursor: pointer;
+}
+
+.modeToggle:hover,
+.modeToggle:focus-visible {
+  color: var(--rg-fg);
+  border-color: var(--rg-fg);
+  outline: none;
+}
+
+.modeIcon {
+  width: 0.95rem;
+  height: 0.95rem;
+}
+
+.menuToggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border: 1px solid var(--rg-line);
+  background: transparent;
+  color: var(--rg-fg);
+  cursor: pointer;
+}
+
+.menuToggle:hover,
+.menuToggle:focus-visible {
+  border-color: var(--rg-fg);
+  outline: none;
+}
+
+.menuIcon {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  width: 0.9rem;
+}
+
+.menuIcon span {
+  display: block;
+  height: 1px;
+  background: currentColor;
+}
+
+@media (min-width: 997px) {
+  .nav {
+    display: flex;
+  }
+
+  .menuToggle {
+    display: none;
+  }
+}
