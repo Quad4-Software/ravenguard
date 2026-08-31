@@ -3,7 +3,7 @@ module github.com/Quad4-Software/ravenguard
 go 1.26.6
 
 require (
-	github.com/BurntSushi/toml v1.5.0
+	github.com/BurntSushi/toml v1.6.0
 	github.com/elastic/go-seccomp-bpf v1.6.0
 	github.com/getsentry/sentry-go v0.49.0
 	github.com/landlock-lsm/go-landlock v0.10.0
