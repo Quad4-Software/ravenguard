@@ -39,3 +39,5 @@ Open `/_rg/test` for challenge, block, rate-limit, upstream, and error page prev
 3. Verify `X-Real-IP` / proto headers from the proxy produce Secure cookies on HTTPS sites.
 4. Exceed rate limits and confirm challenge or reject behavior matches config.
 5. Toggle upstream health and confirm failed origins fail closed as configured.
+6. With challenge enabled, open the site in a browser first, then confirm a WebSocket upgrade succeeds with the clearance cookie and fails with `403` without it.
+7. Confirm `https://` (or `wss://`) upstream URLs reach a TLS origin when configured.

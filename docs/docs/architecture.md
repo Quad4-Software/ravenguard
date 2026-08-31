@@ -18,10 +18,12 @@ RavenGuard applies application-layer controls after TLS termination. Volumetric 
 3. **Optional Q-Feeds cache** for malware IP and domain entries
 4. **Rate limit** keyed by privacy client identity (hashed IP by default). Write methods cost more
 5. **Protect** size limits, concurrency caps, attack signatures, and temp bans
-6. **Detect** HTTP heuristics, short-window behavior, and optional proxy bot-score headers
+6. **Detect** HTTP heuristics, short-window behavior, and optional proxy bot-score headers (skipped for WebSocket upgrades)
 7. **Challenge or block**, otherwise **proxy** to the origin
 
-Upstream forwarding sets `X-Real-IP` and rebuilds `X-Forwarded-For` from the resolved client IP. It does not append client-supplied prior values.
+WebSocket upgrades (`Connection: Upgrade` + `Upgrade: websocket`) still pass blocklists, feeds, health, attack signatures, rate limits, and protect. Detect scoring is skipped. When challenge is enabled, upgrades need an existing clearance cookie or they receive `403` (not an HTML challenge page).
+
+Upstream forwarding sets `X-Real-IP` and rebuilds `X-Forwarded-For` from the resolved client IP. It does not append client-supplied prior values. Origin schemes may be `http`, `https`, `ws`, `wss`, or `unix` (`ws`/`wss` map to `http`/`https` for the transport).
 
 ## Packages
 

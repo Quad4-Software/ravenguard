@@ -12,13 +12,13 @@ RavenGuard is an HTTP application guard. Topology:
 Client -> reverse proxy (TLS) -> RavenGuard -> origin
 ```
 
-It reads the client IP from trusted proxy headers and forwards allowed requests to an HTTP or unix-socket upstream.
+It reads the client IP from trusted proxy headers and forwards allowed requests to an HTTP, HTTPS, WebSocket, or unix-socket upstream.
 
 ## Requirements
 
 - Go 1.26.6 or newer to build from source
 - A reverse proxy that terminates TLS and forwards the client address
-- An upstream origin on TCP or a unix socket
+- An upstream origin on TCP (`http`/`https`/`ws`/`wss`) or a unix socket
 
 ## Build and run
 

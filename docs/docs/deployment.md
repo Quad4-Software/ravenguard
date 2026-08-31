@@ -75,6 +75,12 @@ connect_timeout = "5s"
 response_header_timeout = "30s"
 ```
 
+## HTTPS and WebSocket origins
+
+Point `upstream.url` at `https://` when RavenGuard should speak TLS to the app. Use `ws://` / `wss://` as aliases for the same host when documenting WebSocket apps (they map to `http` / `https` for the reverse proxy).
+
+Ensure the reverse proxy forwards `Upgrade` and `Connection` for WebSocket paths. When challenge is enabled, clients must obtain a clearance cookie over a normal HTTP(S) page load before the WebSocket handshake will be proxied.
+
 ## Upstream health
 
 ```toml

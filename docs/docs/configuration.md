@@ -22,7 +22,7 @@ Full example: [`configs/ravenguard.toml`](https://github.com/Quad4-Software/rave
 | `-listen-http` | `RG_LISTEN_HTTP` | HTTP bind |
 | `-listen-https` | `RG_LISTEN_HTTPS` | HTTPS bind |
 | `-listen-quic` | `RG_LISTEN_QUIC` | HTTP/3 bind |
-| `-upstream` | `RG_UPSTREAM_URL` | Origin URL (`http://`, `https://`, `unix://`) |
+| `-upstream` | `RG_UPSTREAM_URL` | Origin URL (`http://`, `https://`, `ws://`, `wss://`, `unix://`) |
 | `-challenge-secret` | `RG_CHALLENGE_SECRET` | HMAC secret (min 16 chars, not `change-me*`) |
 | `-public-url` | `RG_SITE_PUBLIC_URL` | Canonical / Open Graph base URL |
 | `-test-mode` | `RG_UI_TEST_MODE` | Enable `/_rg/test` UI previews |
@@ -49,6 +49,10 @@ Typical layout: RavenGuard on plain HTTP behind the reverse proxy, TLS at the ed
 ```toml
 [upstream]
 url = "http://127.0.0.1:8000"
+# url = "https://127.0.0.1:8443"
+# url = "ws://127.0.0.1:8000"    # alias for http://
+# url = "wss://127.0.0.1:8443"   # alias for https://
+# url = "unix:///var/run/app.sock"
 connect_timeout = "5s"
 response_header_timeout = "30s"
 idle_conn_timeout = "90s"
@@ -61,6 +65,8 @@ path = "/healthz"
 interval = "10s"
 timeout = "3s"
 ```
+
+`ws://` and `wss://` are scheme aliases for the same TCP origin as `http://` and `https://`. WebSocket traffic is an HTTP upgrade on that connection. When `[challenge]` is enabled, upgrades require an existing clearance cookie from a prior page load (browsers cannot run the JS puzzle during a handshake). Forward WebSocket upgrades from your reverse proxy to RavenGuard.
 
 Env: `RG_UPSTREAM_URL`, `RG_UPSTREAM_HEALTH_ENABLED`, `RG_UPSTREAM_HEALTH_PATH`.
 
