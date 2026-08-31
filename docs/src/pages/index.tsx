@@ -113,9 +113,7 @@ function HomepageHeader(): ReactNode {
 
 export default function Home(): ReactNode {
   return (
-    <Layout
-      title="Docs"
-      description="HTTP application guard between reverse proxy and origin. Blocklists, rate limits, detect scoring, optional browser challenge.">
+    <Layout description="HTTP application guard between reverse proxy and origin. Blocklists, rate limits, detect scoring, optional browser challenge.">
       <HomepageHeader />
       <main>
         <section className={styles.section}>

@@ -88,7 +88,7 @@
   width: 2rem;
   height: 2rem;
   padding: 0;
-  border: 1px solid var(--rg-line);
+  border: none;
   background: transparent;
   color: var(--rg-muted);
   cursor: pointer;
@@ -97,7 +97,6 @@
 .modeToggle:hover,
 .modeToggle:focus-visible {
   color: var(--rg-fg);
-  border-color: var(--rg-fg);
   outline: none;
 }
 

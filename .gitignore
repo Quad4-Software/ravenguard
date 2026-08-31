@@ -10,12 +10,17 @@
 /bin/
 /dist/
 
-# Docs site
+# Node / pnpm
+/node_modules/
+/packages/*/node_modules/
+/packages/*/dist/
 /docs/node_modules/
 /docs/build/
 /docs/.docusaurus/
 /docs/.cache-loader/
 /docs/.pnpm-store/
+/docs/pnpm-lock.yaml
+
 
 # IDE / OS
 .idea/
