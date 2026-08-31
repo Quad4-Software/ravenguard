@@ -1,0 +1,5 @@
+# Example blocked IPs and CIDRs (one per line)
+203.0.113.10
+198.51.100.0/24
+2001:db8::1
+2001:db8:dead::/48

@@ -1,0 +1,158 @@
+name: Nightly
+
+on:
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: nightly-${{ github.workflow }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  nightly:
+    name: Nightly release
+    if: github.repository == 'Quad4-Software/ravenguard'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: nightly
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Compute unique nightly identity
+        id: meta
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          # Unique tags are required with immutable releases (tags cannot be moved or reused).
+          stamp="$(date -u +%Y%m%d)"
+          short="$(git rev-parse --short=8 HEAD)"
+          tag="nightly-${stamp}-${short}"
+          if gh release view "${tag}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            echo "Release ${tag} already exists, skipping"
+            {
+              echo "skip=true"
+            } >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+          {
+            echo "skip=false"
+            echo "tag=${tag}"
+            echo "title=Nightly ${stamp} (${short})"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Run GoReleaser snapshot
+        if: steps.meta.outputs.skip != 'true'
+        uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
+        with:
+          distribution: goreleaser
+          version: v2.18.0
+          args: release --snapshot --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create draft prerelease with assets
+        if: steps.meta.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.meta.outputs.tag }}
+          TITLE: ${{ steps.meta.outputs.title }}
+        run: |
+          set -euo pipefail
+          # Create annotated tag pointing at HEAD (locked once the release is published as immutable).
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "${TAG}" -m "${TITLE}"
+          auth="$(printf 'x-access-token:%s' "${GH_TOKEN}" | base64 -w0)"
+          echo "::add-mask::${auth}"
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth}" \
+            push origin "refs/tags/${TAG}"
+
+          mapfile -t assets < <(find dist -maxdepth 1 -type f \( \
+            -name '*.tar.gz' -o -name '*.zip' -o -name 'checksums.txt' -o -name '*.sbom.json' -o -name 'artifacts.json' -o -name 'metadata.json' \
+          \) | sort)
+
+          gh release create "${TAG}" \
+            --draft \
+            --prerelease \
+            --latest=false \
+            --title "${TITLE}" \
+            --notes "Automated nightly build from \`${GITHUB_SHA}\`. Not a stable release." \
+            --repo "${GITHUB_REPOSITORY}" \
+            "${assets[@]}"
+
+      - name: Collect artifact subjects
+        if: steps.meta.outputs.skip != 'true'
+        id: subjects
+        run: |
+          set -euo pipefail
+          mapfile -t files < <(find dist -maxdepth 1 -type f \( \
+            -name '*.tar.gz' -o -name '*.zip' -o -name 'checksums.txt' -o -name '*.sbom.json' -o -name 'artifacts.json' -o -name 'metadata.json' \
+          \) | sort)
+          if ((${#files[@]} == 0)); then
+            echo "No release artifacts found in dist/" >&2
+            exit 1
+          fi
+          {
+            echo "paths<<EOF"
+            printf '%s\n' "${files[@]}"
+            echo "EOF"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Attest nightly artifacts
+        if: steps.meta.outputs.skip != 'true'
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: ${{ steps.subjects.outputs.paths }}
+
+      - name: Publish draft prerelease
+        if: steps.meta.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.meta.outputs.tag }}
+        run: |
+          set -euo pipefail
+          gh release edit "${TAG}" \
+            --draft=false \
+            --prerelease \
+            --latest=false \
+            --repo "${GITHUB_REPOSITORY}"
+          gh release view "${TAG}" --repo "${GITHUB_REPOSITORY}"
+
+      - name: Prune old nightly releases
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          KEEP: "14"
+        run: |
+          set -euo pipefail
+          mapfile -t tags < <(
+            gh release list --repo "${GITHUB_REPOSITORY}" --limit 100 --json tagName,isPrerelease,createdAt \
+              --jq '[.[] | select(.tagName | startswith("nightly-"))] | sort_by(.createdAt) | reverse | .[].tagName'
+          )
+          if ((${#tags[@]} <= KEEP)); then
+            echo "Keeping ${#tags[@]} nightly releases"
+            exit 0
+          fi
+          for tag in "${tags[@]:KEEP}"; do
+            echo "Deleting old nightly ${tag}"
+            gh release delete "${tag}" --yes --cleanup-tag --repo "${GITHUB_REPOSITORY}" || true
+          done

@@ -1,0 +1,35 @@
+services:
+  ravenguard:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    ports:
+      - "8080:8080"
+      - "8443:8443/tcp"
+      - "8443:8443/udp"
+    volumes:
+      - ../configs/ravenguard.docker.toml:/config/ravenguard.toml:ro
+      - ../testdata/blocklists:/blocklists:ro
+    environment:
+      QFEEDS_API_TOKEN: ${QFEEDS_API_TOKEN:-}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-}
+      SENTRY_RELEASE: ${SENTRY_RELEASE:-}
+      RG_SANDBOX_MODE: ${RG_SANDBOX_MODE:-best_effort}
+      RG_CHALLENGE_SECRET: ${RG_CHALLENGE_SECRET:-rg-docker-dev-secret!!}
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+      - seccomp=seccomp-ravenguard.json
+    depends_on:
+      - app
+    restart: unless-stopped
+
+  app:
+    image: traefik/whoami:v1.10
+    expose:
+      - "80"

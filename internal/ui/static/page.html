@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="{{.Lang}}">
+<head>
+  {{template "head" .}}
+</head>
+<body>
+  <main class="wrap">
+    <p class="code">{{.Code}}</p>
+    <p class="status">{{.Title}}</p>
+    {{if .Detail}}<p class="sub">{{.Detail}}</p>{{end}}
+    <p class="ray">Ray ID: <span>{{.RayID}}</span></p>
+  </main>
+  <footer>
+    <img class="raven" src="{{.Prefix}}/static/raven.png" alt="{{.Brand}}">
+    <span>{{.Brand}}</span>
+  </footer>
+</body>
+</html>

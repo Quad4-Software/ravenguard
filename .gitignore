@@ -1,0 +1,33 @@
+# Binaries
+/ravenguard
+/cmd/ravenguard/ravenguard
+*.exe
+*.test
+*.out
+
+# Deps / build
+/vendor/
+/bin/
+/dist/
+
+# Docs site
+/docs/node_modules/
+/docs/build/
+/docs/.docusaurus/
+/docs/.cache-loader/
+/docs/.pnpm-store/
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# Secrets / local
+.env
+*.pem
+*.key
+/certs/
+
+# Fuzz
+**/testdata/fuzz/

@@ -1,0 +1,19 @@
+packages:
+  - '.'
+
+# Supply chain defaults for pnpm 11+
+# https://pnpm.io/supply-chain-security
+minimumReleaseAge: 10080
+minimumReleaseAgeStrict: true
+trustPolicy: no-downgrade
+# Skip trust checks for packages published over a year ago (pre-provenance era).
+trustPolicyIgnoreAfter: 525600
+blockExoticSubdeps: true
+strictDepBuilds: true
+trustLockfile: false
+dangerouslyAllowAllBuilds: false
+
+# Explicit lifecycle script allowlist only.
+allowBuilds:
+  '@swc/core': true
+  core-js: false

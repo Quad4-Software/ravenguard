@@ -1,0 +1,7 @@
+# Workflow and release config changes need maintainer review.
+.github/ @Sudo-Ivan
+.goreleaser.yaml @Sudo-Ivan
+.golangci.yml @Sudo-Ivan
+go.mod @Sudo-Ivan
+go.sum @Sudo-Ivan
+deploy/ @Sudo-Ivan

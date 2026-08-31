@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="{{.Lang}}">
+<head>
+  {{template "head" .}}
+</head>
+<body>
+  <main class="wrap">
+    <p class="code">TEST</p>
+    <p class="status">UI preview</p>
+    <p class="sub">Local test mode. These routes only work when <code>ui.test_mode</code> is enabled.</p>
+    <ul class="test-list">
+      {{range .Links}}
+      <li><a href="{{.Href}}">{{.Label}}</a><span>{{.Hint}}</span></li>
+      {{end}}
+    </ul>
+    <p class="ray">Ray ID: <span>{{.RayID}}</span></p>
+  </main>
+  <footer>
+    <img class="raven" src="{{.Prefix}}/static/raven.png" alt="{{.Brand}}">
+    <span>{{.Brand}}</span>
+  </footer>
+</body>
+</html>

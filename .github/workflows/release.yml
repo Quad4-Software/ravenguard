@@ -1,0 +1,97 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag to release (must already exist)
+        required: true
+        type: string
+
+concurrency:
+  group: release-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    name: GoReleaser
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (startsWith(github.ref, 'refs/tags/v') && !contains(github.ref_name, 'nightly'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: release
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Checkout dispatch tag
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          git fetch --force origin "refs/tags/${TAG}:refs/tags/${TAG}"
+          git checkout --force "tags/${TAG}"
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Run GoReleaser (draft)
+        uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
+        with:
+          distribution: goreleaser
+          version: v2.18.0
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Collect artifact subjects
+        id: subjects
+        run: |
+          set -euo pipefail
+          mapfile -t files < <(find dist -maxdepth 1 -type f \( \
+            -name '*.tar.gz' -o -name '*.zip' -o -name 'checksums.txt' -o -name '*.sbom.json' -o -name 'artifacts.json' -o -name 'metadata.json' \
+          \) | sort)
+          if ((${#files[@]} == 0)); then
+            echo "No release artifacts found in dist/" >&2
+            exit 1
+          fi
+          {
+            echo "paths<<EOF"
+            printf '%s\n' "${files[@]}"
+            echo "EOF"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Attest release artifacts
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: ${{ steps.subjects.outputs.paths }}
+
+      - name: Publish draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          # Publish only after all assets and attestations are attached.
+          # Required when repository immutable releases are enabled.
+          gh release edit "${TAG}" --draft=false --repo "${GITHUB_REPOSITORY}"
+          gh release view "${TAG}" --repo "${GITHUB_REPOSITORY}"

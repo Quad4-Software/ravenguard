@@ -1,0 +1,15 @@
+# Substrings matched case-insensitively against User-Agent
+# Hard-block list (separate from soft detect scoring)
+sqlmap
+nikto
+masscan
+GPTBot
+ChatGPT-User
+ClaudeBot
+Bytespider
+CCBot
+Google-Extended
+meta-externalagent
+PerplexityBot
+Amazonbot
+cohere-ai

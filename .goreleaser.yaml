@@ -1,0 +1,82 @@
+# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+version: 2
+
+project_name: ravenguard
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: ravenguard
+    main: ./cmd/ravenguard
+    binary: ravenguard
+    env:
+      - CGO_ENABLED=0
+      - GOTOOLCHAIN=go1.26.6
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+
+archives:
+  - id: default
+    formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - LICENSE
+      - README.md
+      - configs/*
+
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+
+sboms:
+  - id: archive
+    artifacts: archive
+
+changelog:
+  sort: asc
+  use: github
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^ci:"
+      - "^chore(\\(|:)"
+      - "^Merge pull request"
+
+release:
+  draft: true
+  replace_existing_draft: true
+  prerelease: auto
+  make_latest: true
+  footer: |
+    ---
+    ### Verify (immutable releases)
+
+    After publish, assets and the Git tag are locked when repository immutable releases are enabled.
+
+    ```bash
+    gh attestation verify --owner Quad4-Software --repo ravenguard <artifact>
+    gh release verify {{ .Tag }}
+    ```
+
+snapshot:
+  version_template: "{{ .Version }}-next"
