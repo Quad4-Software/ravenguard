@@ -8,16 +8,19 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/Quad4-Software/ravenguard/internal/allowlist"
 	"github.com/Quad4-Software/ravenguard/internal/blocklist"
 	"github.com/Quad4-Software/ravenguard/internal/challenge"
 	"github.com/Quad4-Software/ravenguard/internal/config"
 	"github.com/Quad4-Software/ravenguard/internal/detect"
+	"github.com/Quad4-Software/ravenguard/internal/iputil"
 	"github.com/Quad4-Software/ravenguard/internal/pipeline"
 	"github.com/Quad4-Software/ravenguard/internal/privacy"
 	"github.com/Quad4-Software/ravenguard/internal/protect"
@@ -58,18 +61,14 @@ func testHandler(t *testing.T, mutate func(*config.Config)) http.Handler {
 		[]string{filepath.Join(root, "testdata/blocklists/domains.txt")},
 		[]string{filepath.Join(root, "testdata/blocklists/ua.txt")},
 	)
-	pages, err := ui.New(ui.Site{
-		Brand:            cfg.UI.Brand,
-		StatusText:       cfg.UI.StatusText,
-		Prefix:           cfg.Challenge.PathPrefix,
-		PrivacyNoticeURL: cfg.Privacy.PrivacyNoticeURL,
-	})
+	pages, err := ui.New(ui.SiteFromConfig(cfg))
 	if err != nil {
 		t.Fatal(err)
 	}
 	chal := &challenge.Manager{
 		Secret:     []byte(cfg.Challenge.Secret),
 		Difficulty: cfg.Challenge.Difficulty,
+		Algorithm:  "sha256",
 		CookieName: cfg.Challenge.CookieName,
 		CookieTTL:  time.Hour,
 	}
@@ -77,7 +76,8 @@ func testHandler(t *testing.T, mutate func(*config.Config)) http.Handler {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok"))
 	})
-	return pipeline.New(cfg, lists, nil, nil, chal, pages, upstream, nil, nil, nil, testPriv(cfg), nil, nil)
+	trusted, _ := iputil.ParseCIDRs(cfg.Trust.TrustedProxies)
+	return pipeline.New(cfg, lists, nil, nil, chal, pages, upstream, trusted, nil, nil, testPriv(cfg), nil, nil)
 }
 
 func TestAllowCleanRequest(t *testing.T) {
@@ -125,6 +125,30 @@ func TestBlockUA(t *testing.T) {
 	}
 }
 
+func solvedPayload(t *testing.T, m *challenge.Manager, bindID string, env challenge.EnvAttestation) string {
+	t.Helper()
+	m.Algorithm = "sha256"
+	ch, err := m.IssueChallenge(bindID, challenge.RiskLow)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sol, err := challenge.SolveChallenge(ch)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := challenge.EncodePayload(challenge.Payload{
+		V: ch.V, Algorithm: ch.Algorithm, Challenge: ch.Challenge, Salt: ch.Salt,
+		Difficulty: ch.Difficulty, MaxNumber: ch.MaxNumber, Expires: ch.Expires,
+		Bind: ch.Bind, Params: ch.Params, Signature: ch.Signature,
+		Solution: strconv.FormatUint(sol, 10),
+		Env:      env,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return raw
+}
+
 func TestChallengeAndClearance(t *testing.T) {
 	h := testHandler(t, func(cfg *config.Config) {
 		cfg.Detect.BlockScore = 200
@@ -139,7 +163,7 @@ func TestChallengeAndClearance(t *testing.T) {
 		t.Fatalf("challenge code=%d", rr.Code)
 	}
 	body := rr.Body.String()
-	if !strings.Contains(body, "window.__RG__") {
+	if !strings.Contains(body, "rg-check") {
 		t.Fatalf("missing challenge page: %s", body[:min(200, len(body))])
 	}
 
@@ -149,28 +173,9 @@ func TestChallengeAndClearance(t *testing.T) {
 		LogIP:        "hash",
 	})
 	bindID := priv.ClientKey("192.0.2.30")
-	m := &challenge.Manager{Secret: []byte(testSecret), Difficulty: 8, CookieName: "rg_clear", CookieTTL: time.Hour}
-	tok, payload, err := m.Issue(bindID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	sol, err := challenge.SolvePoW(tok.Nonce, tok.Difficulty)
-	if err != nil {
-		t.Fatal(err)
-	}
-	payloadJSON, _ := json.Marshal(map[string]any{
-		"token":    payload,
-		"solution": strconv.FormatUint(sol, 10),
-		"ray":      "test",
-		"env": map[string]any{
-			"webdriver":  false,
-			"playwright": false,
-			"headless":   false,
-			"no_plugins": false,
-			"interacted": true,
-			"solve_ms":   200,
-		},
-	})
+	m := &challenge.Manager{Secret: []byte(testSecret), Difficulty: 8, CookieName: "rg_clear", CookieTTL: time.Hour, Algorithm: "sha256"}
+	raw := solvedPayload(t, m, bindID, challenge.EnvAttestation{Interacted: true, SolveMs: 200})
+	payloadJSON, _ := json.Marshal(map[string]any{"payload": raw, "ray": "test"})
 	creq := httptest.NewRequest(http.MethodPost, "/_rg/challenge", bytes.NewReader(payloadJSON))
 	creq.Header.Set("Content-Type", "application/json")
 	creq.RemoteAddr = "192.0.2.30:1"
@@ -211,27 +216,9 @@ func TestWebdriverEnvRefused(t *testing.T) {
 		cfg.Privacy.HashClientIP = false
 	})
 	bindID := "192.0.2.88"
-	m := &challenge.Manager{Secret: []byte(testSecret), Difficulty: 8, CookieName: "rg_clear", CookieTTL: time.Hour}
-	tok, payload, err := m.Issue(bindID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	sol, err := challenge.SolvePoW(tok.Nonce, tok.Difficulty)
-	if err != nil {
-		t.Fatal(err)
-	}
-	payloadJSON, _ := json.Marshal(map[string]any{
-		"token":    payload,
-		"solution": strconv.FormatUint(sol, 10),
-		"env": map[string]any{
-			"webdriver":  true,
-			"playwright": false,
-			"headless":   false,
-			"no_plugins": true,
-			"interacted": true,
-			"solve_ms":   200,
-		},
-	})
+	m := &challenge.Manager{Secret: []byte(testSecret), Difficulty: 8, CookieName: "rg_clear", CookieTTL: time.Hour, Algorithm: "sha256"}
+	raw := solvedPayload(t, m, bindID, challenge.EnvAttestation{Webdriver: true, Interacted: true, SolveMs: 200, NoPlugins: true})
+	payloadJSON, _ := json.Marshal(map[string]any{"payload": raw})
 	creq := httptest.NewRequest(http.MethodPost, "/_rg/challenge", bytes.NewReader(payloadJSON))
 	creq.Header.Set("Content-Type", "application/json")
 	creq.RemoteAddr = "192.0.2.88:1"
@@ -250,30 +237,15 @@ func TestChallengeSecureFromProto(t *testing.T) {
 		cfg.Challenge.Mode = "always"
 		cfg.Detect.Enabled = false
 		cfg.Privacy.HashClientIP = false
+		cfg.Trust.Mode = "behind_proxy"
+		cfg.Trust.TrustedProxies = []string{"192.0.2.0/24"}
+		cfg.Trust.ProtoHeader = "X-Forwarded-Proto"
 	})
 	priv := privacy.New(privacy.Config{HashClientIP: false, Secret: []byte(testSecret), LogIP: "off"})
 	bindID := priv.ClientKey("192.0.2.77")
-	m := &challenge.Manager{Secret: []byte(testSecret), Difficulty: 8, CookieName: "rg_clear", CookieTTL: time.Hour}
-	tok, payload, err := m.Issue(bindID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	sol, err := challenge.SolvePoW(tok.Nonce, tok.Difficulty)
-	if err != nil {
-		t.Fatal(err)
-	}
-	payloadJSON, _ := json.Marshal(map[string]any{
-		"token":    payload,
-		"solution": strconv.FormatUint(sol, 10),
-		"env": map[string]any{
-			"webdriver":  false,
-			"playwright": false,
-			"headless":   false,
-			"no_plugins": false,
-			"interacted": true,
-			"solve_ms":   200,
-		},
-	})
+	m := &challenge.Manager{Secret: []byte(testSecret), Difficulty: 8, CookieName: "rg_clear", CookieTTL: time.Hour, Algorithm: "sha256"}
+	raw := solvedPayload(t, m, bindID, challenge.EnvAttestation{Interacted: true, SolveMs: 200})
+	payloadJSON, _ := json.Marshal(map[string]any{"payload": raw})
 	creq := httptest.NewRequest(http.MethodPost, "/_rg/challenge", bytes.NewReader(payloadJSON))
 	creq.Header.Set("Content-Type", "application/json")
 	creq.Header.Set("X-Forwarded-Proto", "https")
@@ -303,8 +275,89 @@ func TestChallengeAlways(t *testing.T) {
 	if rr.Code != http.StatusForbidden {
 		t.Fatalf("code=%d", rr.Code)
 	}
-	if !strings.Contains(rr.Body.String(), "window.__RG__") {
+	if !strings.Contains(rr.Body.String(), "rg-check") {
 		t.Fatal("expected challenge page")
+	}
+}
+
+func TestAllowlistSkipsChallenge(t *testing.T) {
+	dir := t.TempDir()
+	ipFile := filepath.Join(dir, "ips.txt")
+	uaFile := filepath.Join(dir, "ua.txt")
+	hdrFile := filepath.Join(dir, "headers.txt")
+	_ = os.WriteFile(ipFile, []byte("192.0.2.80\n"), 0o600)
+	_ = os.WriteFile(uaFile, []byte("HealthCheckBot\n"), 0o600)
+	_ = os.WriteFile(hdrFile, []byte("X-RG-Allow: trusted\n"), 0o600)
+
+	allows := allowlist.New()
+	if err := allows.Load([]string{ipFile}, []string{uaFile}, []string{hdrFile}); err != nil {
+		t.Fatal(err)
+	}
+
+	newH := func() *pipeline.Handler {
+		cfg := config.Default()
+		cfg.Challenge.Secret = testSecret
+		cfg.Challenge.Mode = "always"
+		cfg.Challenge.Enabled = true
+		cfg.Detect.Enabled = true
+		cfg.RateLimit.Enabled = false
+		cfg.Privacy.HashClientIP = false
+		pages, err := ui.New(ui.Site{Brand: "RavenGuard", StatusText: "x", Prefix: "/_rg"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		chal := &challenge.Manager{
+			Secret:     []byte(cfg.Challenge.Secret),
+			Difficulty: 8,
+			Algorithm:  "sha256",
+			CookieName: cfg.Challenge.CookieName,
+			CookieTTL:  time.Hour,
+		}
+		upstream := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("ok"))
+		})
+		h := pipeline.New(cfg, blocklist.New(), nil, nil, chal, pages, upstream, nil, nil, nil, testPriv(cfg), nil, nil)
+		h.SetAllowlists(allows)
+		return h
+	}
+
+	cases := []struct {
+		name string
+		mut  func(*http.Request)
+	}{
+		{"ip", func(r *http.Request) { r.RemoteAddr = "192.0.2.80:1" }},
+		{"ua", func(r *http.Request) {
+			r.RemoteAddr = "192.0.2.81:1"
+			r.Header.Set("User-Agent", "HealthCheckBot/1.0")
+		}},
+		{"header", func(r *http.Request) {
+			r.RemoteAddr = "192.0.2.82:1"
+			r.Header.Set("X-RG-Allow", "trusted")
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/", nil)
+			req.Header.Set("User-Agent", "Mozilla/5.0")
+			req.Header.Set("Accept", "text/html")
+			tc.mut(req)
+			rr := httptest.NewRecorder()
+			newH().ServeHTTP(rr, req)
+			if rr.Code != http.StatusOK || rr.Body.String() != "ok" {
+				t.Fatalf("code=%d body=%s", rr.Code, rr.Body.String())
+			}
+		})
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("User-Agent", "Mozilla/5.0")
+	req.Header.Set("Accept", "text/html")
+	req.RemoteAddr = "192.0.2.83:1"
+	rr := httptest.NewRecorder()
+	newH().ServeHTTP(rr, req)
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("unlisted code=%d", rr.Code)
 	}
 }
 
@@ -361,6 +414,7 @@ func TestWebSocketWithClearance(t *testing.T) {
 	chal := &challenge.Manager{
 		Secret:     []byte(cfg.Challenge.Secret),
 		Difficulty: cfg.Challenge.Difficulty,
+		Algorithm:  "sha256",
 		CookieName: cfg.Challenge.CookieName,
 		CookieTTL:  time.Hour,
 	}
@@ -459,7 +513,7 @@ func TestTestModePages(t *testing.T) {
 		{"/_rg/test/ratelimit", 429, "Too many requests"},
 		{"/_rg/test/upstream", 502, "Origin unreachable"},
 		{"/_rg/test/error", 500, "Internal error"},
-		{"/_rg/test/challenge", 403, "window.__RG__"},
+		{"/_rg/test/challenge", 403, "__g__"},
 	}
 	for _, tc := range paths {
 		req := httptest.NewRequest(http.MethodGet, tc.path, nil)
@@ -550,5 +604,60 @@ func TestRateLimit(t *testing.T) {
 	h.ServeHTTP(rr2, req)
 	if rr2.Code != http.StatusTooManyRequests {
 		t.Fatalf("second=%d", rr2.Code)
+	}
+}
+
+func TestEdgeModeIgnoresForwardedIP(t *testing.T) {
+	h := testHandler(t, func(cfg *config.Config) {
+		cfg.Trust.Mode = "edge"
+		cfg.Trust.TrustedProxies = []string{"10.0.0.0/8"}
+		cfg.Trust.RealIPHeader = "X-Real-IP"
+		cfg.Challenge.Enabled = false
+		cfg.Detect.Enabled = false
+	})
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("User-Agent", "Mozilla/5.0")
+	req.Header.Set("Accept", "text/html")
+	req.Header.Set("X-Real-IP", "203.0.113.9")
+	req.RemoteAddr = "10.0.0.5:1234"
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("code=%d", rr.Code)
+	}
+}
+
+func TestStealthOmitsRayHeaderAndBrandFingerprints(t *testing.T) {
+	h := testHandler(t, func(cfg *config.Config) {
+		cfg.Challenge.Mode = "always"
+		cfg.Detect.Enabled = false
+		cfg.Stealth.RayHeader = ""
+		cfg.Stealth.GenericCopy = true
+		cfg.Stealth.HideBrandMark = true
+		cfg.Stealth.ElementName = "rg-check"
+		cfg.Stealth.BootstrapGlobal = "__g__"
+		cfg.Challenge.PathPrefix = "/gate"
+	})
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("User-Agent", "Mozilla/5.0")
+	req.Header.Set("Accept", "text/html")
+	req.RemoteAddr = "192.0.2.91:1"
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("code=%d", rr.Code)
+	}
+	if rr.Header().Get("X-RavenGuard-Ray") != "" {
+		t.Fatal("expected no X-RavenGuard-Ray header")
+	}
+	body := rr.Body.String()
+	if strings.Contains(body, "ravenguard-widget") {
+		t.Fatal("unexpected ravenguard-widget fingerprint")
+	}
+	if strings.Contains(body, "window.__RG__") {
+		t.Fatal("unexpected __RG__ fingerprint")
+	}
+	if !strings.Contains(body, "rg-check") && !strings.Contains(body, "__g__") {
+		t.Fatalf("expected stealth widget bootstrap in body=%s", body[:min(200, len(body))])
 	}
 }

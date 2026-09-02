@@ -21,17 +21,35 @@ type Config struct {
 	Upstream   UpstreamConfig   `toml:"upstream"`
 	Trust      TrustConfig      `toml:"trust"`
 	Blocklists BlocklistsConfig `toml:"blocklists"`
+	Allowlists AllowlistsConfig `toml:"allowlists"`
 	QFeeds     QFeedsConfig     `toml:"qfeeds"`
 	RateLimit  RateLimitConfig  `toml:"ratelimit"`
 	Protect    ProtectConfig    `toml:"protect"`
 	Detect     DetectConfig     `toml:"detect"`
 	Challenge  ChallengeConfig  `toml:"challenge"`
+	Stealth    StealthConfig    `toml:"stealth"`
 	Privacy    PrivacyConfig    `toml:"privacy"`
 	UI         UIConfig         `toml:"ui"`
 	Site       SiteConfig       `toml:"site"`
 	Logging    LoggingConfig    `toml:"logging"`
 	Sentry     SentryConfig     `toml:"sentry"`
 	Sandbox    SandboxConfig    `toml:"sandbox"`
+	Admin      AdminConfig      `toml:"admin"`
+}
+
+// AdminConfig configures the management plane (separate listen, users, SPA).
+type AdminConfig struct {
+	Enabled           bool     `toml:"enabled"`
+	Listen            string   `toml:"listen"`
+	HTTPS             string   `toml:"https"`
+	CertFile          string   `toml:"cert_file"`
+	KeyFile           string   `toml:"key_file"`
+	BasePath          string   `toml:"base_path"`
+	DataDir           string   `toml:"data_dir"`
+	BootstrapUser     string   `toml:"bootstrap_user"`
+	BootstrapPassword string   `toml:"bootstrap_password"`
+	SessionTTL        Duration `toml:"session_ttl"`
+	CookieSecure      string   `toml:"cookie_secure"`
 }
 
 // SandboxConfig controls Linux Landlock and seccomp-bpf hardening.
@@ -63,14 +81,31 @@ type SandboxSeccompConfig struct {
 }
 
 type ListenConfig struct {
-	HTTP  string `toml:"http"`
-	HTTPS string `toml:"https"`
-	QUIC  string `toml:"quic"`
+	HTTP  string `toml:"http" json:"http"`
+	HTTPS string `toml:"https" json:"https"`
+	QUIC  string `toml:"quic" json:"quic"`
 }
 
 type TLSConfig struct {
-	CertFile string `toml:"cert_file"`
-	KeyFile  string `toml:"key_file"`
+	Mode     string     `toml:"mode"` // off | files | acme
+	CertFile string     `toml:"cert_file"`
+	KeyFile  string     `toml:"key_file"`
+	ACME     ACMEConfig `toml:"acme"`
+}
+
+// ACMEConfig configures automatic Let's Encrypt certificate management.
+type ACMEConfig struct {
+	Email        string   `toml:"email"`
+	Directory    string   `toml:"directory"`
+	Staging      bool     `toml:"staging"`
+	StorageDir   string   `toml:"storage_dir"`
+	Hosts        []string `toml:"hosts"`
+	HTTP01       *bool    `toml:"http01"`
+	TLSALPN01    *bool    `toml:"tls_alpn01"`
+	RedirectHTTP *bool    `toml:"redirect_http"`
+	AgreeTOS     bool     `toml:"agree_tos"`
+	RenewWindow  Duration `toml:"renew_window"`
+	OnDemand     bool     `toml:"on_demand"`
 }
 
 type UpstreamConfig struct {
@@ -113,6 +148,14 @@ type BlocklistsConfig struct {
 	IPFiles        []string `toml:"ip_files"`
 	DNSFiles       []string `toml:"dns_files"`
 	UAFiles        []string `toml:"ua_files"`
+	ReloadInterval Duration `toml:"reload_interval"`
+}
+
+// AllowlistsConfig loads trusted IP, User-Agent, and header lists that skip detect and challenge.
+type AllowlistsConfig struct {
+	IPFiles        []string `toml:"ip_files"`
+	UAFiles        []string `toml:"ua_files"`
+	HeaderFiles    []string `toml:"header_files"`
 	ReloadInterval Duration `toml:"reload_interval"`
 }
 
@@ -184,9 +227,11 @@ type DetectProxySignals struct {
 }
 
 type ChallengeConfig struct {
-	Enabled    bool          `toml:"enabled"`
-	Mode       string        `toml:"mode"`
-	Difficulty int           `toml:"difficulty"`
+	Enabled    bool   `toml:"enabled"`
+	Mode       string `toml:"mode"`
+	Difficulty int    `toml:"difficulty"`
+	// Algorithm is sha256, pbkdf2, argon2id, or adaptive (default).
+	Algorithm  string        `toml:"algorithm"`
 	CookieName string        `toml:"cookie_name"`
 	CookieTTL  Duration      `toml:"cookie_ttl"`
 	Secret     string        `toml:"secret"`
@@ -200,10 +245,39 @@ type CaptchaConfig struct {
 	Token    string `toml:"token"`
 }
 
+// StealthConfig controls public fingerprints on the guard edge.
+type StealthConfig struct {
+	RayHeader        string `toml:"ray_header"`
+	ElementName      string `toml:"element_name"`
+	BootstrapGlobal  string `toml:"bootstrap_global"`
+	AccessCookieName string `toml:"access_cookie_name"`
+	HideBrandMark    bool   `toml:"hide_brand_mark"`
+	GenericCopy      bool   `toml:"generic_copy"`
+	ServeManifest    bool   `toml:"serve_manifest"`
+	ServeRootIcons   bool   `toml:"serve_root_icons"`
+	WidgetInputName  string `toml:"widget_input_name"`
+}
+
 type UIConfig struct {
-	Brand      string `toml:"brand"`
-	StatusText string `toml:"status_text"`
-	TestMode   bool   `toml:"test_mode"`
+	Brand             string `toml:"brand"`
+	StatusText        string `toml:"status_text"`
+	TestMode          bool   `toml:"test_mode"`
+	LogoURL           string `toml:"logo_url"`
+	FaviconURL        string `toml:"favicon_url"`
+	Background        string `toml:"background"`
+	Foreground        string `toml:"foreground"`
+	Accent            string `toml:"accent"`
+	FontSans          string `toml:"font_sans"`
+	FontMono          string `toml:"font_mono"`
+	ChallengeTitle    string `toml:"challenge_title"`
+	ChallengeSubtitle string `toml:"challenge_subtitle"`
+	BlockTitle        string `toml:"block_title"`
+	RateLimitTitle    string `toml:"rate_limit_title"`
+	UpstreamTitle     string `toml:"upstream_title"`
+	ErrorTitle        string `toml:"error_title"`
+	FooterText        string `toml:"footer_text"`
+	CustomCSS         string `toml:"custom_css"`
+	RayLabel          string `toml:"ray_label"`
 }
 
 type SiteConfig struct {
@@ -259,8 +333,20 @@ func (d Duration) MarshalText() ([]byte, error) {
 }
 
 func Default() Config {
+	http01 := true
+	tlsALPN := true
+	redir := true
 	return Config{
 		Listen: ListenConfig{HTTP: ":8080"},
+		TLS: TLSConfig{
+			Mode: "off",
+			ACME: ACMEConfig{
+				StorageDir:   "./data/certs",
+				HTTP01:       &http01,
+				TLSALPN01:    &tlsALPN,
+				RedirectHTTP: &redir,
+			},
+		},
 		Upstream: UpstreamConfig{
 			URL:                 "http://127.0.0.1:8000",
 			ConnectTimeout:      Duration{5 * time.Second},
@@ -282,6 +368,9 @@ func Default() Config {
 			ProtoHeader:  "X-Forwarded-Proto",
 		},
 		Blocklists: BlocklistsConfig{
+			ReloadInterval: Duration{30 * time.Second},
+		},
+		Allowlists: AllowlistsConfig{
 			ReloadInterval: Duration{30 * time.Second},
 		},
 		QFeeds: QFeedsConfig{
@@ -325,8 +414,17 @@ func Default() Config {
 			},
 		},
 		Challenge: ChallengeConfig{
-			Enabled: true, Mode: "detect", Difficulty: 16,
+			Enabled: true, Mode: "detect", Difficulty: 16, Algorithm: "adaptive",
 			CookieName: "rg_clear", CookieTTL: Duration{24 * time.Hour}, PathPrefix: "/_rg",
+		},
+		Stealth: StealthConfig{
+			RayHeader:        "X-RavenGuard-Ray",
+			ElementName:      "rg-check",
+			BootstrapGlobal:  "__g__",
+			AccessCookieName: "rg_access",
+			ServeManifest:    true,
+			ServeRootIcons:   true,
+			WidgetInputName:  "rg",
 		},
 		Privacy: PrivacyConfig{
 			HashClientIP: true,
@@ -359,21 +457,34 @@ func Default() Config {
 				DenyAction: "errno",
 			},
 		},
+		Admin: AdminConfig{
+			Enabled:       false,
+			Listen:        "127.0.0.1:9090",
+			BasePath:      "/",
+			DataDir:       "./data/admin",
+			BootstrapUser: "admin",
+			SessionTTL:    Duration{12 * time.Hour},
+			CookieSecure:  "auto",
+		},
 	}
 }
 
 type Flags struct {
-	ConfigPath  string
-	ListenHTTP  string
-	ListenHTTPS string
-	ListenQUIC  string
-	Upstream    string
-	Secret      string
-	TestMode    bool
-	TestModeSet bool
-	PublicURL   string
-	LogLevel    string
-	LogFormat   string
+	ConfigPath      string
+	ListenHTTP      string
+	ListenHTTPS     string
+	ListenQUIC      string
+	Upstream        string
+	Secret          string
+	TestMode        bool
+	TestModeSet     bool
+	PublicURL       string
+	LogLevel        string
+	LogFormat       string
+	AdminListen     string
+	AdminEnabled    bool
+	AdminEnabledSet bool
+	AdminDataDir    string
 }
 
 func ParseFlags(args []string) (Flags, error) {
@@ -388,14 +499,21 @@ func ParseFlags(args []string) (Flags, error) {
 	fs.StringVar(&f.PublicURL, "public-url", "", "public site URL for SEO canonical/OG")
 	fs.StringVar(&f.LogLevel, "log-level", "", "debug|info|warn|error")
 	fs.StringVar(&f.LogFormat, "log-format", "", "text|json")
+	fs.StringVar(&f.AdminListen, "admin-listen", "", "admin HTTP listen address")
+	fs.StringVar(&f.AdminDataDir, "admin-data-dir", "", "admin SQLite data directory")
+	adminEnabled := fs.Bool("admin-enabled", false, "enable admin control plane")
 	test := fs.Bool("test-mode", false, "enable UI test routes under /_rg/test")
 	if err := fs.Parse(args); err != nil {
 		return Flags{}, err
 	}
 	f.TestMode = *test
+	f.AdminEnabled = *adminEnabled
 	fs.Visit(func(fl *flag.Flag) {
 		if fl.Name == "test-mode" {
 			f.TestModeSet = true
+		}
+		if fl.Name == "admin-enabled" {
+			f.AdminEnabledSet = true
 		}
 	})
 	return f, nil
@@ -439,11 +557,44 @@ func applyEnv(c *Config) {
 	setStr(&c.Listen.QUIC, "RG_LISTEN_QUIC")
 	setStr(&c.TLS.CertFile, "RG_TLS_CERT_FILE")
 	setStr(&c.TLS.KeyFile, "RG_TLS_KEY_FILE")
+	setStr(&c.TLS.Mode, "RG_TLS_MODE")
+	setStr(&c.TLS.ACME.Email, "RG_ACME_EMAIL")
+	setStr(&c.TLS.ACME.StorageDir, "RG_ACME_STORAGE_DIR")
+	setStr(&c.TLS.ACME.Directory, "RG_ACME_DIRECTORY")
+	setBool(&c.TLS.ACME.Staging, "RG_ACME_STAGING")
+	setBool(&c.TLS.ACME.AgreeTOS, "RG_ACME_AGREE_TOS")
+	if v := os.Getenv("RG_ACME_HOSTS"); v != "" {
+		parts := strings.Split(v, ",")
+		c.TLS.ACME.Hosts = c.TLS.ACME.Hosts[:0]
+		for _, p := range parts {
+			p = strings.TrimSpace(p)
+			if p != "" {
+				c.TLS.ACME.Hosts = append(c.TLS.ACME.Hosts, p)
+			}
+		}
+	}
 	setStr(&c.Upstream.URL, "RG_UPSTREAM_URL")
 	setStr(&c.Trust.Mode, "RG_TRUST_MODE")
 	setStr(&c.Trust.RealIPHeader, "RG_REAL_IP_HEADER")
 	setStr(&c.Trust.ProtoHeader, "RG_PROTO_HEADER")
 	setBool(&c.Trust.ProxyProtocol, "RG_PROXY_PROTOCOL")
+	if v := os.Getenv("RG_TRUSTED_PROXIES"); v != "" {
+		parts := strings.Split(v, ",")
+		c.Trust.TrustedProxies = c.Trust.TrustedProxies[:0]
+		for _, p := range parts {
+			p = strings.TrimSpace(p)
+			if p != "" {
+				c.Trust.TrustedProxies = append(c.Trust.TrustedProxies, p)
+			}
+		}
+	}
+	setStr(&c.Challenge.CookieName, "RG_CHALLENGE_COOKIE_NAME")
+	setStr(&c.Stealth.RayHeader, "RG_STEALTH_RAY_HEADER")
+	setStr(&c.Stealth.ElementName, "RG_STEALTH_ELEMENT_NAME")
+	setStr(&c.Stealth.BootstrapGlobal, "RG_STEALTH_BOOTSTRAP_GLOBAL")
+	setStr(&c.Stealth.AccessCookieName, "RG_STEALTH_ACCESS_COOKIE_NAME")
+	setBool(&c.Stealth.HideBrandMark, "RG_STEALTH_HIDE_BRAND_MARK")
+	setBool(&c.Stealth.GenericCopy, "RG_STEALTH_GENERIC_COPY")
 	setStr(&c.QFeeds.APIToken, "RG_QFEEDS_API_TOKEN")
 	if c.QFeeds.APIToken == "" {
 		setStr(&c.QFeeds.APIToken, "QFEEDS_API_TOKEN")
@@ -452,6 +603,7 @@ func applyEnv(c *Config) {
 	setStr(&c.Challenge.Secret, "RG_CHALLENGE_SECRET")
 	setStr(&c.Challenge.Mode, "RG_CHALLENGE_MODE")
 	setStr(&c.Challenge.PathPrefix, "RG_CHALLENGE_PATH_PREFIX")
+	setStr(&c.Challenge.Algorithm, "RG_CHALLENGE_ALGORITHM")
 	setInt(&c.Challenge.Difficulty, "RG_CHALLENGE_DIFFICULTY")
 	setBool(&c.Challenge.Enabled, "RG_CHALLENGE_ENABLED")
 	setBool(&c.Challenge.Captcha.Enabled, "RG_CAPTCHA_ENABLED")
@@ -506,6 +658,19 @@ func applyEnv(c *Config) {
 	setBoolPtr(&c.Sandbox.Landlock.RestrictNet, "RG_SANDBOX_LANDLOCK_RESTRICT_NET")
 	setBoolPtr(&c.Sandbox.Landlock.RestrictScoped, "RG_SANDBOX_LANDLOCK_RESTRICT_SCOPED")
 	setBoolPtr(&c.Sandbox.Landlock.IgnoreMissing, "RG_SANDBOX_LANDLOCK_IGNORE_MISSING")
+	setBool(&c.Admin.Enabled, "RG_ADMIN_ENABLED")
+	setStr(&c.Admin.Listen, "RG_ADMIN_LISTEN")
+	setStr(&c.Admin.HTTPS, "RG_ADMIN_HTTPS")
+	setStr(&c.Admin.BasePath, "RG_ADMIN_BASE_PATH")
+	setStr(&c.Admin.DataDir, "RG_ADMIN_DATA_DIR")
+	setStr(&c.Admin.BootstrapUser, "RG_ADMIN_BOOTSTRAP_USER")
+	setStr(&c.Admin.BootstrapPassword, "RG_ADMIN_BOOTSTRAP_PASSWORD")
+	setStr(&c.Admin.CookieSecure, "RG_ADMIN_COOKIE_SECURE")
+	if v := os.Getenv("RG_ADMIN_SESSION_TTL"); v != "" {
+		if d, err := time.ParseDuration(v); err == nil {
+			c.Admin.SessionTTL = Duration{d}
+		}
+	}
 }
 
 func applyFlags(c *Config, f Flags) {
@@ -536,11 +701,31 @@ func applyFlags(c *Config, f Flags) {
 	if f.TestModeSet {
 		c.UI.TestMode = f.TestMode
 	}
+	if f.AdminListen != "" {
+		c.Admin.Listen = f.AdminListen
+	}
+	if f.AdminDataDir != "" {
+		c.Admin.DataDir = f.AdminDataDir
+	}
+	if f.AdminEnabledSet {
+		c.Admin.Enabled = f.AdminEnabled
+	}
 }
 
 func normalize(c *Config) {
 	if c.Trust.Mode == "" {
 		c.Trust.Mode = "edge"
+	}
+	if c.TLS.Mode == "" {
+		if c.TLS.CertFile != "" || c.TLS.KeyFile != "" {
+			c.TLS.Mode = "files"
+		} else {
+			c.TLS.Mode = "off"
+		}
+	}
+	c.TLS.Mode = strings.ToLower(strings.TrimSpace(c.TLS.Mode))
+	if c.TLS.ACME.StorageDir == "" {
+		c.TLS.ACME.StorageDir = "./data/certs"
 	}
 	if c.Trust.RealIPHeader == "" {
 		c.Trust.RealIPHeader = "X-Real-IP"
@@ -556,6 +741,21 @@ func normalize(c *Config) {
 	}
 	if c.Challenge.Mode == "" {
 		c.Challenge.Mode = "detect"
+	}
+	if c.Challenge.CookieName == "" {
+		c.Challenge.CookieName = "rg_clear"
+	}
+	if c.Stealth.ElementName == "" {
+		c.Stealth.ElementName = "rg-check"
+	}
+	if c.Stealth.BootstrapGlobal == "" {
+		c.Stealth.BootstrapGlobal = "__g__"
+	}
+	if c.Stealth.AccessCookieName == "" {
+		c.Stealth.AccessCookieName = "rg_access"
+	}
+	if c.Stealth.WidgetInputName == "" {
+		c.Stealth.WidgetInputName = "rg"
 	}
 	if c.Detect.High404Action == "" {
 		c.Detect.High404Action = "challenge"
@@ -605,6 +805,25 @@ func normalize(c *Config) {
 	if c.Sandbox.Seccomp.DenyAction == "" {
 		c.Sandbox.Seccomp.DenyAction = "errno"
 	}
+	if c.Admin.Listen == "" {
+		c.Admin.Listen = "127.0.0.1:9090"
+	}
+	if c.Admin.BasePath == "" {
+		c.Admin.BasePath = "/"
+	}
+	if c.Admin.DataDir == "" {
+		c.Admin.DataDir = "./data/admin"
+	}
+	if c.Admin.BootstrapUser == "" {
+		c.Admin.BootstrapUser = "admin"
+	}
+	if c.Admin.SessionTTL.Duration <= 0 {
+		c.Admin.SessionTTL = Duration{12 * time.Hour}
+	}
+	if c.Admin.CookieSecure == "" {
+		c.Admin.CookieSecure = "auto"
+	}
+	c.Admin.BasePath = normalizeBasePath(c.Admin.BasePath)
 }
 
 func weakChallengeSecret(secret string) bool {
@@ -651,8 +870,39 @@ func (c Config) Validate() error {
 	if c.Listen.HTTP == "" && c.Listen.HTTPS == "" && c.Listen.QUIC == "" {
 		return fmt.Errorf("at least one of listen.http, listen.https, listen.quic is required")
 	}
-	if (c.Listen.HTTPS != "" || c.Listen.QUIC != "") && (c.TLS.CertFile == "" || c.TLS.KeyFile == "") {
-		return fmt.Errorf("tls.cert_file and tls.key_file required when https or quic is enabled")
+	tlsMode := strings.ToLower(strings.TrimSpace(c.TLS.Mode))
+	if tlsMode == "" {
+		tlsMode = "off"
+	}
+	switch tlsMode {
+	case "off", "files", "acme":
+	default:
+		return fmt.Errorf("tls.mode must be off, files, or acme")
+	}
+	needsTLS := c.Listen.HTTPS != "" || c.Listen.QUIC != ""
+	switch tlsMode {
+	case "files":
+		if needsTLS && (c.TLS.CertFile == "" || c.TLS.KeyFile == "") {
+			return fmt.Errorf("tls.cert_file and tls.key_file required when tls.mode is files and https or quic is enabled")
+		}
+	case "acme":
+		if !c.TLS.ACME.AgreeTOS {
+			return fmt.Errorf("tls.acme.agree_tos is required when tls.mode is acme")
+		}
+		if strings.TrimSpace(c.TLS.ACME.Email) == "" {
+			return fmt.Errorf("tls.acme.email is required when tls.mode is acme")
+		}
+		if strings.TrimSpace(c.TLS.ACME.StorageDir) == "" {
+			return fmt.Errorf("tls.acme.storage_dir is required when tls.mode is acme")
+		}
+		http01 := c.TLS.ACME.HTTP01 == nil || *c.TLS.ACME.HTTP01
+		if http01 && c.Listen.HTTP == "" {
+			return fmt.Errorf("listen.http is required when tls.acme.http01 is enabled")
+		}
+	case "off":
+		if needsTLS {
+			return fmt.Errorf("tls.mode must be files or acme when listen.https or listen.quic is set")
+		}
 	}
 	switch strings.ToLower(strings.TrimSpace(c.Trust.Mode)) {
 	case "edge", "behind_proxy":
@@ -691,14 +941,24 @@ func (c Config) Validate() error {
 		default:
 			return fmt.Errorf("challenge.mode must be detect or always")
 		}
+		algo := strings.ToLower(strings.TrimSpace(c.Challenge.Algorithm))
+		if algo == "" {
+			c.Challenge.Algorithm = "adaptive"
+			algo = "adaptive"
+		}
+		switch algo {
+		case "adaptive", "sha256", "sha-256", "pbkdf2", "pbkdf2-sha256", "argon2id":
+		default:
+			return fmt.Errorf("challenge.algorithm must be adaptive, sha256, pbkdf2, or argon2id")
+		}
 	}
 	if c.Challenge.Captcha.Enabled {
 		provider := strings.ToLower(strings.TrimSpace(c.Challenge.Captcha.Provider))
 		if provider == "" {
 			return fmt.Errorf("challenge.captcha.provider is required when captcha is enabled")
 		}
-		if provider != "stub" {
-			return fmt.Errorf("challenge.captcha.provider %q is not supported (use stub)", c.Challenge.Captcha.Provider)
+		if provider != "stub" && provider != "ravenguard" {
+			return fmt.Errorf("challenge.captcha.provider %q is not supported (use stub or ravenguard)", c.Challenge.Captcha.Provider)
 		}
 	}
 	if c.QFeeds.Enabled {
@@ -764,7 +1024,44 @@ func (c Config) Validate() error {
 	default:
 		return fmt.Errorf("sandbox.seccomp.deny_action must be errno, kill_thread, kill_process, trap, or log")
 	}
+	if c.Admin.Enabled {
+		if c.Admin.Listen == "" && c.Admin.HTTPS == "" {
+			return fmt.Errorf("admin.listen or admin.https is required when admin is enabled")
+		}
+		if c.Admin.HTTPS != "" {
+			cert := c.Admin.CertFile
+			key := c.Admin.KeyFile
+			if cert == "" {
+				cert = c.TLS.CertFile
+			}
+			if key == "" {
+				key = c.TLS.KeyFile
+			}
+			if cert == "" || key == "" {
+				return fmt.Errorf("admin TLS cert/key or tls.cert_file/tls.key_file required when admin.https is set")
+			}
+		}
+		if strings.TrimSpace(c.Admin.DataDir) == "" {
+			return fmt.Errorf("admin.data_dir is required when admin is enabled")
+		}
+		switch strings.ToLower(strings.TrimSpace(c.Admin.CookieSecure)) {
+		case "auto", "true", "false", "1", "0", "yes", "no":
+		default:
+			return fmt.Errorf("admin.cookie_secure must be auto, true, or false")
+		}
+	}
 	return nil
+}
+
+func normalizeBasePath(p string) string {
+	p = strings.TrimSpace(p)
+	if p == "" || p == "/" {
+		return "/"
+	}
+	if !strings.HasPrefix(p, "/") {
+		p = "/" + p
+	}
+	return strings.TrimSuffix(p, "/")
 }
 
 func validateSandboxMode(field, value string) error {

@@ -20,7 +20,7 @@ timeout = "3s"
 
 [trust]
 mode = "behind_proxy"
-trusted_proxies = ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "fc00::/7"]
+trusted_proxies = ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "127.0.0.0/8", "fc00::/7", "::1/128"]
 real_ip_header = "X-Real-IP"
 proto_header = "X-Forwarded-Proto"
 proxy_protocol = false
@@ -29,6 +29,12 @@ proxy_protocol = false
 ip_files = ["/blocklists/ips.txt"]
 dns_files = ["/blocklists/domains.txt"]
 ua_files = ["/blocklists/ua.txt"]
+reload_interval = "30s"
+
+[allowlists]
+# ip_files = ["/allowlists/ips.txt"]
+# ua_files = ["/allowlists/ua.txt"]
+# header_files = ["/allowlists/headers.txt"]
 reload_interval = "30s"
 
 [qfeeds]
@@ -93,6 +99,7 @@ low_score_points = 40
 [challenge]
 enabled = true
 mode = "detect"
+algorithm = "adaptive"
 difficulty = 16
 cookie_name = "rg_clear"
 cookie_ttl = "24h"
@@ -102,6 +109,7 @@ path_prefix = "/_rg"
 
 [challenge.captcha]
 enabled = false
+# provider = "ravenguard"
 
 [privacy]
 hash_client_ip = true
@@ -141,7 +149,17 @@ restrict_net = true
 restrict_scoped = true
 ignore_missing = true
 ro_dirs = ["/config", "/blocklists", "/etc/ssl/certs"]
-rw_dirs = ["/tmp"]
+rw_dirs = ["/tmp", "/data/admin"]
 
 [sandbox.seccomp]
 deny_action = "errno"
+
+# Enable with RG_ADMIN_ENABLED=true and RG_ADMIN_BOOTSTRAP_PASSWORD
+[admin]
+enabled = false
+listen = ":9090"
+base_path = "/"
+data_dir = "/data/admin"
+bootstrap_user = "admin"
+session_ttl = "12h"
+cookie_secure = "auto"

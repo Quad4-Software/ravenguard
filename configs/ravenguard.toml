@@ -1,14 +1,30 @@
 # RavenGuard example config
-# Primary topology: Client -> reverse proxy -> RavenGuard -> origin
+# Edge topology: Client -> RavenGuard (:80/:443 TLS) -> origin
+# Optional: Client -> reverse proxy -> RavenGuard (HTTP) -> origin
 
 [listen]
 http = ":8080"
-# https = ":8443"
-# quic = ":8443"
+# Edge with ACME:
+# http = ":80"
+# https = ":443"
+# quic = ":443"
 
 [tls]
+mode = "off" # off | files | acme
+# Static PEM (tls.mode = "files"):
 # cert_file = "/certs/fullchain.pem"
 # key_file = "/certs/privkey.pem"
+
+# Automatic Let's Encrypt (tls.mode = "acme"):
+# [tls.acme]
+# email = "admin@example.com"
+# agree_tos = true
+# staging = true
+# storage_dir = "./data/certs"
+# hosts = ["app.example.com"]
+# http01 = true
+# tls_alpn01 = true
+# redirect_http = true
 
 [upstream]
 url = "http://127.0.0.1:8000"
@@ -32,6 +48,7 @@ timeout = "3s"
 
 [trust]
 mode = "behind_proxy"
+# Edge mode (RavenGuard terminates TLS): mode = "edge"
 trusted_proxies = ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "127.0.0.0/8", "fc00::/7", "::1/128"]
 real_ip_header = "X-Real-IP"
 proto_header = "X-Forwarded-Proto"
@@ -41,6 +58,13 @@ proxy_protocol = false
 ip_files = ["testdata/blocklists/ips.txt"]
 dns_files = ["testdata/blocklists/domains.txt"]
 ua_files = ["testdata/blocklists/ua.txt"]
+reload_interval = "30s"
+
+[allowlists]
+# Trusted clients skip detect scoring and challenge (still subject to blocklists, feeds, rate limits, access policies).
+# ip_files = ["testdata/allowlists/ips.txt"]
+# ua_files = ["testdata/allowlists/ua.txt"]
+# header_files = ["testdata/allowlists/headers.txt"]
 reload_interval = "30s"
 
 [qfeeds]
@@ -107,6 +131,7 @@ low_score_points = 40
 [challenge]
 enabled = true
 mode = "detect"
+algorithm = "adaptive"
 difficulty = 16
 cookie_name = "rg_clear"
 cookie_ttl = "24h"
@@ -116,6 +141,7 @@ path_prefix = "/_rg"
 
 [challenge.captcha]
 enabled = false
+# provider = "ravenguard"
 # provider = "stub"
 # token = "ok"
 
@@ -130,6 +156,35 @@ retention = "30m"
 brand = "RavenGuard"
 status_text = "Checking your browser before accessing this site."
 test_mode = false
+# Appearance (maps to CSS vars --bg, --fg, --accent, --theme, fonts)
+# logo_url = ""
+# favicon_url = ""
+# background = "#050505"
+# foreground = "#e8e8e8"
+# accent = "#c4c4c4"
+# font_sans = ""
+# font_mono = ""
+# challenge_title = ""
+# challenge_subtitle = ""
+# block_title = ""
+# rate_limit_title = ""
+# upstream_title = ""
+# error_title = ""
+# footer_text = ""
+# custom_css = ""
+# ray_label = ""
+
+# Public fingerprint controls. Empty ray_header omits the response header.
+# [stealth]
+# ray_header = "X-RavenGuard-Ray"
+# element_name = "rg-check"
+# bootstrap_global = "__g__"
+# access_cookie_name = "rg_access"
+# hide_brand_mark = false
+# generic_copy = false
+# serve_manifest = true
+# serve_root_icons = true
+# widget_input_name = "rg"
 
 [site]
 # public_url = "https://example.com"
@@ -161,7 +216,7 @@ flush_timeout = "2s"
 
 # Linux Landlock LSM + in-process seccomp-bpf.
 # Modes: off | try | best_effort | enforce
-# try and best_effort soft-fail; enforce aborts startup on failure.
+# try and best_effort soft-fail. enforce aborts startup on failure.
 [sandbox]
 mode = "best_effort"
 
@@ -181,3 +236,19 @@ ignore_missing = true
 [sandbox.seccomp]
 # mode = ""  # inherit sandbox.mode
 deny_action = "errno"  # errno | kill_thread | kill_process | trap | log
+
+# Management plane (separate listener, never on the public guard port).
+[admin]
+enabled = true
+listen = "127.0.0.1:9090"
+# https = ""
+# cert_file = ""
+# key_file = ""
+base_path = "/"
+data_dir = "./data/admin"
+# bootstrap_user = "admin"
+# Optional. If empty on first start, a random password is generated,
+# printed once in the log, and written to data_dir/initial_admin_password.
+# bootstrap_password = ""  # or RG_ADMIN_BOOTSTRAP_PASSWORD
+session_ttl = "12h"
+cookie_secure = "auto"

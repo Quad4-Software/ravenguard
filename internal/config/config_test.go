@@ -52,6 +52,16 @@ func TestValidateCaptchaStubOK(t *testing.T) {
 	}
 }
 
+func TestValidateCaptchaRavenOK(t *testing.T) {
+	cfg := config.Default()
+	cfg.Challenge.Secret = "test-secret-16chars"
+	cfg.Challenge.Captcha.Enabled = true
+	cfg.Challenge.Captcha.Provider = "ravenguard"
+	if err := cfg.Validate(); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestValidateChallengeMode(t *testing.T) {
 	cfg := config.Default()
 	cfg.Challenge.Secret = "test-secret-16chars"
@@ -281,5 +291,32 @@ func TestValidateSandboxMode(t *testing.T) {
 	}
 	if cfg.Sandbox.Mode != "try" {
 		t.Fatalf("mode=%q", cfg.Sandbox.Mode)
+	}
+}
+
+func TestEnvTrustedProxies(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "cfg.toml")
+	body := []byte(`
+[upstream]
+url = "http://127.0.0.1:8000"
+[challenge]
+secret = "test-secret-16chars"
+[trust]
+mode = "behind_proxy"
+trusted_proxies = ["10.0.0.0/8"]
+`)
+	if err := os.WriteFile(path, body, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("RG_TRUSTED_PROXIES", "192.168.0.0/16, 127.0.0.1")
+	cfg, err := config.Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cfg.Trust.TrustedProxies) != 2 {
+		t.Fatalf("trusted_proxies=%v", cfg.Trust.TrustedProxies)
+	}
+	if cfg.Trust.TrustedProxies[0] != "192.168.0.0/16" || cfg.Trust.TrustedProxies[1] != "127.0.0.1" {
+		t.Fatalf("trusted_proxies=%v", cfg.Trust.TrustedProxies)
 	}
 }
