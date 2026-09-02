@@ -33,21 +33,39 @@ type Result struct {
 	Reasons []string
 }
 
+// scannerUA matches vulnerability scanners, HTTP libraries, SEO crawlers,
+// and headless or automation clients that commonly scrape sites.
 var scannerUA = []string{
-	"sqlmap", "nikto", "nmap", "masscan", "zgrab", "dirbuster",
-	"gobuster", "wfuzz", "ffuf", "nuclei", "httpx", "acunetix",
-	"nessus", "openvas", "w3af", "burpsuite", "python-requests",
+	"sqlmap", "nikto", "nmap", "masscan", "zgrab", "zgrab2",
+	"dirbuster", "gobuster", "wfuzz", "ffuf", "nuclei", "httpx",
+	"acunetix", "nessus", "openvas", "w3af", "burpsuite", "burp/",
+	"python-requests", "python-urllib", "aiohttp",
 	"go-http-client", "scrapy", "curl/", "wget/", "libwww-perl",
-	"java/", "phantomjs", "headlesschrome", "semrush", "ahrefs",
-	"mj12bot", "dotbot", "petalbot",
+	"libcurl", "java/", "okhttp", "apache-httpclient", "axios/",
+	"node-fetch", "undici", "postmanruntime", "insomnia/",
+	"phantomjs", "headlesschrome", "puppeteer",
+	"playwright", "selenium", "chromedriver", "geckodriver",
+	"crawl4ai", "firecrawl", "browser-use", "scrapling",
+	"httrack", "semrush", "ahrefs", "mj12bot", "dotbot",
+	"petalbot", "dataforseobot", "serpstat", "majestic", "rogerbot",
+	"screaming frog", "seokicks", "blexbot", "linkdexbot",
 }
 
+// aiUA matches documented AI training crawlers, answer-engine indexers,
+// and user-triggered AI fetch agents (research snapshot mid-2026).
 var aiUA = []string{
-	"gptbot", "chatgpt-user", "oai-searchbot", "claudebot", "claude-web",
-	"anthropic-ai", "bytespider", "ccbot", "google-extended",
-	"meta-externalagent", "meta-externalfetcher", "perplexitybot",
+	"gptbot", "chatgpt-user", "oai-searchbot",
+	"claudebot", "claude-user", "claude-searchbot", "claude-web",
+	"anthropic-ai", "anthropic/",
+	"bytespider", "ccbot", "google-extended", "google-agent",
+	"google-cloudvertexbot", "googleagent-mariner", "googleother",
+	"meta-externalagent", "meta-externalfetcher", "facebookbot",
+	"facebookexternalhit",
+	"perplexitybot", "perplexity-user",
 	"amazonbot", "cohere-ai", "ai2bot", "diffbot", "youbot",
-	"omgili", "facebookexternalhit", "imagesiftbot",
+	"omgili", "omgilibot", "webzio", "imagesiftbot",
+	"applebot-extended", "mistralai-user", "duckassistbot",
+	"timpibot", "pangubot", "kangaroo bot", "kangaroobot",
 }
 
 var probePaths = []string{

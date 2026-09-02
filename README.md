@@ -3,7 +3,13 @@
 > [!WARNING]
 > Alpha software under active development. Not ready for production.
 
-HTTP application guard for HTTP, HTTPS, and WebSocket origins. Place it between a reverse proxy and the origin:
+HTTP edge reverse proxy and application guard. RavenGuard can terminate TLS with automatic Let's Encrypt, route to multiple upstreams, enforce access gates, and run WAF-style controls:
+
+```text
+Client -> RavenGuard (:80/:443) -> origin(s)
+```
+
+It still works behind an external reverse proxy when you prefer that topology:
 
 ```text
 Client -> reverse proxy (TLS) -> RavenGuard -> origin
@@ -11,14 +17,21 @@ Client -> reverse proxy (TLS) -> RavenGuard -> origin
 
 ## Features
 
-- Runs behind nginx, Caddy, Traefik, or similar. Uses the client IP from trusted proxy headers
+- Edge TLS with static PEM files or automatic Let's Encrypt (HTTP-01 / TLS-ALPN-01, durable renewals)
+- Multi-upstream host and path routing with live admin CRUD
+- Per-route access gates: password, PIN, IP allowlist, header secret, User-Agent allowlist
+- Optional placement behind nginx, Caddy, or Traefik with trusted proxy headers
 - Proxies to HTTP, HTTPS, WebSocket (`ws`/`wss` URL aliases), or unix-socket upstreams
 - IP, hostname, and User-Agent blocklists with periodic reload
+- IP, User-Agent, and header allowlists that skip detect and challenge
 - Per-client rate limits
 - Heuristic detection for scanners, scrapers, and common AI crawler User-Agents
 - Concurrency limits, request size caps, temporary bans for repeat offenders
 - Blocks common path and query exploit probes
-- Optional JavaScript proof-of-work challenge with clearance cookie
+- Optional JavaScript proof-of-work challenge (`@quad4/ravenguard-widget`) with clearance cookie
+- Adaptive PoW effort (SHA-256 / PBKDF2) from detect risk bands
+- Embeddable form widget sharing the same protocol as the gate interstitial
+- Optional admin control plane on a separate listen address (multi-user, argon2id, embedded SPA)
 - WebSocket upgrades require an existing clearance cookie when challenge is enabled
 - Client IPs hashed in memory and logs by default
 - Optional Q-Feeds threat-intel integration

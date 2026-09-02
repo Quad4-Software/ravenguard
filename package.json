@@ -1,0 +1,20 @@
+{
+  "name": "ravenguard",
+  "private": true,
+  "packageManager": "pnpm@11.24.0",
+  "engines": {
+    "node": ">=22.0.0",
+    "pnpm": ">=11.0.0"
+  },
+  "scripts": {
+    "widget:build": "pnpm --filter @quad4/ravenguard-widget build",
+    "widget:test": "pnpm --filter @quad4/ravenguard-widget test",
+    "widget:typecheck": "pnpm --filter @quad4/ravenguard-widget typecheck",
+    "admin:dev": "pnpm --filter @quad4/ravenguard-admin dev",
+    "admin:build": "pnpm --filter @quad4/ravenguard-admin build",
+    "admin:test": "pnpm --filter @quad4/ravenguard-admin test",
+    "admin:typecheck": "pnpm --filter @quad4/ravenguard-admin typecheck",
+    "docs:start": "pnpm --filter ravenguard-docs start",
+    "docs:build": "pnpm --filter ravenguard-docs build"
+  }
+}

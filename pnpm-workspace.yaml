@@ -1,0 +1,27 @@
+packages:
+  - 'packages/*'
+  - 'docs'
+
+# Supply chain defaults for pnpm 11+
+# https://pnpm.io/supply-chain-security
+minimumReleaseAge: 10080
+minimumReleaseAgeStrict: true
+trustPolicy: no-downgrade
+trustPolicyIgnoreAfter: 525600
+blockExoticSubdeps: true
+strictDepBuilds: true
+trustLockfile: false
+dangerouslyAllowAllBuilds: false
+
+overrides:
+  uuid: ^14.0.0
+  serialize-javascript: ^7.0.5
+
+minimumReleaseAgeExclude:
+  - uuid
+  - serialize-javascript
+
+allowBuilds:
+  '@swc/core': true
+  core-js: false
+  esbuild: true

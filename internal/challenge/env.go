@@ -15,6 +15,7 @@ var ErrAutomation = errors.New("automation environment detected")
 type EnvReport struct {
 	Webdriver  bool `json:"webdriver"`
 	Playwright bool `json:"playwright"`
+	Selenium   bool `json:"selenium"`
 	Headless   bool `json:"headless"`
 	NoPlugins  bool `json:"no_plugins"`
 	Interacted bool `json:"interacted"`
@@ -36,11 +37,15 @@ func (m *Manager) EvaluateEnv(rep EnvReport, difficulty int) EnvVerdict {
 		v.Refuse = true
 		v.Reasons = append(v.Reasons, "playwright")
 	}
+	if rep.Selenium {
+		v.Refuse = true
+		v.Reasons = append(v.Reasons, "selenium")
+	}
 	if rep.Headless {
 		v.Refuse = true
 		v.Reasons = append(v.Reasons, "headless")
 	}
-	if rep.NoPlugins && (rep.Webdriver || rep.Headless || rep.Playwright) {
+	if rep.NoPlugins && (rep.Webdriver || rep.Headless || rep.Playwright || rep.Selenium) {
 		v.Reasons = append(v.Reasons, "no_plugins")
 	}
 	if !rep.Interacted {

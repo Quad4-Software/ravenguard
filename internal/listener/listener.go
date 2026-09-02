@@ -25,6 +25,7 @@ type Config struct {
 	QUIC             string
 	CertFile         string
 	KeyFile          string
+	TLSConfig        *tls.Config
 	Handler          http.Handler
 	ProxyProtocol    bool
 	MaxHeaderBytes   int
@@ -86,19 +87,21 @@ func (s *Server) Run(ctx context.Context) error {
 			return fmt.Errorf("https listen: %w", err)
 		}
 		ln = s.wrap(ln)
+		httpsTLS := tlsCfg.Clone()
+		httpsTLS.NextProtos = appendALPN(httpsTLS.NextProtos, "h2", "http/1.1")
 		srv := &http.Server{
 			Handler:           withAltSvc(s.cfg.Handler, s.cfg.QUIC),
-			TLSConfig:         tlsCfg.Clone(),
+			TLSConfig:         httpsTLS,
 			ReadHeaderTimeout: 10 * time.Second,
 			ReadTimeout:       30 * time.Second,
 			WriteTimeout:      60 * time.Second,
 			IdleTimeout:       120 * time.Second,
 			MaxHeaderBytes:    s.maxHeaderBytes(),
 		}
-		srv.TLSConfig.NextProtos = []string{"h2", "http/1.1"}
+		tlsLn := tls.NewListener(ln, httpsTLS)
 		wg.Go(func() {
 			log.Printf("listening https on %s", s.cfg.HTTPS)
-			if err := srv.ServeTLS(ln, s.cfg.CertFile, s.cfg.KeyFile); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			if err := srv.Serve(tlsLn); err != nil && !errors.Is(err, http.ErrServerClosed) {
 				errCh <- fmt.Errorf("https: %w", err)
 			}
 		})
@@ -174,6 +177,9 @@ func (s *Server) wrap(ln net.Listener) net.Listener {
 }
 
 func (s *Server) loadTLS() (*tls.Config, error) {
+	if s.cfg.TLSConfig != nil {
+		return s.cfg.TLSConfig.Clone(), nil
+	}
 	if s.cfg.CertFile == "" || s.cfg.KeyFile == "" {
 		return nil, nil
 	}
@@ -185,6 +191,26 @@ func (s *Server) loadTLS() (*tls.Config, error) {
 		Certificates: []tls.Certificate{cert},
 		MinVersion:   tls.VersionTLS12,
 	}, nil
+}
+
+func appendALPN(existing []string, extras ...string) []string {
+	seen := make(map[string]struct{}, len(existing)+len(extras))
+	out := make([]string, 0, len(existing)+len(extras))
+	for _, p := range existing {
+		if _, ok := seen[p]; ok {
+			continue
+		}
+		seen[p] = struct{}{}
+		out = append(out, p)
+	}
+	for _, p := range extras {
+		if _, ok := seen[p]; ok {
+			continue
+		}
+		seen[p] = struct{}{}
+		out = append(out, p)
+	}
+	return out
 }
 
 func withAltSvc(next http.Handler, quicAddr string) http.Handler {

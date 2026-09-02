@@ -17,10 +17,15 @@ import (
 )
 
 type Sets struct {
-	ips  atomic.Pointer[[]net.IPNet]
-	dns  atomic.Pointer[map[string]struct{}]
-	uas  atomic.Pointer[[]string]
-	stop chan struct{}
+	ips        atomic.Pointer[[]net.IPNet]
+	dns        atomic.Pointer[map[string]struct{}]
+	uas        atomic.Pointer[[]string]
+	stop       chan struct{}
+	lastReload atomic.Int64
+	ipFiles    []string
+	dnsFiles   []string
+	uaFiles    []string
+	overlayDir string
 }
 
 func New() *Sets {
@@ -50,6 +55,11 @@ func (s *Sets) Load(ipFiles, dnsFiles, uaFiles []string) error {
 	s.ips.Store(&ips)
 	s.dns.Store(&dns)
 	s.uas.Store(&uas)
+	s.ipFiles = append([]string(nil), ipFiles...)
+	s.dnsFiles = append([]string(nil), dnsFiles...)
+	s.uaFiles = append([]string(nil), uaFiles...)
+	s.attachOverlayFiles()
+	s.lastReload.Store(time.Now().UnixNano())
 	return nil
 }
 
@@ -57,6 +67,10 @@ func (s *Sets) StartReload(ipFiles, dnsFiles, uaFiles []string, every time.Durat
 	if every <= 0 {
 		return
 	}
+	s.ipFiles = append([]string(nil), ipFiles...)
+	s.dnsFiles = append([]string(nil), dnsFiles...)
+	s.uaFiles = append([]string(nil), uaFiles...)
+	s.attachOverlayFiles()
 	go func() {
 		t := time.NewTicker(every)
 		defer t.Stop()
@@ -65,10 +79,42 @@ func (s *Sets) StartReload(ipFiles, dnsFiles, uaFiles []string, every time.Durat
 			case <-s.stop:
 				return
 			case <-t.C:
-				_ = s.Load(ipFiles, dnsFiles, uaFiles)
+				_ = s.Load(s.ipFiles, s.dnsFiles, s.uaFiles)
 			}
 		}
 	}()
+}
+
+func (s *Sets) ReloadNow() error {
+	s.attachOverlayFiles()
+	return s.Load(s.ipFiles, s.dnsFiles, s.uaFiles)
+}
+
+type Stats struct {
+	IPCount    int       `json:"ip_count"`
+	DNSCount   int       `json:"dns_count"`
+	UACount    int       `json:"ua_count"`
+	LastReload time.Time `json:"last_reload,omitempty"`
+}
+
+func (s *Sets) Stats() Stats {
+	var st Stats
+	if s == nil {
+		return st
+	}
+	if ips := s.ips.Load(); ips != nil {
+		st.IPCount = len(*ips)
+	}
+	if dns := s.dns.Load(); dns != nil {
+		st.DNSCount = len(*dns)
+	}
+	if uas := s.uas.Load(); uas != nil {
+		st.UACount = len(*uas)
+	}
+	if n := s.lastReload.Load(); n > 0 {
+		st.LastReload = time.Unix(0, n)
+	}
+	return st
 }
 
 func (s *Sets) Stop() {

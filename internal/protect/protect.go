@@ -297,6 +297,130 @@ func (g *Guard) Sweep(maxAge time.Duration) {
 	})
 }
 
+// BanInfo is a snapshot of a ban or strike entry.
+type BanInfo struct {
+	Key         string    `json:"key"`
+	Strikes     int       `json:"strikes"`
+	BannedUntil time.Time `json:"banned_until,omitempty"`
+	WindowStart time.Time `json:"window_start,omitempty"`
+	Active      bool      `json:"active"`
+}
+
+func (g *Guard) ListBans() []BanInfo {
+	if g == nil {
+		return nil
+	}
+	now := time.Now()
+	var out []BanInfo
+	for i := range g.bans {
+		s := &g.bans[i]
+		s.mu.Lock()
+		for k, e := range s.ents {
+			active := !e.bannedUntil.IsZero() && now.Before(e.bannedUntil)
+			if !active && e.strikes == 0 {
+				continue
+			}
+			out = append(out, BanInfo{
+				Key:         k,
+				Strikes:     e.strikes,
+				BannedUntil: e.bannedUntil,
+				WindowStart: e.windowStart,
+				Active:      active,
+			})
+		}
+		s.mu.Unlock()
+	}
+	return out
+}
+
+func (g *Guard) Unban(key string) bool {
+	if g == nil || key == "" {
+		return false
+	}
+	s := &g.bans[strhash.String(key)%banShards]
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	e, ok := s.ents[key]
+	if !ok {
+		return false
+	}
+	delete(s.ents, key)
+	e.bannedUntil = time.Time{}
+	e.strikes = 0
+	e.windowStart = time.Time{}
+	banEntryPool.Put(e)
+	return true
+}
+
+func (g *Guard) ClearStrikes(key string) bool {
+	return g.Unban(key)
+}
+
+func (g *Guard) BanCount() int {
+	if g == nil {
+		return 0
+	}
+	now := time.Now()
+	n := 0
+	for i := range g.bans {
+		s := &g.bans[i]
+		s.mu.Lock()
+		for _, e := range s.ents {
+			if !e.bannedUntil.IsZero() && now.Before(e.bannedUntil) {
+				n++
+			}
+		}
+		s.mu.Unlock()
+	}
+	return n
+}
+
+func (g *Guard) Concurrency() (global int64, clients int) {
+	if g == nil {
+		return 0, 0
+	}
+	g.clients.Range(func(_, _ any) bool {
+		clients++
+		return true
+	})
+	return g.global.Load(), clients
+}
+
+func (g *Guard) UpdateConfig(cfg Config) {
+	if g == nil {
+		return
+	}
+	if cfg.BanAfterStrikes > 0 {
+		g.cfg.BanAfterStrikes = cfg.BanAfterStrikes
+	}
+	if cfg.BanTTL > 0 {
+		g.cfg.BanTTL = cfg.BanTTL
+	}
+	if cfg.MaxBodyBytes > 0 {
+		g.cfg.MaxBodyBytes = cfg.MaxBodyBytes
+	}
+	if cfg.MaxHeaderBytes > 0 {
+		g.cfg.MaxHeaderBytes = cfg.MaxHeaderBytes
+	}
+	if cfg.MaxURLBytes > 0 {
+		g.cfg.MaxURLBytes = cfg.MaxURLBytes
+	}
+	if cfg.MaxConcurrentGlobal > 0 {
+		g.cfg.MaxConcurrentGlobal = cfg.MaxConcurrentGlobal
+	}
+	if cfg.MaxConcurrentClient > 0 {
+		g.cfg.MaxConcurrentClient = cfg.MaxConcurrentClient
+	}
+	g.cfg.AttackBlock = cfg.AttackBlock
+	if cfg.AttackScore > 0 {
+		g.cfg.AttackScore = cfg.AttackScore
+	}
+	if cfg.WriteMethodCost > 0 {
+		g.cfg.WriteMethodCost = cfg.WriteMethodCost
+	}
+	g.cfg.Enabled = cfg.Enabled
+}
+
 func MethodCost(method string, writeCost int) int {
 	switch method {
 	case http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:

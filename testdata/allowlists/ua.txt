@@ -1,0 +1,3 @@
+# Substring allowlist for known health checks and trusted agents
+# HealthCheckBot
+# my-uptime-probe

@@ -23,6 +23,7 @@ type Config struct {
 	MaxConnsPerHost       int
 	FlushInterval         time.Duration
 	SetHeaders            map[string]string
+	StripPrefix           string
 	ErrorHandler          func(http.ResponseWriter, *http.Request, error)
 }
 
@@ -55,6 +56,7 @@ func New(cfg Config) *httputil.ReverseProxy {
 
 	target := NormalizeTarget(cfg.Target)
 	setHeaders := cfg.SetHeaders
+	strip := strings.TrimSuffix(cfg.StripPrefix, "/")
 	rp := &httputil.ReverseProxy{
 		Rewrite: func(pr *httputil.ProxyRequest) {
 			out := pr.Out
@@ -77,6 +79,17 @@ func New(cfg Config) *httputil.ReverseProxy {
 				out.Host = "localhost"
 			} else {
 				out.Host = target.Host
+			}
+			if strip != "" {
+				p := out.URL.Path
+				if p == strip {
+					out.URL.Path = "/"
+				} else if strings.HasPrefix(p, strip+"/") {
+					out.URL.Path = p[len(strip):]
+					if out.URL.Path == "" {
+						out.URL.Path = "/"
+					}
+				}
 			}
 			for k, v := range setHeaders {
 				out.Header.Set(k, v)

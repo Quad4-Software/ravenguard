@@ -24,4 +24,7 @@ func TestStubCaptcha(t *testing.T) {
 	if _, err := challenge.NewCaptcha("hcaptcha", ""); err == nil {
 		t.Fatal("expected unsupported")
 	}
+	if _, err := challenge.NewCaptcha("ravenguard", ""); err != nil {
+		t.Fatal(err)
+	}
 }

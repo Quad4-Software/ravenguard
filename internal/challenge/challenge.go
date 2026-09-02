@@ -43,11 +43,14 @@ type CaptchaVerifier interface {
 type Manager struct {
 	Secret     []byte
 	Difficulty int
+	// Algorithm is sha256, pbkdf2, argon2id, or adaptive (default).
+	Algorithm  string
 	CookieName string
 	CookieTTL  time.Duration
 	Secure     bool
 	Captcha    CaptchaVerifier
 	nonces     nonceStore
+	risks      riskCache
 }
 
 type Token struct {
@@ -127,6 +130,7 @@ func (m *Manager) ConsumeNonce(token Token) error {
 
 func (m *Manager) SweepNonces(now time.Time) {
 	m.nonces.sweep(now.Unix())
+	m.risks.sweep(now.Unix())
 }
 
 func (s *nonceStore) consume(nonce string, exp int64) bool {

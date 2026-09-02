@@ -44,12 +44,14 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
-          cache-dependency-path: docs/pnpm-lock.yaml
+          cache-dependency-path: pnpm-lock.yaml
 
       - name: Install dependencies
+        working-directory: .
         run: pnpm install --frozen-lockfile
 
       - name: Build website
+        working-directory: docs
         run: pnpm run build
 
       - name: Upload Pages artifact

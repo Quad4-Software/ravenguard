@@ -1,0 +1,3 @@
+# Header-Name: value (exact value match)
+# X-RG-Allow: trusted
+# X-Internal-Token: replace-me

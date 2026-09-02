@@ -70,6 +70,9 @@ linters:
           - gosec
         path: internal/(privacy|challenge)/unsafe\.go
         text: G103
+      - linters:
+          - noctx
+        path: internal/admin/store
     paths:
       - docs
       - node_modules

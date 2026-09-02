@@ -176,3 +176,38 @@ func (l *Limiter) Sweep(maxAge time.Duration) {
 		s.mu.Unlock()
 	}
 }
+
+func (l *Limiter) ActiveBuckets() int {
+	if l == nil {
+		return 0
+	}
+	n := 0
+	for i := range l.shards {
+		s := &l.shards[i]
+		s.mu.Lock()
+		n += len(s.ents)
+		s.mu.Unlock()
+	}
+	return n
+}
+
+func (l *Limiter) Update(requests, burst int, window time.Duration, perPath bool) {
+	if l == nil {
+		return
+	}
+	if requests <= 0 {
+		return
+	}
+	if burst <= 0 {
+		burst = requests
+	}
+	if window <= 0 {
+		window = time.Minute
+	}
+	l.requests = requests
+	l.burst = burst
+	l.window = window
+	l.perPath = perPath
+	l.rate = float64(requests) / window.Seconds()
+	l.burstF = float64(burst)
+}

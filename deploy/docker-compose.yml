@@ -5,11 +5,18 @@ services:
       dockerfile: deploy/Dockerfile
     ports:
       - "8080:8080"
+      - "80:80"
+      - "443:443/tcp"
+      - "443:443/udp"
       - "8443:8443/tcp"
       - "8443:8443/udp"
+      # Admin control plane (enable [admin] in config / RG_ADMIN_*). Bind host loopback only.
+      - "127.0.0.1:9090:9090"
     volumes:
       - ../configs/ravenguard.docker.toml:/config/ravenguard.toml:ro
       - ../testdata/blocklists:/blocklists:ro
+      - admin-data:/data/admin
+      - certs-data:/data/certs
     environment:
       QFEEDS_API_TOKEN: ${QFEEDS_API_TOKEN:-}
       SENTRY_DSN: ${SENTRY_DSN:-}
@@ -17,6 +24,16 @@ services:
       SENTRY_RELEASE: ${SENTRY_RELEASE:-}
       RG_SANDBOX_MODE: ${RG_SANDBOX_MODE:-best_effort}
       RG_CHALLENGE_SECRET: ${RG_CHALLENGE_SECRET:-rg-docker-dev-secret!!}
+      RG_ADMIN_ENABLED: ${RG_ADMIN_ENABLED:-false}
+      RG_ADMIN_LISTEN: ${RG_ADMIN_LISTEN:-:9090}
+      RG_ADMIN_DATA_DIR: ${RG_ADMIN_DATA_DIR:-/data/admin}
+      RG_ADMIN_BOOTSTRAP_PASSWORD: ${RG_ADMIN_BOOTSTRAP_PASSWORD:-}
+      RG_TLS_MODE: ${RG_TLS_MODE:-off}
+      RG_ACME_EMAIL: ${RG_ACME_EMAIL:-}
+      RG_ACME_STORAGE_DIR: ${RG_ACME_STORAGE_DIR:-/data/certs}
+      RG_ACME_STAGING: ${RG_ACME_STAGING:-true}
+      RG_ACME_AGREE_TOS: ${RG_ACME_AGREE_TOS:-false}
+      RG_ACME_HOSTS: ${RG_ACME_HOSTS:-}
     read_only: true
     tmpfs:
       - /tmp:size=64m,mode=1777
@@ -33,3 +50,7 @@ services:
     image: traefik/whoami:v1.10
     expose:
       - "80"
+
+volumes:
+  admin-data:
+  certs-data:

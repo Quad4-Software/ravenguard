@@ -1,0 +1,15 @@
+{
+  "challenge": {
+    "v": 1,
+    "algorithm": "SHA-256",
+    "challenge": "0123456789abcdef0123456789abcdef",
+    "difficulty": 8,
+    "maxnumber": 2048,
+    "expires": 4102444800,
+    "bind": "fixture-client",
+    "signature": "a667c0368757a01e5cc3cb3fb121219282f3b51c28a1da2a03504b95854f80f2"
+  },
+  "payload": "eyJ2IjoxLCJhbGdvcml0aG0iOiJTSEEtMjU2IiwiY2hhbGxlbmdlIjoiMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYiLCJkaWZmaWN1bHR5Ijo4LCJtYXhudW1iZXIiOjIwNDgsImV4cGlyZXMiOjQxMDI0NDQ4MDAsImJpbmQiOiJmaXh0dXJlLWNsaWVudCIsInNpZ25hdHVyZSI6ImE2NjdjMDM2ODc1N2EwMWU1Y2MzY2IzZmIxMjEyMTkyODJmM2I1MWMyOGExZGEyYTAzNTA0Yjk1ODU0ZjgwZjIiLCJzb2x1dGlvbiI6IjM5IiwiZW52Ijp7IndlYmRyaXZlciI6ZmFsc2UsInBsYXl3cmlnaHQiOmZhbHNlLCJoZWFkbGVzcyI6ZmFsc2UsIm5vX3BsdWdpbnMiOmZhbHNlLCJpbnRlcmFjdGVkIjp0cnVlLCJzb2x2ZV9tcyI6MTIwfX0",
+  "secret": "fixture-secret-16!",
+  "solution": "39"
+}

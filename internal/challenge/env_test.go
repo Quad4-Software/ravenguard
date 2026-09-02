@@ -4,6 +4,7 @@
 package challenge_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/Quad4-Software/ravenguard/internal/challenge"
@@ -29,6 +30,50 @@ func TestEvaluateEnvWebdriver(t *testing.T) {
 	}, 16)
 	if !v.Refuse {
 		t.Fatal("expected refuse")
+	}
+}
+
+func TestEvaluateEnvSelenium(t *testing.T) {
+	m := &challenge.Manager{Secret: []byte("test-secret-16chars"), Difficulty: 8}
+	v := m.EvaluateEnv(challenge.EnvReport{
+		Selenium:   true,
+		Interacted: true,
+		SolveMs:    200,
+	}, 8)
+	if !v.Refuse {
+		t.Fatal("expected selenium refuse")
+	}
+	if len(v.Reasons) == 0 || v.Reasons[0] != "selenium" {
+		t.Fatalf("reasons=%v", v.Reasons)
+	}
+}
+
+func TestEvaluateEnvPlaywright(t *testing.T) {
+	m := &challenge.Manager{Secret: []byte("test-secret-16chars"), Difficulty: 8}
+	v := m.EvaluateEnv(challenge.EnvReport{
+		Playwright: true,
+		NoPlugins:  true,
+		Interacted: true,
+		SolveMs:    200,
+	}, 8)
+	if !v.Refuse {
+		t.Fatal("expected playwright refuse")
+	}
+	joined := strings.Join(v.Reasons, ",")
+	if !strings.Contains(joined, "playwright") || !strings.Contains(joined, "no_plugins") {
+		t.Fatalf("reasons=%v", v.Reasons)
+	}
+}
+
+func TestEvaluateEnvHeadless(t *testing.T) {
+	m := &challenge.Manager{Secret: []byte("test-secret-16chars"), Difficulty: 8}
+	v := m.EvaluateEnv(challenge.EnvReport{
+		Headless:   true,
+		Interacted: true,
+		SolveMs:    200,
+	}, 8)
+	if !v.Refuse {
+		t.Fatal("expected headless refuse")
 	}
 }
 

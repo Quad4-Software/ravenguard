@@ -123,18 +123,14 @@ func deniedSyscalls() []string {
 		"set_mempolicy",
 		"setns",
 		"settimeofday",
-		"stime",
 		"swapon",
 		"swapoff",
 		"sysfs",
 		"_sysctl",
-		"umount",
 		"umount2",
 		"unshare",
 		"uselib",
 		"userfaultfd",
 		"ustat",
-		"vm86",
-		"vm86old",
 	}
 }

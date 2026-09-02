@@ -85,6 +85,71 @@ func (c *Cache) Stop() {
 	}
 }
 
+// Status is a snapshot for the admin control plane.
+type Status struct {
+	Enabled     bool     `json:"enabled"`
+	Failed      bool     `json:"failed"`
+	IPCount     int      `json:"ip_count"`
+	DomainCount int      `json:"domain_count"`
+	Feeds       []string `json:"feeds"`
+	Refresh     string   `json:"refresh"`
+	OnError     string   `json:"on_error"`
+	BaseURL     string   `json:"base_url"`
+	HasToken    bool     `json:"has_token"`
+	Limit       int      `json:"limit"`
+}
+
+func (c *Cache) Status(enabled bool) Status {
+	st := Status{Enabled: enabled}
+	if c == nil {
+		return st
+	}
+	st.Failed = c.failed.Load()
+	st.Feeds = append([]string(nil), c.cfg.Feeds...)
+	st.Refresh = c.cfg.Refresh.String()
+	st.OnError = c.cfg.OnError
+	st.BaseURL = c.cfg.BaseURL
+	st.HasToken = c.cfg.APIToken != ""
+	st.Limit = c.cfg.Limit
+	if ips := c.ips.Load(); ips != nil {
+		st.IPCount = len(*ips)
+	}
+	if doms := c.domains.Load(); doms != nil {
+		st.DomainCount = len(*doms)
+	}
+	return st
+}
+
+func (c *Cache) UpdateSettings(feeds []string, refresh time.Duration, onError, baseURL string, limit int, apiToken string) {
+	if c == nil {
+		return
+	}
+	if len(feeds) > 0 {
+		c.cfg.Feeds = append([]string(nil), feeds...)
+	}
+	if refresh > 0 {
+		c.cfg.Refresh = refresh
+	}
+	if onError != "" {
+		c.cfg.OnError = onError
+	}
+	if baseURL != "" {
+		c.cfg.BaseURL = baseURL
+	}
+	if limit >= 0 {
+		c.cfg.Limit = limit
+	}
+	if apiToken != "" {
+		c.cfg.APIToken = apiToken
+	}
+}
+
+func (c *Cache) RefreshNow(ctx context.Context) {
+	if c != nil {
+		c.refresh(ctx)
+	}
+}
+
 func (c *Cache) IPBlocked(ip net.IP) bool {
 	if ip == nil {
 		return false

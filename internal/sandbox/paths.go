@@ -13,7 +13,7 @@ import (
 
 // DerivePaths fills filesystem and network allowances from process paths and
 // listen/upstream settings. Caller-supplied paths in cfg are preserved.
-func DerivePaths(cfg *Config, configPath string, listenHTTP, listenHTTPS, listenQUIC, upstreamURL string, tlsCert, tlsKey string, blocklistFiles []string) {
+func DerivePaths(cfg *Config, configPath string, listenHTTP, listenHTTPS, listenQUIC, upstreamURL string, tlsCert, tlsKey, acmeStorageDir string, blocklistFiles []string, adminListen, adminHTTPS, adminDataDir string) {
 	addUnique := func(dst *[]string, paths ...string) {
 		seen := make(map[string]struct{}, len(*dst))
 		for _, p := range *dst {
@@ -85,6 +85,12 @@ func DerivePaths(cfg *Config, configPath string, listenHTTP, listenHTTPS, listen
 		addUnique(&cfg.Landlock.ROFiles, tlsKey)
 		addUnique(&cfg.Landlock.RODirs, filepath.Dir(tlsKey))
 	}
+	if acmeStorageDir != "" {
+		addUnique(&cfg.Landlock.RWDirs, acmeStorageDir)
+	}
+	if adminDataDir != "" {
+		addUnique(&cfg.Landlock.RWDirs, adminDataDir)
+	}
 
 	if u, err := url.Parse(upstreamURL); err == nil {
 		switch strings.ToLower(u.Scheme) {
@@ -113,7 +119,7 @@ func DerivePaths(cfg *Config, configPath string, listenHTTP, listenHTTPS, listen
 		}
 	}
 
-	for _, addr := range []string{listenHTTP, listenHTTPS} {
+	for _, addr := range []string{listenHTTP, listenHTTPS, adminListen, adminHTTPS} {
 		if p, ok := tcpPort(addr); ok {
 			addUnique16(&cfg.Landlock.BindTCP, p)
 		}

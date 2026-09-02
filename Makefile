@@ -14,15 +14,34 @@ GOIMPORTS_VERSION ?= latest
 # Minimum total statement coverage for the cover gate (percent).
 COVER_MIN ?= 50
 
-.PHONY: all build test cover bench fuzz tools fmt fix vet lint sec vuln check tidy clean
+.PHONY: all build test cover bench fuzz tools fmt fix vet lint sec vuln check tidy clean widget admin
 
 all: check build
 
 build:
 	CGO_ENABLED=0 $(GO) build -trimpath -ldflags="-s -w" -o bin/ravenguard ./cmd/ravenguard
 
+widget:
+	pnpm widget:build
+	cp packages/widget/dist/w.js internal/ui/static/w.js
+	rm -rf internal/ui/static/workers
+	if [ -d packages/widget/dist/workers ]; then \
+		mkdir -p internal/ui/static/workers; \
+		cp packages/widget/dist/workers/*.js internal/ui/static/workers/; \
+	fi
+	node packages/widget/scripts/obfuscate.mjs internal/ui/static/challenge.js internal/ui/static/c.js
+	cp internal/ui/static/challenge.css internal/ui/static/c.css
+
+admin:
+	pnpm admin:build
+	rm -rf internal/admin/ui/dist
+	mkdir -p internal/admin/ui/dist
+	cp -a packages/admin/build/. internal/admin/ui/dist/
+
 test:
 	$(GO) test ./...
+	pnpm widget:test
+	pnpm admin:test
 
 cover:
 	$(GO) test ./... -covermode=atomic -coverprofile=coverage.out -count=1
@@ -93,3 +112,4 @@ tidy:
 
 clean:
 	rm -rf bin/ coverage.out
+	rm -rf packages/admin/build packages/admin/.svelte-kit
