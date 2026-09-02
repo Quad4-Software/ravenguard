@@ -8,11 +8,11 @@
     <p class="code">{{.Code}}</p>
     <p class="status">{{.Title}}</p>
     {{if .Detail}}<p class="sub">{{.Detail}}</p>{{end}}
-    <p class="ray">Ray ID: <span>{{.RayID}}</span></p>
+    <p class="ray">{{.RayLabel}}: <span>{{.RayID}}</span></p>
   </main>
   <footer>
-    <img class="raven" src="{{.Prefix}}/static/raven.png" alt="{{.Brand}}">
-    <span>{{.Brand}}</span>
+    {{if .ShowBrandMark}}<img class="raven" src="{{.LogoURL}}" alt="{{.Brand}}">{{end}}
+    <span>{{.FooterText}}</span>
   </footer>
 </body>
 </html>

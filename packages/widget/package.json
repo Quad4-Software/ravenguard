@@ -1,0 +1,63 @@
+{
+  "name": "@quad4/ravenguard-widget",
+  "version": "0.1.0",
+  "description": "RavenGuard privacy-first proof-of-work captcha widget",
+  "license": "0BSD",
+  "type": "module",
+  "sideEffects": [
+    "./dist/index.js",
+    "./dist/w.js",
+    "./dist/ravenguard-widget.min.js"
+  ],
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./workers/sha256": {
+      "types": "./dist/workers/sha256.d.ts",
+      "import": "./dist/workers/sha256.js"
+    },
+    "./workers/pbkdf2": {
+      "types": "./dist/workers/pbkdf2.d.ts",
+      "import": "./dist/workers/pbkdf2.js"
+    }
+  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsup && node ./scripts/copy-iife.mjs",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "lint": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "javascript-obfuscator": "5.0.1",
+    "tsup": "^8.5.0",
+    "typescript": "~5.9.2",
+    "vitest": "^3.2.4"
+  },
+  "engines": {
+    "node": ">=22.0.0",
+    "pnpm": ">=11.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Quad4-Software/ravenguard.git",
+    "directory": "packages/widget"
+  },
+  "keywords": [
+    "captcha",
+    "pow",
+    "altcha",
+    "ravenguard",
+    "web-component"
+  ]
+}

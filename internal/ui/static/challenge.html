@@ -5,32 +5,34 @@
 </head>
 <body>
   <main class="wrap">
-    <p class="code">CHALLENGE</p>
+    <p class="code">{{.ChallengeTitle}}</p>
     <p class="status" id="status">{{.StatusText}}</p>
-    <p class="sub" id="sub">This process is automatic. Your browser will redirect shortly.</p>
+    <p class="sub" id="sub">{{.ChallengeSubtitle}}</p>
+    <div class="widget">
+      {{.WidgetHTML}}
+    </div>
     {{if .CaptchaEnabled}}
     <label class="captcha" for="captcha">Confirm
       <input id="captcha" name="captcha" type="text" autocomplete="off" placeholder="type ok">
     </label>
     {{end}}
-    <p class="ray">Ray ID: <span id="ray">{{.RayID}}</span></p>
+    <p class="ray">{{.RayLabel}}: <span id="ray">{{.RayID}}</span></p>
     {{if .PrivacyNoticeURL}}
     <p class="sub"><a href="{{.PrivacyNoticeURL}}">Privacy notice</a></p>
     {{end}}
   </main>
   <footer>
-    <img class="raven" src="{{.Prefix}}/static/raven.png" alt="{{.Brand}}">
-    <span>{{.Brand}}</span>
+    {{if .ShowBrandMark}}<img class="raven" src="{{.LogoURL}}" alt="{{.Brand}}">{{end}}
+    <span>{{.FooterText}}</span>
   </footer>
   <script>
-    window.__RG__ = {
-      token: {{printf "%q" .Token}},
-      difficulty: {{.Difficulty}},
+    window[{{printf "%q" .BootstrapGlobal}}] = {
       prefix: {{printf "%q" .Prefix}},
       ray: {{printf "%q" .RayID}},
       captcha: {{if .CaptchaEnabled}}true{{else}}false{{end}}
     };
   </script>
-  <script src="{{.Prefix}}/static/challenge.js" defer></script>
+  <script src="{{.Prefix}}/static/{{.WidgetJS}}" defer></script>
+  <script src="{{.Prefix}}/static/{{.ChallengeJS}}" defer></script>
 </body>
 </html>

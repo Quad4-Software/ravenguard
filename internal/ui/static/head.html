@@ -7,13 +7,17 @@
 <meta name="theme-color" content="{{.ThemeColor}}">
 <meta name="color-scheme" content="dark">
 {{if .Canonical}}<link rel="canonical" href="{{.Canonical}}">{{end}}
+{{if .FaviconURL}}
+<link rel="icon" href="{{.FaviconURL}}" sizes="any">
+{{else}}
 <link rel="icon" href="/favicon.ico" sizes="any">
 <link rel="icon" href="{{.Prefix}}/static/favicon.ico" sizes="any">
 <link rel="icon" type="image/png" sizes="32x32" href="{{.Prefix}}/static/favicon-32.png">
 <link rel="icon" type="image/png" sizes="16x16" href="{{.Prefix}}/static/favicon-16.png">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="apple-touch-icon" href="{{.Prefix}}/static/apple-touch-icon.png">
-<link rel="manifest" href="{{.Prefix}}/site.webmanifest">
+{{end}}
+{{if .ServeManifest}}<link rel="manifest" href="{{.Prefix}}/site.webmanifest">{{end}}
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="{{.Brand}}">
 <meta property="og:title" content="{{.PageTitle}}">
@@ -24,5 +28,16 @@
 <meta name="twitter:title" content="{{.PageTitle}}">
 <meta name="twitter:description" content="{{.Description}}">
 {{if .OGImage}}<meta name="twitter:image" content="{{.OGImage}}">{{end}}
-<link rel="stylesheet" href="{{.Prefix}}/static/challenge.css">
+<link rel="stylesheet" href="{{.Prefix}}/static/{{.ChallengeCSS}}">
+<style>
+:root {
+  --bg: {{.Background}};
+  --fg: {{.Foreground}};
+  --accent: {{.Accent}};
+  --theme: {{.ThemeColor}};
+  --font-sans: {{.FontSans}};
+  --font-mono: {{.FontMono}};
+}
+{{.CustomCSS}}
+</style>
 {{end}}

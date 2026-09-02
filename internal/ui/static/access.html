@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="{{.Lang}}">
+<head>
+  {{template "head" .}}
+</head>
+<body>
+  <main class="wrap">
+    <p class="code">ACCESS</p>
+    <p class="status">{{.Brand}}</p>
+    <p class="sub">Enter the {{.Label}} to continue.</p>
+    <form class="access-form" method="post" action="{{.Action}}">
+      <label for="secret">{{.Label}}</label>
+      <input id="secret" name="{{.InputName}}" type="{{.InputType}}" autocomplete="{{.Autocomplete}}" required autofocus>
+      <button type="submit">Continue</button>
+    </form>
+  </main>
+  <footer>
+    {{if .ShowBrandMark}}<img class="raven" src="{{.LogoURL}}" alt="{{.Brand}}">{{end}}
+    <span>{{.FooterText}}</span>
+  </footer>
+</body>
+</html>

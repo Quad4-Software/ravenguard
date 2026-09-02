@@ -9,11 +9,22 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Quad4-Software/ravenguard/internal/config"
 	"github.com/Quad4-Software/ravenguard/internal/ui"
 )
 
+func testSite() ui.Site {
+	return ui.Site{
+		Brand:          "RavenGuard",
+		StatusText:     "Checking",
+		Prefix:         "/_rg",
+		ServeRootIcons: true,
+		ServeManifest:  true,
+	}
+}
+
 func TestRenderPages(t *testing.T) {
-	pages, err := ui.New(ui.Site{Brand: "RavenGuard", StatusText: "Checking", Prefix: "/_rg"})
+	pages, err := ui.New(testSite())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -55,12 +66,15 @@ func TestRenderPages(t *testing.T) {
 			if !strings.Contains(body, "Ray ID") {
 				t.Fatal("missing ray")
 			}
+			if !strings.Contains(body, "c.css") {
+				t.Fatal("missing challenge css asset")
+			}
 		})
 	}
 }
 
 func TestStaticNoListingAndRootFavicon(t *testing.T) {
-	pages, err := ui.New(ui.Site{Brand: "RavenGuard", StatusText: "Checking", Prefix: "/_rg"})
+	pages, err := ui.New(testSite())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,7 +91,7 @@ func TestStaticNoListingAndRootFavicon(t *testing.T) {
 	}
 
 	rr2 := httptest.NewRecorder()
-	mux.ServeHTTP(rr2, httptest.NewRequest(http.MethodGet, "/_rg/static/challenge.css", nil))
+	mux.ServeHTTP(rr2, httptest.NewRequest(http.MethodGet, "/_rg/static/c.css", nil))
 	if rr2.Code != http.StatusOK {
 		t.Fatalf("css code=%d", rr2.Code)
 	}
@@ -92,5 +106,108 @@ func TestStaticNoListingAndRootFavicon(t *testing.T) {
 	}
 	if rr3.Body.Len() == 0 {
 		t.Fatal("empty favicon")
+	}
+}
+
+func TestServeRootIconsOff(t *testing.T) {
+	site := testSite()
+	site.ServeRootIcons = false
+	pages, err := ui.New(site)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mux := http.NewServeMux()
+	pages.MountStaticTo(mux, "")
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/favicon.ico", nil))
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("code=%d want 404", rr.Code)
+	}
+}
+
+func TestUpdateSiteAndAccessForm(t *testing.T) {
+	pages, err := ui.New(testSite())
+	if err != nil {
+		t.Fatal(err)
+	}
+	pages.UpdateSite(ui.Site{
+		Brand:          "Gate",
+		Prefix:         "/_rg",
+		FooterText:     "Protected",
+		HideBrandMark:  true,
+		GenericCopy:    true,
+		Background:     "#111111",
+		ServeRootIcons: true,
+		BlockTitle:     "Denied",
+	})
+	site := pages.Site()
+	if site.Brand != "Gate" || site.RayLabel != "Ref" || site.ChallengeTitle != "VERIFY" {
+		t.Fatalf("site=%+v", site)
+	}
+
+	rr := httptest.NewRecorder()
+	pages.RenderBlock(rr, "r1", "nope")
+	body := rr.Body.String()
+	if !strings.Contains(body, "Denied") {
+		t.Fatal("missing block title")
+	}
+	if strings.Contains(body, "raven.png") {
+		t.Fatal("brand mark should be hidden")
+	}
+	if !strings.Contains(body, "Ref:") {
+		t.Fatal("missing generic ray label")
+	}
+	if !strings.Contains(body, "--bg: #111111") {
+		t.Fatal("missing theme var")
+	}
+
+	rr2 := httptest.NewRecorder()
+	pages.ServeAccessForm(rr2, "pin", "/_rg/access")
+	if rr2.Code != http.StatusUnauthorized {
+		t.Fatalf("code=%d", rr2.Code)
+	}
+	ab := rr2.Body.String()
+	if !strings.Contains(ab, `name="pin"`) {
+		t.Fatal("missing pin input")
+	}
+	if !strings.Contains(ab, "Protected") {
+		t.Fatal("missing footer")
+	}
+}
+
+func TestSiteFromConfig(t *testing.T) {
+	cfg := config.Default()
+	cfg.UI.Brand = "Acme"
+	cfg.UI.LogoURL = "https://cdn.example/logo.svg"
+	cfg.UI.CustomCSS = "body{outline:1px solid red}"
+	cfg.Stealth.GenericCopy = true
+	cfg.Stealth.HideBrandMark = true
+	cfg.Stealth.ElementName = "acme-check"
+	cfg.Challenge.PathPrefix = "/x"
+	site := ui.SiteFromConfig(cfg)
+	if site.Brand != "Acme" || site.Prefix != "/x" || site.ElementName != "acme-check" {
+		t.Fatalf("site=%+v", site)
+	}
+	if string(site.CustomCSS) != cfg.UI.CustomCSS {
+		t.Fatal("custom css")
+	}
+	pages, err := ui.New(site)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rr := httptest.NewRecorder()
+	pages.ServeChallenge(rr, ui.Data{RayID: "abc", ChallengeURL: "/x/v1/challenge"})
+	body := rr.Body.String()
+	if !strings.Contains(body, "VERIFY") {
+		t.Fatal("missing verify title")
+	}
+	if !strings.Contains(body, "acme-check") {
+		t.Fatal("missing element name")
+	}
+	if !strings.Contains(body, "https://cdn.example/logo.svg") {
+		t.Fatal("missing logo url")
+	}
+	if !strings.Contains(body, "w.js") || !strings.Contains(body, "c.js") {
+		t.Fatal("missing neutral asset names")
 	}
 }
