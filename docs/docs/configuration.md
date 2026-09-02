@@ -28,21 +28,42 @@ Full example: [`configs/ravenguard.toml`](https://github.com/Quad4-Software/rave
 | `-test-mode` | `RG_UI_TEST_MODE` | Enable `/_rg/test` UI previews |
 | `-log-level` | `RG_LOG_LEVEL` | `debug` / `info` / `warn` / `error` |
 | `-log-format` | `RG_LOG_FORMAT` | `text` / `json` |
+| `-admin-enabled` | `RG_ADMIN_ENABLED` | Enable admin control plane |
+| `-admin-listen` | `RG_ADMIN_LISTEN` | Admin HTTP bind (default `127.0.0.1:9090`) |
+| `-admin-data-dir` | `RG_ADMIN_DATA_DIR` | Admin SQLite directory |
+
+See [Admin control plane](./admin.md) for roles, bootstrap, API tokens, and reverse-proxying the SPA.
 
 ## Listen and TLS
 
 ```toml
 [listen]
 http = ":8080"
-# https = ":8443"
-# quic = ":8443"
+# http = ":80"
+# https = ":443"
+# quic = ":443"
 
 [tls]
+mode = "off" # off | files | acme
 # cert_file = "/certs/fullchain.pem"
 # key_file = "/certs/privkey.pem"
+
+# [tls.acme]
+# email = "admin@example.com"
+# agree_tos = true
+# staging = true
+# storage_dir = "./data/certs"
+# hosts = ["app.example.com"]
+# http01 = true
+# tls_alpn01 = true
+# redirect_http = true
 ```
 
-Typical layout: RavenGuard on plain HTTP behind the reverse proxy, TLS at the edge.
+`tls.mode = "acme"` issues and renews certificates via Let's Encrypt. Account keys and certs live under `storage_dir` and survive restarts. HTTP-01 uses `listen.http`. Route hosts from the admin panel are added to the managed inventory automatically.
+
+Env: `RG_TLS_MODE`, `RG_TLS_CERT_FILE`, `RG_TLS_KEY_FILE`, `RG_ACME_EMAIL`, `RG_ACME_STORAGE_DIR`, `RG_ACME_HOSTS`, `RG_ACME_STAGING`, `RG_ACME_AGREE_TOS`.
+
+Behind-proxy layout: keep `tls.mode = "off"` and plain HTTP listen. Edge layout: `tls.mode = "acme"` or `files` with `trust.mode = "edge"`.
 
 ## Upstream
 
@@ -81,17 +102,23 @@ proto_header = "X-Forwarded-Proto"
 proxy_protocol = false
 ```
 
-`behind_proxy` refuses to start without `trusted_proxies`.
+`behind_proxy` refuses to start without `trusted_proxies`. `edge` ignores forwarded client headers.
 
-Env: `RG_TRUST_MODE`, `RG_REAL_IP_HEADER`, `RG_PROTO_HEADER`, `RG_PROXY_PROTOCOL`.
+Env: `RG_TRUST_MODE`, `RG_TRUSTED_PROXIES` (comma-separated CIDRs), `RG_REAL_IP_HEADER`, `RG_PROTO_HEADER`, `RG_PROXY_PROTOCOL`.
 
-## Blocklists and Q-Feeds
+## Blocklists, allowlists, and Q-Feeds
 
 ```toml
 [blocklists]
 ip_files = ["testdata/blocklists/ips.txt"]
 dns_files = ["testdata/blocklists/domains.txt"]
 ua_files = ["testdata/blocklists/ua.txt"]
+reload_interval = "30s"
+
+[allowlists]
+ip_files = ["testdata/allowlists/ips.txt"]
+ua_files = ["testdata/allowlists/ua.txt"]
+header_files = ["testdata/allowlists/headers.txt"]
 reload_interval = "30s"
 
 [qfeeds]
@@ -162,12 +189,13 @@ low_score_points = 40
 
 Full knobs: [Detection](./detection.md).
 
-## Challenge, UI, and site
+## Challenge, UI, site, and stealth
 
 ```toml
 [challenge]
 enabled = true
 mode = "detect"          # or "always"
+algorithm = "adaptive"   # adaptive | sha256 | pbkdf2 | argon2id
 difficulty = 16
 cookie_name = "rg_clear"
 cookie_ttl = "24h"
@@ -176,11 +204,28 @@ path_prefix = "/_rg"
 
 [challenge.captcha]
 enabled = false
+# provider = "ravenguard"  # or "stub"
 
 [ui]
 brand = "RavenGuard"
 status_text = "Checking your browser before accessing this site."
 test_mode = false
+# logo_url = ""
+# favicon_url = ""
+# background = "#050505"
+# foreground = "#e8e8e8"
+# accent = "#c4c4c4"
+# font_sans = ""
+# font_mono = ""
+# challenge_title = ""
+# challenge_subtitle = ""
+# block_title = ""
+# rate_limit_title = ""
+# upstream_title = ""
+# error_title = ""
+# footer_text = ""
+# custom_css = ""
+# ray_label = ""
 
 [site]
 # public_url = "https://example.com"
@@ -188,9 +233,35 @@ description = "RavenGuard application guard"
 theme_color = "#050505"
 robots = "noindex, nofollow"
 lang = "en"
+
+# Public fingerprint controls (optional)
+[stealth]
+# ray_header = "X-RavenGuard-Ray"  # empty string omits the header
+# element_name = "rg-check"
+# bootstrap_global = "__g__"
+# access_cookie_name = "rg_access"
+# hide_brand_mark = false
+# generic_copy = false
+# serve_manifest = true
+# serve_root_icons = true
+# widget_input_name = "rg"
 ```
 
-Env: `RG_CHALLENGE_ENABLED`, `RG_CHALLENGE_MODE`, `RG_CHALLENGE_DIFFICULTY`, `RG_CHALLENGE_PATH_PREFIX`, `RG_CAPTCHA_ENABLED`, `RG_CAPTCHA_PROVIDER`, `RG_CAPTCHA_TOKEN`, `RG_UI_BRAND`, `RG_UI_STATUS_TEXT`, `RG_SITE_DESCRIPTION`, `RG_SITE_OG_IMAGE`, `RG_SITE_THEME_COLOR`, `RG_SITE_ROBOTS`, `RG_SITE_LANG`.
+| Stealth key | Default | Meaning |
+|-------------|---------|---------|
+| `ray_header` | `X-RavenGuard-Ray` | Response header for ray IDs. Empty string omits the header |
+| `element_name` | `rg-check` | Custom element tag on the challenge page |
+| `bootstrap_global` | `__g__` | `window[...]` bootstrap object name |
+| `access_cookie_name` | `rg_access` | Access-policy clearance cookie |
+| `hide_brand_mark` | `false` | Hide footer brand image |
+| `generic_copy` | `false` | Prefer generic titles and `Ref` instead of branded copy |
+| `serve_manifest` | `true` | Serve `/site.webmanifest` |
+| `serve_root_icons` | `true` | Serve `/favicon.ico` and `/apple-touch-icon.png` |
+| `widget_input_name` | `rg` | Hidden form field name for the widget |
+
+Appearance colors map to CSS variables `--bg`, `--fg`, `--accent`, `--theme`, `--font-sans`, and `--font-mono` on public pages. See [Challenge and UI](./challenge-ui.md).
+
+Env: `RG_CHALLENGE_ENABLED`, `RG_CHALLENGE_MODE`, `RG_CHALLENGE_ALGORITHM`, `RG_CHALLENGE_DIFFICULTY`, `RG_CHALLENGE_COOKIE_NAME`, `RG_CHALLENGE_PATH_PREFIX`, `RG_CAPTCHA_ENABLED`, `RG_CAPTCHA_PROVIDER`, `RG_CAPTCHA_TOKEN`, `RG_UI_BRAND`, `RG_UI_STATUS_TEXT`, `RG_SITE_DESCRIPTION`, `RG_SITE_OG_IMAGE`, `RG_SITE_THEME_COLOR`, `RG_SITE_ROBOTS`, `RG_SITE_LANG`, `RG_STEALTH_RAY_HEADER`, `RG_STEALTH_ELEMENT_NAME`, `RG_STEALTH_BOOTSTRAP_GLOBAL`, `RG_STEALTH_ACCESS_COOKIE_NAME`, `RG_STEALTH_HIDE_BRAND_MARK`, `RG_STEALTH_GENERIC_COPY`.
 
 ## Privacy and logging
 

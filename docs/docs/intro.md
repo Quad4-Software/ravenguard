@@ -6,18 +6,27 @@ description: Build RavenGuard and place it between a reverse proxy and an origin
 
 # Getting started
 
-RavenGuard is an HTTP application guard. Topology:
+RavenGuard is an HTTP edge reverse proxy and application guard. Primary topology:
+
+```text
+Client -> RavenGuard (:80/:443) -> origin(s)
+```
+
+It can also sit behind an external reverse proxy:
 
 ```text
 Client -> reverse proxy (TLS) -> RavenGuard -> origin
 ```
 
-It reads the client IP from trusted proxy headers and forwards allowed requests to an HTTP, HTTPS, WebSocket, or unix-socket upstream.
+It terminates TLS (static PEM or automatic Let's Encrypt), routes by host and path, applies WAF-style controls and optional access gates, then forwards to HTTP, HTTPS, WebSocket, or unix-socket upstreams.
+
+Optional [admin control plane](./admin.md): separate listen address, multi-user auth (argon2id), live upstream/route/access editing, and an embedded SPA.
 
 ## Requirements
 
 - Go 1.26.6 or newer to build from source
-- A reverse proxy that terminates TLS and forwards the client address
+- For edge TLS: public DNS pointing at this host and open ports 80/443
+- Or a reverse proxy that terminates TLS and forwards the client address
 - An upstream origin on TCP (`http`/`https`/`ws`/`wss`) or a unix socket
 
 ## Build and run

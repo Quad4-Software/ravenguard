@@ -7,13 +7,45 @@ description: Reverse proxy placement, Docker, and real-IP trust settings.
 
 ## Topology
 
-Terminate TLS at the reverse proxy. Forward to RavenGuard on loopback or a private network, then to the origin:
+### Edge (recommended when RavenGuard owns TLS)
+
+```text
+Client -> RavenGuard (:80 / :443) -> app
+```
+
+Point DNS A/AAAA records at the RavenGuard host. Open TCP 80 and 443 (and UDP 443 for QUIC). Use automatic Let's Encrypt:
+
+```toml
+[listen]
+http = ":80"
+https = ":443"
+
+[tls]
+mode = "acme"
+
+[tls.acme]
+email = "admin@example.com"
+agree_tos = true
+staging = true
+storage_dir = "./data/certs"
+hosts = ["app.example.com"]
+http01 = true
+tls_alpn01 = true
+redirect_http = true
+
+[trust]
+mode = "edge"
+```
+
+Persist `storage_dir` across restarts. That directory holds the ACME account and certificates. Deleting it forces re-issue and can hit Let's Encrypt rate limits. Bring up with `staging = true`, then flip to production.
+
+Use `trust.mode = "edge"` so RavenGuard ignores `X-Real-IP`, `X-Forwarded-For`, and related forwarded client headers. Client IP comes from the direct TCP peer only.
+
+### Behind an external reverse proxy
 
 ```text
 Client -> nginx / Caddy / Traefik -> RavenGuard -> app
 ```
-
-Publish TCP `80`/`443` and UDP `443` on the reverse proxy. RavenGuard does not need public listeners.
 
 ```toml
 [trust]
@@ -25,6 +57,75 @@ proxy_protocol = false
 ```
 
 `proto_header` sets the clearance cookie Secure flag when TLS ends at the proxy.
+
+Override the CIDR list with `RG_TRUSTED_PROXIES` (comma-separated). Keep the [admin control plane](./admin.md) on a private bind (default `127.0.0.1:9090`) or behind a locked-down reverse proxy path. Never publish it like the public guard port.
+
+## Reverse proxy snippets
+
+Forward `X-Real-IP`, `X-Forwarded-For`, and `X-Forwarded-Proto`. Pass WebSocket `Upgrade` and `Connection` headers. Point RavenGuard `trust.trusted_proxies` (or `RG_TRUSTED_PROXIES`) at the proxy addresses only.
+
+### nginx
+
+```nginx
+upstream ravenguard {
+  server 127.0.0.1:8080;
+}
+
+server {
+  listen 443 ssl http2;
+  server_name app.example.com;
+
+  location / {
+    proxy_pass http://ravenguard;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection $connection_upgrade;
+  }
+}
+
+map $http_upgrade $connection_upgrade {
+  default upgrade;
+  '' close;
+}
+```
+
+### Caddy
+
+```caddy
+app.example.com {
+  reverse_proxy 127.0.0.1:8080 {
+    header_up X-Real-IP {remote_host}
+    header_up X-Forwarded-For {remote_host}
+    header_up X-Forwarded-Proto {scheme}
+  }
+}
+```
+
+Caddy forwards WebSocket upgrades by default when the client requests them.
+
+### Traefik
+
+```yaml
+http:
+  routers:
+    app:
+      rule: Host(`app.example.com`)
+      entryPoints: [websecure]
+      service: ravenguard
+      tls: {}
+  services:
+    ravenguard:
+      loadBalancer:
+        servers:
+          - url: http://127.0.0.1:8080
+        passHostHeader: true
+```
+
+Traefik sets `X-Forwarded-*` for trusted hops. Ensure RavenGuard `trusted_proxies` matches the Traefik source addresses. For WebSockets, use an entrypoint that allows upgrades (default HTTP routers do).
 
 ## Binary
 
@@ -40,6 +141,7 @@ make build
 | `/usr/local/bin/ravenguard` | Binary |
 | `/etc/ravenguard/ravenguard.toml` | Config |
 | `/etc/ravenguard/blocklists/` | IP, DNS, and UA lists |
+| `/var/lib/ravenguard/certs/` | ACME storage (when `tls.mode = acme`) |
 
 ## Docker Compose
 
@@ -50,19 +152,23 @@ cd deploy
 docker compose up --build
 ```
 
-Mount config and blocklists. Set `RG_CHALLENGE_SECRET` and `QFEEDS_API_TOKEN` when needed. Point `upstream.url` at the app service. The sample stack exposes RavenGuard on `8080` and includes TCP/UDP `8443` for optional TLS or QUIC.
+Mount config and blocklists. Set `RG_CHALLENGE_SECRET` and `QFEEDS_API_TOKEN` when needed. Point `upstream.url` at the app service. The sample stack exposes `8080`, optional `80`/`443` for edge ACME, and TCP/UDP `8443` for manual TLS or QUIC. The `certs-data` volume is ACME renewal memory.
 
 The compose file enables Landlock and in-process seccomp-bpf via `[sandbox]` (default `best_effort`), drops all capabilities, sets `no-new-privileges`, mounts a read-only root with `/tmp` tmpfs, and applies [`deploy/seccomp-ravenguard.json`](https://github.com/Quad4-Software/ravenguard/blob/main/deploy/seccomp-ravenguard.json) so the container seccomp profile allows `landlock_*` and `seccomp`.
 
 Override with `RG_SANDBOX_MODE=try` or `enforce` as needed. Hosts without Landlock still start under `try` / `best_effort`.
 
+When adding upstreams on new TCP ports from the admin panel under `sandbox.mode = enforce`, either restart after the change or pre-open ports with `[sandbox.landlock] connect_tcp`. Prefer `best_effort` or `try` for dynamic routing during bring-up.
+
 ## PROXY protocol and real IP
 
-Set `trust.mode = "behind_proxy"`, list every hop in `trust.trusted_proxies`, and choose one of:
+Set `trust.mode = "behind_proxy"`, list every hop in `trust.trusted_proxies` (or `RG_TRUSTED_PROXIES`), and choose one of:
 
 - `trust.real_ip_header = "X-Real-IP"` (one trusted hop)
 - `trust.real_ip_header = "X-Forwarded-For"` (rightmost untrusted hop)
-- `trust.proxy_protocol = true`
+- `trust.proxy_protocol = true` (PROXY protocol v1/v2 from the trusted peer)
+
+With `trust.mode = "edge"`, forwarded headers and PROXY protocol client addresses are not used for trust decisions. Prefer edge when RavenGuard terminates TLS directly.
 
 Untrusted forwarded headers without a tight `trusted_proxies` list allow client IP spoofing. RavenGuard will not start in `behind_proxy` mode without that list.
 

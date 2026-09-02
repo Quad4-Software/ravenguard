@@ -85,6 +85,8 @@ Protect handles size caps, concurrency, exploit probes, and temp bans. Detection
 ## Limits
 
 - Obvious scanners and scrapers are scored and challenged or blocked
-- Automation that fails the challenge env probe is denied clearance
-- Browser-like agents that solve PoW can pass
-- Verified search-bot allowlisting is not implemented. Do not treat User-Agent strings alone as proof of legitimacy
+- Built-in AI UA scoring covers major training crawlers, answer-engine indexers, and user-triggered fetch agents (OpenAI, Anthropic, Perplexity, Google AI, Meta, Apple Intelligence token, and others)
+- Sample `ua_files` hard-block AI agents and common scraper libraries while leaving search crawlers such as Googlebot and Applebot alone
+- Automation that fails the challenge env probe (webdriver, Playwright, Puppeteer, Selenium, headless) is denied clearance
+- Browser-like agents that spoof headers and solve PoW can still pass
+- Verified search-bot allowlisting is not implemented. Do not treat User-Agent strings alone as proof of legitimacy. Use `[allowlists]` only for sources you control (office CIDRs, health-check UAs, shared header tokens)

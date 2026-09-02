@@ -1,11 +1,11 @@
 ---
 title: Blocklists and feeds
-description: IP, hostname, and User-Agent lists plus optional Q-Feeds.
+description: IP, hostname, and User-Agent deny lists, allowlists, plus optional Q-Feeds.
 ---
 
 # Blocklists and feeds
 
-Blocklists deny clients before rate limits and detection run.
+Blocklists deny clients before rate limits and detection run. Allowlists skip detect and challenge for trusted clients.
 
 ## File-based blocklists
 
@@ -49,6 +49,31 @@ Bytespider
 
 Sample files: [`testdata/blocklists/`](https://github.com/Quad4-Software/ravenguard/tree/main/testdata/blocklists).
 
+## File-based allowlists
+
+Allowlists skip detect scoring and challenge for matching clients. Protect, blocklists, Q-Feeds, rate limits, attack signatures, and access policies still apply.
+
+```toml
+[allowlists]
+ip_files = ["/etc/ravenguard/allowlists/ips.txt"]
+ua_files = ["/etc/ravenguard/allowlists/ua.txt"]
+header_files = ["/etc/ravenguard/allowlists/headers.txt"]
+reload_interval = "30s"
+```
+
+Any single match is enough (IP **or** User-Agent substring **or** header). Empty lists have no effect.
+
+### Header lists
+
+One `Header-Name: value` pair per line. The header name is matched case-insensitively. The value must match exactly.
+
+```text
+X-RG-Allow: trusted
+X-Internal-Token: replace-me
+```
+
+Sample files: [`testdata/allowlists/`](https://github.com/Quad4-Software/ravenguard/tree/main/testdata/allowlists).
+
 ## Q-Feeds
 
 Optional threat-intel feeds merge into the same deny path:
@@ -77,5 +102,6 @@ Env: `RG_QFEEDS_ENABLED`, `RG_QFEEDS_API_TOKEN`, or `QFEEDS_API_TOKEN`.
 
 - Use UA and IP lists for known abusive sources
 - Use detect scoring for ambiguous traffic rather than large UA deny lists
-- Search-bot User-Agents are not DNS-verified. Do not blanket-block known crawler names unless that is intentional
+- Use allowlists for health checks, office CIDRs, or shared header tokens that should skip detect and challenge
+- Search-bot User-Agents are not DNS-verified. Do not blanket-block known crawler names unless that is intentional. Prefer allowlists only for sources you control
 - Choose `reload_interval` for ops response time without excessive disk reads

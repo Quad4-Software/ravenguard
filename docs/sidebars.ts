@@ -11,6 +11,7 @@ const sidebars: SidebarsConfig = {
       items: [
         'deployment',
         'configuration',
+        'admin',
         'blocklists',
         'challenge-ui',
       ],
