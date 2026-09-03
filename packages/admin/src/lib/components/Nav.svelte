@@ -22,7 +22,6 @@
     Users,
     Key,
     ClipboardList,
-    Settings,
   } from '@lucide/svelte'
 
   interface NavLink {
@@ -47,7 +46,6 @@
     { href: `${base}/users`, label: 'Users', show: canManageUsers(auth.role), icon: Users },
     { href: `${base}/tokens`, label: 'Tokens', show: true, icon: Key },
     { href: `${base}/audit`, label: 'Audit', show: true, icon: ClipboardList },
-    { href: `${base}/settings`, label: 'Settings', show: true, icon: Settings },
   ])
 
   function isActive(href: string): boolean {
@@ -68,24 +66,28 @@
     <div class="brand-name">RavenGuard</div>
     <div class="brand-sub">Admin Console</div>
   </div>
-  <ul class="nav-list">
-    {#each links as link (link.href)}
-      {#if link.show}
-        {@const Icon = link.icon}
-        <li class="nav-item">
-          <a class="nav-link" class:active={isActive(link.href)} href={link.href}>
-            <Icon class="nav-link-icon" size={17} strokeWidth={1.75} aria-hidden="true" />
-            {link.label}
-          </a>
-        </li>
-      {/if}
-    {/each}
-  </ul>
+  <nav class="nav-scroll" aria-label="Admin">
+    <ul class="nav-list">
+      {#each links as link (link.href)}
+        {#if link.show}
+          {@const Icon = link.icon}
+          <li class="nav-item">
+            <a class="nav-link" class:active={isActive(link.href)} href={link.href}>
+              <Icon class="nav-link-icon" size={17} strokeWidth={1.75} aria-hidden="true" />
+              {link.label}
+            </a>
+          </li>
+        {/if}
+      {/each}
+    </ul>
+  </nav>
   <div class="nav-foot">
     <a class="user-row nav-link" href={`${base}/settings`} class:active={isActive(`${base}/settings`)}>
       <span class="username mono">{auth.user?.username ?? ''}</span>
       <span class="badge badge-{auth.role ?? 'viewer'}">{auth.role ?? ''}</span>
     </a>
-    <button type="button" class="btn btn-ghost btn-sm" onclick={handleLogout}>Sign out</button>
+    <button type="button" class="btn btn-ghost btn-sm nav-signout" onclick={handleLogout}>
+      Sign out
+    </button>
   </div>
 </aside>

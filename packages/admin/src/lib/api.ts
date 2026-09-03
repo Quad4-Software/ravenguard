@@ -15,7 +15,20 @@ export interface Session {
   user: User
   csrf_token: string
   token_auth?: boolean
+  expires_at?: string
+  session_id?: string
 }
+
+export interface AuthSession {
+  id: string
+  ip: string
+  user_agent: string
+  created_at: string
+  expires_at: string
+  current: boolean
+}
+
+export type ModuleKey = 'protect' | 'ratelimit' | 'detect' | 'challenge' | 'qfeeds'
 
 export interface APIToken {
   id: string
@@ -560,7 +573,10 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 export const api = {
   auth: {
     login(username: string, password: string) {
-      return request<{ user: User; csrf_token: string }>('POST', '/auth/login', { username, password })
+      return request<{ user: User; csrf_token: string; expires_at?: string }>('POST', '/auth/login', {
+        username,
+        password,
+      })
     },
     logout() {
       return request<{ ok: string }>('POST', '/auth/logout')
@@ -568,11 +584,23 @@ export const api = {
     me() {
       return request<Session>('GET', '/auth/me')
     },
+    refresh() {
+      return request<{ user: User; csrf_token: string; expires_at: string }>('POST', '/auth/refresh')
+    },
     changePassword(current: string, next: string) {
       return request<{ ok: string }>('POST', '/auth/password', { current, new: next })
     },
     updateProfile(username: string) {
       return request<{ user: User }>('PATCH', '/auth/profile', { username })
+    },
+    sessions() {
+      return request<{ sessions: AuthSession[] }>('GET', '/auth/sessions')
+    },
+    revokeSession(id: string) {
+      return request<{ ok: string; signed_out: boolean }>('DELETE', `/auth/sessions/${id}`)
+    },
+    revokeAllSessions() {
+      return request<{ ok: string; signed_out: boolean }>('DELETE', '/auth/sessions')
     },
   },
 
@@ -658,6 +686,22 @@ export const api = {
       a.click()
       URL.revokeObjectURL(href)
       return view
+    },
+    async setModuleEnabled(key: ModuleKey, enabled: boolean) {
+      if (key === 'qfeeds') {
+        const res = await request<{ status: QFeedsStatus; config: QFeedsSafe }>('GET', '/qfeeds')
+        const cfg = { ...res.config }
+        cfg.enabled = enabled
+        if (!cfg.api_token) delete cfg.api_token
+        return request<{ status: QFeedsStatus; config: QFeedsSafe }>('PUT', '/qfeeds', cfg)
+      }
+      const view = await request<ConfigView>('GET', '/config')
+      const live = normalizeSafeConfig(view.live)
+      if (key === 'protect') live.protect.enabled = enabled
+      else if (key === 'ratelimit') live.ratelimit.enabled = enabled
+      else if (key === 'detect') live.detect.enabled = enabled
+      else live.challenge.enabled = enabled
+      return request<ConfigView>('PUT', '/config', live)
     },
   },
 

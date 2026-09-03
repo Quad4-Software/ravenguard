@@ -1,7 +1,10 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte'
   import { base } from '$app/paths'
-  import { api, APIError, type Status, type StatusSample } from '$lib/api'
+  import { api, APIError, type ModuleKey, type Status, type StatusSample } from '$lib/api'
+  import { toast } from '$lib/toast.svelte'
+  import { auth } from '$lib/auth.svelte'
+  import { canWriteConfig } from '$lib/rbac'
   import Sparkline from '$lib/components/Sparkline.svelte'
   import Gauge from '$lib/components/Gauge.svelte'
   import BarMeter from '$lib/components/BarMeter.svelte'
@@ -15,6 +18,9 @@
   let error = $state('')
   let refreshedAt = $state('')
   let timer: ReturnType<typeof setInterval> | undefined
+  let toggling = $state<ModuleKey | null>(null)
+
+  const canWrite = $derived(canWriteConfig(auth.role))
 
   async function load() {
     if (typeof document !== 'undefined' && document.hidden) return
@@ -141,17 +147,62 @@
     return { items, max }
   })
 
-  const features = $derived.by(() => {
+  const modules = $derived.by(() => {
     if (!status) return []
     const qf = status.qfeeds_enabled ? (status.qfeeds?.failed ? 'degraded' : 'on') : 'off'
     return [
-      { label: 'Protect', state: status.protect_enabled ? 'on' : 'off' },
-      { label: 'Rate limit', state: status.ratelimit_enabled ? 'on' : 'off' },
-      { label: 'Detect', state: status.detect_enabled ? 'on' : 'off' },
-      { label: 'Challenge', state: status.challenge_enabled ? 'on' : 'off' },
-      { label: 'Q-Feeds', state: qf },
+      {
+        key: 'protect' as const,
+        label: 'Protect',
+        state: status.protect_enabled ? 'on' : 'off',
+        enabled: !!status.protect_enabled,
+        href: `${base}/config`,
+      },
+      {
+        key: 'ratelimit' as const,
+        label: 'Rate limit',
+        state: status.ratelimit_enabled ? 'on' : 'off',
+        enabled: !!status.ratelimit_enabled,
+        href: `${base}/config`,
+      },
+      {
+        key: 'detect' as const,
+        label: 'Detect',
+        state: status.detect_enabled ? 'on' : 'off',
+        enabled: !!status.detect_enabled,
+        href: `${base}/config`,
+      },
+      {
+        key: 'challenge' as const,
+        label: 'Challenge',
+        state: status.challenge_enabled ? 'on' : 'off',
+        enabled: !!status.challenge_enabled,
+        href: `${base}/config`,
+      },
+      {
+        key: 'qfeeds' as const,
+        label: 'Q-Feeds',
+        state: qf,
+        enabled: !!status.qfeeds_enabled,
+        href: `${base}/qfeeds`,
+      },
     ]
   })
+
+  async function toggleModule(key: ModuleKey, enabled: boolean) {
+    if (!canWrite || toggling) return
+    toggling = key
+    try {
+      await api.config.setModuleEnabled(key, enabled)
+      await load()
+      toast.info(`${key} ${enabled ? 'enabled' : 'disabled'}`)
+    } catch (err) {
+      toast.error(err instanceof APIError ? err.message : 'failed to update module')
+      await load()
+    } finally {
+      toggling = null
+    }
+  }
 </script>
 
 <div class="page-head">
@@ -288,14 +339,24 @@
   </div>
 
   <div class="section">
-    <div class="section-title">Features</div>
-    <div class="feat-row">
-      {#each features as feat (feat.label)}
-        <span class={['feat', feat.state]}>
-          <span class={['dot', { ok: feat.state === 'on', bad: feat.state === 'degraded' }]}></span>
-          {feat.label}
-          <span class="feat-state">{feat.state}</span>
-        </span>
+    <div class="section-title">Modules</div>
+    <div class="module-row">
+      {#each modules as mod (mod.key)}
+        <div class={['module', mod.state]}>
+          <span class={['dot', { ok: mod.state === 'on', bad: mod.state === 'degraded' }]}></span>
+          <a class="module-label" href={mod.href}>{mod.label}</a>
+          <span class="module-state">{mod.state}</span>
+          <label class="switch">
+            <input
+              type="checkbox"
+              checked={mod.enabled}
+              disabled={!canWrite || toggling === mod.key}
+              onchange={(e) => void toggleModule(mod.key, e.currentTarget.checked)}
+            />
+            <span class="switch-track" aria-hidden="true"></span>
+            <span class="sr-only">{mod.enabled ? 'Disable' : 'Enable'} {mod.label}</span>
+          </label>
+        </div>
       {/each}
     </div>
   </div>
@@ -414,16 +475,16 @@
     border-bottom: 1px solid var(--line);
   }
 
-  .feat-row {
+  .module-row {
     display: flex;
     flex-wrap: wrap;
     gap: 0.4rem;
   }
 
-  .feat {
+  .module {
     display: inline-flex;
     align-items: center;
-    gap: 0.4rem;
+    gap: 0.45rem;
     font-family: var(--font-mono);
     font-size: 0.68rem;
     letter-spacing: 0.1em;
@@ -434,29 +495,38 @@
     color: var(--muted);
   }
 
-  .feat.on {
+  .module.on {
     color: var(--fg);
     border-left-color: var(--ok);
   }
 
-  .feat.off {
+  .module.off {
     border-left-color: var(--line);
   }
 
-  .feat.degraded {
+  .module.degraded {
     color: var(--fg);
     border-left-color: var(--bad);
   }
 
-  .feat-state {
+  .module-label {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  .module-label:hover {
+    color: var(--fg);
+  }
+
+  .module-state {
     color: var(--code);
   }
 
-  .feat.on .feat-state {
+  .module.on .module-state {
     color: var(--ok);
   }
 
-  .feat.degraded .feat-state {
+  .module.degraded .module-state {
     color: var(--bad);
   }
 
