@@ -44,8 +44,12 @@ test:
 	pnpm widget:test
 	pnpm admin:test
 
+# Cover internal packages only. Skip cmd (mains), embed-only admin/ui, and
+# listener (network-heavy integration surface).
+COVER_PKGS ?= $(shell $(GO) list ./internal/... | grep -Ev '/(admin/ui|listener)$$')
+
 cover:
-	$(GO) test ./... -covermode=atomic -coverprofile=coverage.out -count=1
+	$(GO) test $(COVER_PKGS) -covermode=atomic -coverprofile=coverage.out -count=1
 	@$(GO) tool cover -func=coverage.out | awk '/^total:/{print}'
 	@total=$$($(GO) tool cover -func=coverage.out | awk '/^total:/{gsub(/%/,"",$$NF); print $$NF}'); \
 	awk -v t="$$total" -v m="$(COVER_MIN)" 'BEGIN { \
