@@ -61,8 +61,11 @@ func (s *Server) Mount(mux *http.ServeMux, base string) {
 	mux.HandleFunc(api+"/auth/login", s.handleLogin)
 	mux.HandleFunc(api+"/auth/logout", s.auth(s.handleLogout))
 	mux.HandleFunc(api+"/auth/me", s.auth(s.handleMe))
+	mux.HandleFunc(api+"/auth/refresh", s.auth(s.csrf(s.handleRefresh)))
 	mux.HandleFunc(api+"/auth/password", s.auth(s.csrf(s.handlePassword)))
 	mux.HandleFunc(api+"/auth/profile", s.auth(s.csrf(s.handleProfile)))
+	mux.HandleFunc(api+"/auth/sessions", s.auth(s.handleSessions))
+	mux.HandleFunc(api+"/auth/sessions/", s.auth(s.handleSessionID))
 	mux.HandleFunc(api+"/users", s.auth(s.handleUsers))
 	mux.HandleFunc(api+"/users/", s.auth(s.handleUserID))
 	mux.HandleFunc(api+"/tokens", s.auth(s.handleTokens))
@@ -181,9 +184,11 @@ func (s *Server) resolveActor(r *http.Request) (Actor, bool) {
 }
 
 func (s *Server) setSessionCookie(w http.ResponseWriter, raw string, expires time.Time) {
+	maxAge := max(int(time.Until(expires).Seconds()), 0)
 	http.SetCookie(w, &http.Cookie{
 		Name: sessionCookie, Value: raw, Path: s.cookiePath(),
-		HttpOnly: true, SameSite: http.SameSiteStrictMode, Secure: s.SecureCookie, Expires: expires,
+		HttpOnly: true, SameSite: http.SameSiteStrictMode, Secure: s.SecureCookie,
+		Expires: expires, MaxAge: maxAge,
 	})
 }
 
@@ -249,7 +254,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	s.audit(Actor{User: u}, r, "auth.login", u.Username, "")
 	passFile := filepath.Join(s.Admin.DataDir, "initial_admin_password")
 	_ = os.Remove(passFile)
-	writeJSON(w, http.StatusOK, map[string]any{"user": u, "csrf_token": csrf})
+	writeJSON(w, http.StatusOK, map[string]any{"user": u, "csrf_token": csrf, "expires_at": exp.UTC().Format(time.RFC3339Nano)})
 }
 
 func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
@@ -274,7 +279,139 @@ func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 	actor := actorFrom(r)
 	u := actor.User
 	u.PasswordHash = ""
-	writeJSON(w, http.StatusOK, map[string]any{"user": u, "csrf_token": actor.CSRF, "token_auth": actor.TokenAuth})
+	out := map[string]any{"user": u, "csrf_token": actor.CSRF, "token_auth": actor.TokenAuth}
+	if actor.Session != nil {
+		out["expires_at"] = actor.Session.ExpiresAt.UTC().Format(time.RFC3339Nano)
+		out["session_id"] = actor.Session.ID
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+type sessionView struct {
+	ID        string `json:"id"`
+	IP        string `json:"ip"`
+	UserAgent string `json:"user_agent"`
+	CreatedAt string `json:"created_at"`
+	ExpiresAt string `json:"expires_at"`
+	Current   bool   `json:"current"`
+}
+
+func (s *Server) sessionViews(actor Actor) ([]sessionView, error) {
+	list, err := s.Store.ListSessionsForUser(actor.User.ID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]sessionView, 0, len(list))
+	currentID := ""
+	if actor.Session != nil {
+		currentID = actor.Session.ID
+	}
+	for _, sess := range list {
+		out = append(out, sessionView{
+			ID:        sess.ID,
+			IP:        sess.IP,
+			UserAgent: sess.UserAgent,
+			CreatedAt: sess.CreatedAt.UTC().Format(time.RFC3339Nano),
+			ExpiresAt: sess.ExpiresAt.UTC().Format(time.RFC3339Nano),
+			Current:   sess.ID == currentID,
+		})
+	}
+	return out, nil
+}
+
+func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
+	actor := actorFrom(r)
+	switch r.Method {
+	case http.MethodGet:
+		list, err := s.sessionViews(actor)
+		if err != nil {
+			writeErr(w, http.StatusInternalServerError, "sessions")
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"sessions": list})
+	case http.MethodDelete:
+		if !s.checkCSRF(w, r, actor) {
+			return
+		}
+		if err := s.Store.DeleteSessionsForUser(actor.User.ID); err != nil {
+			writeErr(w, http.StatusInternalServerError, "revoke")
+			return
+		}
+		s.clearSessionCookie(w)
+		s.audit(actor, r, "auth.sessions.revoke_all", actor.User.Username, "")
+		writeJSON(w, http.StatusOK, map[string]any{"ok": "1", "signed_out": true})
+	default:
+		writeErr(w, http.StatusMethodNotAllowed, "method")
+	}
+}
+
+func (s *Server) handleSessionID(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete {
+		writeErr(w, http.StatusMethodNotAllowed, "method")
+		return
+	}
+	actor := actorFrom(r)
+	if !s.checkCSRF(w, r, actor) {
+		return
+	}
+	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+	id := parts[len(parts)-1]
+	if id == "" || id == "sessions" {
+		writeErr(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	if err := s.Store.DeleteSessionForUser(actor.User.ID, id); err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			writeErr(w, http.StatusNotFound, "not found")
+			return
+		}
+		writeErr(w, http.StatusInternalServerError, "revoke")
+		return
+	}
+	signedOut := actor.Session != nil && actor.Session.ID == id
+	if signedOut {
+		s.clearSessionCookie(w)
+	}
+	s.audit(actor, r, "auth.sessions.revoke", id, "")
+	writeJSON(w, http.StatusOK, map[string]any{"ok": "1", "signed_out": signedOut})
+}
+
+func (s *Server) handleRefresh(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeErr(w, http.StatusMethodNotAllowed, "method")
+		return
+	}
+	actor := actorFrom(r)
+	if actor.TokenAuth || actor.Session == nil {
+		writeErr(w, http.StatusBadRequest, "session required")
+		return
+	}
+	c, err := r.Cookie(sessionCookie)
+	if err != nil || c.Value == "" {
+		writeErr(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	ttl := s.Admin.SessionTTL.Duration
+	if ttl <= 0 {
+		ttl = 12 * time.Hour
+	}
+	exp, csrf, err := s.Store.ExtendSession(actor.Session.ID, ttl, true)
+	if errors.Is(err, store.ErrNotFound) {
+		writeErr(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "session")
+		return
+	}
+	s.setSessionCookie(w, c.Value, exp)
+	u := actor.User
+	u.PasswordHash = ""
+	writeJSON(w, http.StatusOK, map[string]any{
+		"user":       u,
+		"csrf_token": csrf,
+		"expires_at": exp.UTC().Format(time.RFC3339Nano),
+	})
 }
 
 func (s *Server) handlePassword(w http.ResponseWriter, r *http.Request) {

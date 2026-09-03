@@ -51,6 +51,46 @@ func TestBootstrapAndSession(t *testing.T) {
 	if u.Username != "owner" || sess.CSRFToken != csrf {
 		t.Fatalf("session mismatch")
 	}
+
+	before := sess.ExpiresAt
+	newExp, newCSRF, err := st.ExtendSession(sess.ID, 2*time.Hour, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !newExp.After(before) {
+		t.Fatalf("expected later expiry got %v before %v", newExp, before)
+	}
+	if newCSRF == "" || newCSRF == csrf {
+		t.Fatal("expected rotated csrf")
+	}
+	sess2, _, err := st.GetSessionByToken(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sess2.CSRFToken != newCSRF {
+		t.Fatalf("csrf not persisted")
+	}
+
+	sessID, raw2, _, _, err := st.CreateSession(owner.ID, time.Hour, "10.0.0.2", "other-ua")
+	if err != nil {
+		t.Fatal(err)
+	}
+	list, err := st.ListSessionsForUser(owner.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(list) != 2 {
+		t.Fatalf("want 2 sessions got %d", len(list))
+	}
+	if err := st.DeleteSessionForUser(owner.ID, sessID); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := st.GetSessionByToken(raw2); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("want revoked session not found got %v", err)
+	}
+	if err := st.DeleteSessionForUser(owner.ID, "missing"); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("want not found got %v", err)
+	}
 }
 
 func TestLastOwnerGuard(t *testing.T) {
