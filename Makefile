@@ -37,6 +37,7 @@ admin:
 	rm -rf internal/admin/ui/dist
 	mkdir -p internal/admin/ui/dist
 	cp -a packages/admin/build/. internal/admin/ui/dist/
+	touch internal/admin/ui/dist/.gitkeep
 
 test:
 	$(GO) test ./...
@@ -111,5 +112,8 @@ tidy:
 	$(GO) mod tidy
 
 clean:
-	rm -rf bin/ coverage.out
+	rm -rf bin/ coverage.out coverage.html bench.txt
 	rm -rf packages/admin/build packages/admin/.svelte-kit
+	rm -rf internal/admin/ui/dist
+	mkdir -p internal/admin/ui/dist
+	touch internal/admin/ui/dist/.gitkeep

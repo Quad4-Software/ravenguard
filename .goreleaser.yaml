@@ -6,6 +6,7 @@ project_name: ravenguard
 before:
   hooks:
     - go mod tidy
+    - make admin
 
 builds:
   - id: ravenguard

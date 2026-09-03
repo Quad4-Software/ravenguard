@@ -1,1 +1,0 @@
-var e={viewer:1,admin:2,owner:3};function t(t){return t?e[t]??0:0}function n(e,n){return t(e)>=t(n)}function r(e){return n(e,`admin`)}function i(e){return n(e,`admin`)}function a(e){return n(e,`admin`)}function o(e){return e===`owner`}export{r as i,a as n,i as r,o as t};
