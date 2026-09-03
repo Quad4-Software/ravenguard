@@ -71,7 +71,7 @@ func VerifyPassword(encoded, password string) error {
 	if len(want) == 0 || len(want) > 64 {
 		return ErrInvalidHash
 	}
-	got := argon2.IDKey([]byte(password), salt, timeCost, memory, threads, uint32(len(want))) //nolint:gosec // G115: key length bounded above
+	got := argon2.IDKey([]byte(password), salt, timeCost, memory, threads, uint32(len(want))) // #nosec G115 -- key length bounded above
 	if subtle.ConstantTimeCompare(got, want) != 1 {
 		return ErrPasswordMismatch
 	}

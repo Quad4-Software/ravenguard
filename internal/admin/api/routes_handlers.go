@@ -633,7 +633,7 @@ func pathID(r *http.Request, resource string) string {
 
 func pathAfter(r *http.Request, resource string) string {
 	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
-	for i := 0; i < len(parts); i++ {
+	for i := range parts {
 		if parts[i] == resource && i+1 < len(parts) {
 			return strings.Join(parts[i+1:], "/")
 		}

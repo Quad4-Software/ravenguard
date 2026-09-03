@@ -31,7 +31,7 @@ const (
 type Rule struct {
 	Type string `json:"type"`
 	// Secret is plaintext only on create or update input. Cleared after hashing.
-	Secret string `json:"secret,omitempty"` //nolint:gosec // G117: secret only on write input
+	Secret string `json:"secret,omitempty"` // #nosec G117 -- secret only on write input
 	// SecretHash is the argon2id encoding for password and pin rules.
 	SecretHash  string   `json:"secret_hash,omitempty"`
 	HeaderName  string   `json:"header_name,omitempty"`

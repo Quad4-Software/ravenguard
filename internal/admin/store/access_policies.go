@@ -67,7 +67,7 @@ func (s *Store) CreateAccessPolicy(p AccessPolicyRow) (AccessPolicyRow, error) {
 		return AccessPolicyRow{}, err
 	}
 	p = normalizeAccessPolicy(p)
-	raw, err := json.Marshal(rules) //nolint:gosec // G117: secret only on write input
+	raw, err := json.Marshal(rules) // #nosec G117 -- secret only on write input
 	if err != nil {
 		return AccessPolicyRow{}, err
 	}
@@ -95,7 +95,7 @@ func (s *Store) UpdateAccessPolicy(id string, p AccessPolicyRow) (AccessPolicyRo
 		return AccessPolicyRow{}, err
 	}
 	p = normalizeAccessPolicy(p)
-	raw, err := json.Marshal(rules) //nolint:gosec // G117: secret only on write input
+	raw, err := json.Marshal(rules) // #nosec G117 -- secret only on write input
 	if err != nil {
 		return AccessPolicyRow{}, err
 	}

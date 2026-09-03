@@ -190,7 +190,7 @@ func SiteFromConfig(cfg config.Config) Site {
 		UpstreamTitle:     cfg.UI.UpstreamTitle,
 		ErrorTitle:        cfg.UI.ErrorTitle,
 		FooterText:        cfg.UI.FooterText,
-		CustomCSS:         template.CSS(cfg.UI.CustomCSS), //nolint:gosec // G203: operator CSS from config
+		CustomCSS:         template.CSS(cfg.UI.CustomCSS), // #nosec G203 -- operator CSS from config
 		RayLabel:          cfg.UI.RayLabel,
 		ElementName:       cfg.Stealth.ElementName,
 		BootstrapGlobal:   cfg.Stealth.BootstrapGlobal,
@@ -415,7 +415,7 @@ func widgetHTML(tag, challengeURL, inputName string) template.HTML {
 	if inputName == "" {
 		inputName = "rg"
 	}
-	return template.HTML(fmt.Sprintf( //nolint:gosec // G203: tag sanitized by sanitizeElementName
+	return template.HTML(fmt.Sprintf( // #nosec G203 -- tag sanitized by sanitizeElementName
 		`<%s id="rg-widget" challenge="%s" name="%s" auto="off" workers="2"></%s>`,
 		tag,
 		html.EscapeString(challengeURL),

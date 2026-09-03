@@ -41,7 +41,7 @@ func TestCPUTrackerSamples(t *testing.T) {
 		t.Fatalf("first sample want 0 got %v", got)
 	}
 	sum := 0.0
-	for i := 0; i < 2_000_000; i++ {
+	for i := range 2_000_000 {
 		sum += float64(i)
 	}
 	_ = sum

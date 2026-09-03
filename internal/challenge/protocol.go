@@ -149,10 +149,7 @@ func (m *Manager) selectEffort(risk RiskLevel) (algo string, diff int, params ma
 	}
 	switch risk {
 	case RiskHigh:
-		d := diff + 4
-		if d > 28 {
-			d = 28
-		}
+		d := min(diff+4, 28)
 		return AlgoPBKDF2SHA256, d, map[string]int{"iterations": 50000}
 	case RiskElevated:
 		return AlgoPBKDF2SHA256, diff, map[string]int{"iterations": 10000}
@@ -169,10 +166,7 @@ func maxNumberFor(diff int) uint64 {
 		return 1 << 32
 	}
 	// Search space ~ 8x expected work for leading-zero bits.
-	shift := diff + 3
-	if shift > 32 {
-		shift = 32
-	}
+	shift := min(diff+3, 32)
 	return 1 << uint(shift)
 }
 

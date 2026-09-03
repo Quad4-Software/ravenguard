@@ -100,7 +100,7 @@ func processRSSBytes() uint64 {
 	if ps <= 0 {
 		return 0
 	}
-	page := uint64(ps) //nolint:gosec // G115: Getpagesize is a small positive OS constant
+	page := uint64(ps) // #nosec G115 -- Getpagesize is a small positive OS constant
 	return rss * page
 }
 

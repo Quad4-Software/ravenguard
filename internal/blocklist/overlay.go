@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 )
@@ -51,10 +52,8 @@ func (s *Sets) attachOverlayFiles() {
 }
 
 func prependUnique(files []string, path string) []string {
-	for _, f := range files {
-		if f == path {
-			return files
-		}
+	if slices.Contains(files, path) {
+		return files
 	}
 	return append([]string{path}, files...)
 }
