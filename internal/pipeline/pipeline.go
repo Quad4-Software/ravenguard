@@ -5,6 +5,7 @@ package pipeline
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -168,7 +169,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if !strings.HasPrefix(r.URL.Path, "/.well-known/acme-challenge/") {
 			host := r.Host
 			target := "https://" + host + r.URL.RequestURI()
-			http.Redirect(w, r, target, http.StatusMovedPermanently) //nolint:gosec // G710: HTTP to HTTPS redirect using request host
+			http.Redirect(w, r, target, http.StatusMovedPermanently) // #nosec G710 -- HTTP to HTTPS redirect using request host
 			return
 		}
 	}
@@ -916,67 +917,50 @@ func stripPort(host string) string {
 	return host
 }
 
-func StartSweeper(l *ratelimit.Limiter, every, maxAge time.Duration) {
+func StartSweeper(ctx context.Context, l *ratelimit.Limiter, every, maxAge time.Duration) {
 	if l == nil || every <= 0 {
 		return
 	}
-	go func() {
-		t := time.NewTicker(every)
-		defer t.Stop()
-		for range t.C {
-			l.Sweep(maxAge)
-		}
-	}()
+	go runSweeper(ctx, every, func() { l.Sweep(maxAge) })
 }
 
-func StartNotFoundSweeper(nf *detect.NotFoundTracker, every, maxAge time.Duration) {
+func StartNotFoundSweeper(ctx context.Context, nf *detect.NotFoundTracker, every, maxAge time.Duration) {
 	if nf == nil || every <= 0 {
 		return
 	}
-	go func() {
-		t := time.NewTicker(every)
-		defer t.Stop()
-		for range t.C {
-			nf.Sweep(maxAge)
-		}
-	}()
+	go runSweeper(ctx, every, func() { nf.Sweep(maxAge) })
 }
 
-func StartNonceSweeper(chal *challenge.Manager, every time.Duration) {
+func StartNonceSweeper(ctx context.Context, chal *challenge.Manager, every time.Duration) {
 	if chal == nil || every <= 0 {
 		return
 	}
-	go func() {
-		t := time.NewTicker(every)
-		defer t.Stop()
-		for range t.C {
-			chal.SweepNonces(time.Now())
-		}
-	}()
+	go runSweeper(ctx, every, func() { chal.SweepNonces(time.Now()) })
 }
 
-func StartBehaviorSweeper(beh *detect.BehaviorTracker, every, maxAge time.Duration) {
+func StartBehaviorSweeper(ctx context.Context, beh *detect.BehaviorTracker, every, maxAge time.Duration) {
 	if beh == nil || every <= 0 {
 		return
 	}
-	go func() {
-		t := time.NewTicker(every)
-		defer t.Stop()
-		for range t.C {
-			beh.Sweep(maxAge)
-		}
-	}()
+	go runSweeper(ctx, every, func() { beh.Sweep(maxAge) })
 }
 
-func StartProtectSweeper(g *protect.Guard, every, maxAge time.Duration) {
+func StartProtectSweeper(ctx context.Context, g *protect.Guard, every, maxAge time.Duration) {
 	if g == nil || every <= 0 {
 		return
 	}
-	go func() {
-		t := time.NewTicker(every)
-		defer t.Stop()
-		for range t.C {
-			g.Sweep(maxAge)
+	go runSweeper(ctx, every, func() { g.Sweep(maxAge) })
+}
+
+func runSweeper(ctx context.Context, every time.Duration, fn func()) {
+	t := time.NewTicker(every)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			fn()
 		}
-	}()
+	}
 }

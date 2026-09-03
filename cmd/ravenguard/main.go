@@ -13,6 +13,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -116,13 +117,13 @@ func main() {
 	var limiter *ratelimit.Limiter
 	if cfg.RateLimit.Enabled {
 		limiter = ratelimit.New(cfg.RateLimit.Requests, cfg.RateLimit.Burst, cfg.RateLimit.Window.Duration, cfg.RateLimit.PerPath)
-		pipeline.StartSweeper(limiter, 5*time.Minute, retention)
+		pipeline.StartSweeper(ctx, limiter, 5*time.Minute, retention)
 	}
 
 	var nf *detect.NotFoundTracker
 	if cfg.Detect.Enabled && cfg.Detect.High404Action != "off" {
 		nf = detect.NewNotFoundTracker(cfg.Detect.High404Threshold, cfg.Detect.High404Window.Duration)
-		pipeline.StartNotFoundSweeper(nf, time.Minute, retention)
+		pipeline.StartNotFoundSweeper(ctx, nf, time.Minute, retention)
 	}
 
 	var beh *detect.BehaviorTracker
@@ -136,7 +137,7 @@ func main() {
 			StrikeLimit:     cfg.Detect.BehaviorStrikeLimit,
 			StrikeScore:     cfg.Detect.BehaviorStrikeScore,
 		})
-		pipeline.StartBehaviorSweeper(beh, time.Minute, retention)
+		pipeline.StartBehaviorSweeper(ctx, beh, time.Minute, retention)
 	}
 
 	var prot *protect.Guard
@@ -154,7 +155,7 @@ func main() {
 			AttackScore:         cfg.Protect.AttackScore,
 			WriteMethodCost:     cfg.Protect.WriteMethodCost,
 		})
-		pipeline.StartProtectSweeper(prot, time.Minute, retention)
+		pipeline.StartProtectSweeper(ctx, prot, time.Minute, retention)
 	}
 
 	var hc *health.Checker
@@ -204,7 +205,7 @@ func main() {
 				chal.Captcha = v
 			}
 		}
-		pipeline.StartNonceSweeper(chal, time.Minute)
+		pipeline.StartNonceSweeper(ctx, chal, time.Minute)
 	}
 
 	pages, err := ui.New(ui.SiteFromConfig(cfg))
@@ -523,15 +524,21 @@ func main() {
 			slog.Error("admin", "err", err)
 			os.Exit(1)
 		}
-		defer func() { _ = adminSrv.Close() }()
 		if err := reloadRouting(adminSrv.Store()); err != nil {
 			slog.Error("load routes", "err", err)
 			os.Exit(1)
 		}
-		go func() {
+		var adminWG sync.WaitGroup
+		adminWG.Go(func() {
 			if aerr := adminSrv.Run(ctx); aerr != nil {
 				slog.Error("admin server", "err", aerr)
 				cancel()
+			}
+		})
+		defer func() {
+			adminWG.Wait()
+			if cerr := adminSrv.Close(); cerr != nil {
+				slog.Warn("admin close", "err", cerr)
 			}
 		}()
 	} else if acmeMgr != nil && len(cfg.TLS.ACME.Hosts) > 0 {
@@ -582,7 +589,12 @@ func main() {
 	})
 
 	slog.Info("ravenguard starting", "upstream", cfg.Upstream.URL, "trust_mode", cfg.Trust.Mode, "tls_mode", cfg.TLS.Mode, "admin", cfg.Admin.Enabled)
+	go func() {
+		<-ctx.Done()
+		slog.Info("shutting down")
+	}()
 	err = srv.Run(ctx)
+	slog.Info("cleaning up")
 	lists.Stop()
 	allows.Stop()
 	if feeds != nil {
@@ -591,6 +603,7 @@ func main() {
 	if hc != nil {
 		hc.Stop()
 	}
+	up.CloseIdleConnections()
 	if err != nil {
 		slog.Error("server", "err", err)
 		sentryRep.CaptureException(err)

@@ -27,7 +27,20 @@ type Config struct {
 	ErrorHandler          func(http.ResponseWriter, *http.Request, error)
 }
 
-func New(cfg Config) *httputil.ReverseProxy {
+type Proxy struct {
+	*httputil.ReverseProxy
+	transport *http.Transport
+}
+
+// CloseIdleConnections drains idle upstream connections.
+func (p *Proxy) CloseIdleConnections() {
+	if p == nil || p.transport == nil {
+		return
+	}
+	p.transport.CloseIdleConnections()
+}
+
+func New(cfg Config) *Proxy {
 	dial := DialFunc(cfg.Target, cfg.ConnectTimeout)
 	maxIdle := cfg.MaxIdleConns
 	if maxIdle <= 0 {
@@ -105,7 +118,7 @@ func New(cfg Config) *httputil.ReverseProxy {
 			http.Error(w, "upstream unavailable", http.StatusBadGateway)
 		},
 	}
-	return rp
+	return &Proxy{ReverseProxy: rp, transport: transport}
 }
 
 func IsUnix(u *url.URL) bool {

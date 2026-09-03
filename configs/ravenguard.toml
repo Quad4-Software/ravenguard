@@ -245,6 +245,7 @@ listen = "127.0.0.1:9090"
 # cert_file = ""
 # key_file = ""
 base_path = "/"
+# Persist this directory across restarts so admin sessions survive process restarts.
 data_dir = "./data/admin"
 # bootstrap_user = "admin"
 # Optional. If empty on first start, a random password is generated,
