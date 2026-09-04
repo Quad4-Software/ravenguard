@@ -420,6 +420,7 @@ type UISafe struct {
 	UpstreamTitle     string `json:"upstream_title"`
 	ErrorTitle        string `json:"error_title"`
 	FooterText        string `json:"footer_text"`
+	Contact           string `json:"contact"`
 	CustomCSS         string `json:"custom_css"`
 	Description       string `json:"description"`
 	Lang              string `json:"lang"`
@@ -509,7 +510,7 @@ func (r *Runtime) ConfigView() ConfigView {
 				ChallengeTitle: cfg.UI.ChallengeTitle, ChallengeSubtitle: cfg.UI.ChallengeSubtitle,
 				BlockTitle: cfg.UI.BlockTitle, RateLimitTitle: cfg.UI.RateLimitTitle,
 				UpstreamTitle: cfg.UI.UpstreamTitle, ErrorTitle: cfg.UI.ErrorTitle,
-				FooterText: cfg.UI.FooterText, CustomCSS: cfg.UI.CustomCSS,
+				FooterText: cfg.UI.FooterText, Contact: cfg.UI.Contact, CustomCSS: cfg.UI.CustomCSS,
 				Description: cfg.Site.Description, Lang: cfg.Site.Lang, Robots: cfg.Site.Robots,
 				PrivacyNoticeURL: cfg.Privacy.PrivacyNoticeURL, OGImage: cfg.Site.OGImage,
 				RayLabel: cfg.UI.RayLabel,
@@ -833,6 +834,7 @@ func applyUISafe(cfg *config.Config, ui UISafe) {
 	setNonEmpty(&cfg.UI.UpstreamTitle, ui.UpstreamTitle)
 	setNonEmpty(&cfg.UI.ErrorTitle, ui.ErrorTitle)
 	setNonEmpty(&cfg.UI.FooterText, ui.FooterText)
+	setNonEmpty(&cfg.UI.Contact, ui.Contact)
 	setNonEmpty(&cfg.UI.CustomCSS, ui.CustomCSS)
 	setNonEmpty(&cfg.UI.RayLabel, ui.RayLabel)
 	setNonEmpty(&cfg.Site.Description, ui.Description)

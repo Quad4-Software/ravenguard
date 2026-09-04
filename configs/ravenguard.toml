@@ -172,6 +172,7 @@ test_mode = false
 # upstream_title = ""
 # error_title = ""
 # footer_text = ""
+# contact = ""  # email, phone, URL, or free text on block/denied pages
 # custom_css = ""
 # ray_label = ""
 

@@ -225,6 +225,7 @@ test_mode = false
 # upstream_title = ""
 # error_title = ""
 # footer_text = ""
+# contact = ""  # email, phone, URL, or free text on block/denied pages
 # custom_css = ""
 # ray_label = ""
 
@@ -264,7 +265,9 @@ lang = "en"
 
 Appearance colors map to CSS variables `--bg`, `--fg`, `--accent`, `--theme`, `--font-sans`, and `--font-mono` on public pages. See [Challenge and UI](./challenge-ui.md).
 
-Env: `RG_CHALLENGE_ENABLED`, `RG_CHALLENGE_MODE`, `RG_CHALLENGE_ALGORITHM`, `RG_CHALLENGE_DIFFICULTY`, `RG_CHALLENGE_COOKIE_NAME`, `RG_CHALLENGE_PATH_PREFIX`, `RG_CAPTCHA_ENABLED`, `RG_CAPTCHA_PROVIDER`, `RG_CAPTCHA_TOKEN`, `RG_UI_BRAND`, `RG_UI_STATUS_TEXT`, `RG_SITE_DESCRIPTION`, `RG_SITE_OG_IMAGE`, `RG_SITE_THEME_COLOR`, `RG_SITE_ROBOTS`, `RG_SITE_LANG`, `RG_STEALTH_RAY_HEADER`, `RG_STEALTH_ELEMENT_NAME`, `RG_STEALTH_BOOTSTRAP_GLOBAL`, `RG_STEALTH_ACCESS_COOKIE_NAME`, `RG_STEALTH_HIDE_BRAND_MARK`, `RG_STEALTH_GENERIC_COPY`.
+`ui.contact` (env `RG_UI_CONTACT`) is optional free text shown on block, rate-limit, upstream, and error pages. Email addresses, phone numbers, and `http(s)` / `mailto:` / `tel:` values are rendered as links.
+
+Env: `RG_CHALLENGE_ENABLED`, `RG_CHALLENGE_MODE`, `RG_CHALLENGE_ALGORITHM`, `RG_CHALLENGE_DIFFICULTY`, `RG_CHALLENGE_COOKIE_NAME`, `RG_CHALLENGE_PATH_PREFIX`, `RG_CAPTCHA_ENABLED`, `RG_CAPTCHA_PROVIDER`, `RG_CAPTCHA_TOKEN`, `RG_UI_BRAND`, `RG_UI_STATUS_TEXT`, `RG_UI_CONTACT`, `RG_SITE_DESCRIPTION`, `RG_SITE_OG_IMAGE`, `RG_SITE_THEME_COLOR`, `RG_SITE_ROBOTS`, `RG_SITE_LANG`, `RG_STEALTH_RAY_HEADER`, `RG_STEALTH_ELEMENT_NAME`, `RG_STEALTH_BOOTSTRAP_GLOBAL`, `RG_STEALTH_ACCESS_COOKIE_NAME`, `RG_STEALTH_HIDE_BRAND_MARK`, `RG_STEALTH_GENERIC_COPY`.
 
 ## Privacy and logging
 

@@ -9,6 +9,9 @@
     <p class="status">{{.Title}}</p>
     {{if .Detail}}<p class="sub">{{.Detail}}</p>{{end}}
     <p class="ray">{{.RayLabel}}: <span>{{.RayID}}</span></p>
+    {{if .Contact}}
+    <p class="sub">{{if .ContactHref}}<a href="{{.ContactHref}}">{{.Contact}}</a>{{else}}{{.Contact}}{{end}}</p>
+    {{end}}
   </main>
   <footer>
     {{if .ShowBrandMark}}<img class="raven" src="{{.LogoURL}}" alt="{{.Brand}}">{{end}}

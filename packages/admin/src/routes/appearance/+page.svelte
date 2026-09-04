@@ -155,10 +155,21 @@
           <input id="ui-footer" type="text" bind:value={form.ui.footer_text} disabled={!canWrite} />
         </div>
         <div class="field">
+          <label for="ui-contact">Contact</label>
+          <input
+            id="ui-contact"
+            type="text"
+            placeholder="email, phone, URL, or text"
+            bind:value={form.ui.contact}
+            disabled={!canWrite}
+          />
+        </div>
+        <div class="field">
           <label for="ui-robots">Robots</label>
           <input id="ui-robots" type="text" bind:value={form.ui.robots} disabled={!canWrite} />
         </div>
       </div>
+      <p class="field-help">Contact shows on block, rate-limit, and error pages. Email, phone, and http(s) values become links.</p>
       <div class="field checkbox-field">
         <input
           id="st-hide-brand"

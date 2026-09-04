@@ -232,6 +232,7 @@ export interface UISafe {
   upstream_title: string
   error_title: string
   footer_text: string
+  contact: string
   custom_css: string
   description: string
   lang: string
@@ -379,6 +380,7 @@ export function normalizeSafeConfig(raw: Partial<SafeConfig> | null | undefined)
       upstream_title: String(ui.upstream_title ?? ''),
       error_title: String(ui.error_title ?? ''),
       footer_text: String(ui.footer_text ?? ''),
+      contact: String(ui.contact ?? ''),
       custom_css: String(ui.custom_css ?? ''),
       description: String(ui.description ?? ''),
       lang: String(ui.lang ?? 'en'),

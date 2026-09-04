@@ -150,6 +150,7 @@ secret = "file-secret-16chars"
 	t.Setenv("RG_CHALLENGE_SECRET", "env-secret-16chars!")
 	t.Setenv("RG_LISTEN_HTTP", ":9090")
 	t.Setenv("RG_SITE_PUBLIC_URL", "https://edge.example")
+	t.Setenv("RG_UI_CONTACT", "help@example.com")
 	cfg, err := config.Load(path)
 	if err != nil {
 		t.Fatal(err)
@@ -162,6 +163,9 @@ secret = "file-secret-16chars"
 	}
 	if cfg.Site.PublicURL != "https://edge.example" {
 		t.Fatalf("public=%q", cfg.Site.PublicURL)
+	}
+	if cfg.UI.Contact != "help@example.com" {
+		t.Fatalf("contact=%q", cfg.UI.Contact)
 	}
 }
 

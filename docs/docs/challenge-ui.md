@@ -166,8 +166,11 @@ test_mode = false
 # challenge_title = ""
 # challenge_subtitle = ""
 # footer_text = ""
+# contact = ""  # email, phone, URL, or free text on block/denied pages
 # custom_css = ""
 ```
+
+`ui.contact` (or `RG_UI_CONTACT`) shows on block, rate-limit, upstream, and error pages. Email, phone, and `http(s)` / `mailto:` / `tel:` values become links. Other text is shown as-is.
 
 `privacy.privacy_notice_url` adds a privacy notice link on the challenge page when set. Live appearance edits are also available from the admin Appearance page.
 

@@ -50,6 +50,7 @@ type Site struct {
 	UpstreamTitle     string
 	ErrorTitle        string
 	FooterText        string
+	Contact           string
 	CustomCSS         template.CSS
 	RayLabel          string
 
@@ -85,6 +86,8 @@ type viewBase struct {
 	ChallengeSubtitle string
 	RayLabel          string
 	FooterText        string
+	Contact           string
+	ContactHref       template.URL
 	LogoURL           string
 	HideBrandMark     bool
 	ShowBrandMark     bool
@@ -191,6 +194,7 @@ func SiteFromConfig(cfg config.Config) Site {
 		UpstreamTitle:     cfg.UI.UpstreamTitle,
 		ErrorTitle:        cfg.UI.ErrorTitle,
 		FooterText:        cfg.UI.FooterText,
+		Contact:           cfg.UI.Contact,
 		CustomCSS:         template.CSS(cfg.UI.CustomCSS), // #nosec G203 -- operator CSS from config
 		RayLabel:          cfg.UI.RayLabel,
 		ElementName:       cfg.Stealth.ElementName,
@@ -373,6 +377,8 @@ func (p *Pages) base(site Site, pageTitle, pathSuffix string) viewBase {
 		ChallengeSubtitle: site.ChallengeSubtitle,
 		RayLabel:          site.RayLabel,
 		FooterText:        site.FooterText,
+		Contact:           site.Contact,
+		ContactHref:       template.URL(contactHref(site.Contact)), // #nosec G203 -- schemes limited by contactHref
 		LogoURL:           logoURL,
 		HideBrandMark:     site.HideBrandMark,
 		ShowBrandMark:     showMark,
@@ -409,6 +415,68 @@ func sanitizeElementName(name string) string {
 		return "rg-check"
 	}
 	return out
+}
+
+// contactHref returns a safe href for email, phone, or http(s) contact values.
+// Plain text and unknown schemes yield an empty href so the template shows text only.
+func contactHref(contact string) string {
+	contact = strings.TrimSpace(contact)
+	if contact == "" {
+		return ""
+	}
+	lower := strings.ToLower(contact)
+	switch {
+	case strings.HasPrefix(lower, "https://"), strings.HasPrefix(lower, "http://"):
+		return contact
+	case strings.HasPrefix(lower, "mailto:"):
+		addr := strings.TrimSpace(contact[len("mailto:"):])
+		if addr == "" || strings.ContainsAny(addr, " \t\r\n") {
+			return ""
+		}
+		return "mailto:" + addr
+	case strings.HasPrefix(lower, "tel:"):
+		num := strings.TrimSpace(contact[len("tel:"):])
+		if num == "" {
+			return ""
+		}
+		return "tel:" + num
+	case looksLikeEmail(contact):
+		return "mailto:" + contact
+	case looksLikePhone(contact):
+		return "tel:" + contact
+	default:
+		return ""
+	}
+}
+
+func looksLikeEmail(s string) bool {
+	if strings.ContainsAny(s, " \t\r\n") || strings.Count(s, "@") != 1 {
+		return false
+	}
+	at := strings.IndexByte(s, '@')
+	if at < 1 || at >= len(s)-3 {
+		return false
+	}
+	domain := s[at+1:]
+	return strings.Contains(domain, ".") && !strings.HasPrefix(domain, ".") && !strings.HasSuffix(domain, ".")
+}
+
+func looksLikePhone(s string) bool {
+	if len(s) < 7 || len(s) > 24 {
+		return false
+	}
+	digits := 0
+	for i, r := range s {
+		switch {
+		case r >= '0' && r <= '9':
+			digits++
+		case r == '+' && i == 0:
+		case r == ' ' || r == '-' || r == '(' || r == ')' || r == '.':
+		default:
+			return false
+		}
+	}
+	return digits >= 7
 }
 
 func widgetHTML(tag, challengeURL, inputName, gate string) template.HTML {

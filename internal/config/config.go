@@ -278,6 +278,7 @@ type UIConfig struct {
 	UpstreamTitle     string `toml:"upstream_title"`
 	ErrorTitle        string `toml:"error_title"`
 	FooterText        string `toml:"footer_text"`
+	Contact           string `toml:"contact"`
 	CustomCSS         string `toml:"custom_css"`
 	RayLabel          string `toml:"ray_label"`
 }
@@ -618,6 +619,7 @@ func applyEnv(c *Config) {
 	setStr(&c.Privacy.PrivacyNoticeURL, "RG_PRIVACY_NOTICE_URL")
 	setStr(&c.UI.Brand, "RG_UI_BRAND")
 	setStr(&c.UI.StatusText, "RG_UI_STATUS_TEXT")
+	setStr(&c.UI.Contact, "RG_UI_CONTACT")
 	setBool(&c.UI.TestMode, "RG_UI_TEST_MODE")
 	setStr(&c.Site.PublicURL, "RG_SITE_PUBLIC_URL")
 	setStr(&c.Site.Description, "RG_SITE_DESCRIPTION")

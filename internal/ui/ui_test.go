@@ -180,6 +180,7 @@ func TestSiteFromConfig(t *testing.T) {
 	cfg.UI.Brand = "Acme"
 	cfg.UI.LogoURL = "https://cdn.example/logo.svg"
 	cfg.UI.CustomCSS = "body{outline:1px solid red}"
+	cfg.UI.Contact = "help@example.com"
 	cfg.Stealth.GenericCopy = true
 	cfg.Stealth.HideBrandMark = true
 	cfg.Stealth.ElementName = "acme-check"
@@ -187,6 +188,9 @@ func TestSiteFromConfig(t *testing.T) {
 	site := ui.SiteFromConfig(cfg)
 	if site.Brand != "Acme" || site.Prefix != "/x" || site.ElementName != "acme-check" {
 		t.Fatalf("site=%+v", site)
+	}
+	if site.Contact != "help@example.com" {
+		t.Fatalf("contact=%q", site.Contact)
 	}
 	if string(site.CustomCSS) != cfg.UI.CustomCSS {
 		t.Fatal("custom css")
@@ -225,5 +229,55 @@ func TestSiteFromConfig(t *testing.T) {
 	}
 	if strings.Contains(body2, `window["\"__g__\""]`) {
 		t.Fatal("bootstrap global is double-escaped")
+	}
+
+	rr3 := httptest.NewRecorder()
+	pages.RenderBlock(rr3, "ray-c", "blocked")
+	block := rr3.Body.String()
+	if !strings.Contains(block, `href="mailto:help@example.com"`) {
+		t.Fatalf("missing contact mailto: %s", block[:min(300, len(block))])
+	}
+}
+
+func TestBlockContactVariants(t *testing.T) {
+	cases := []struct {
+		name    string
+		contact string
+		want    string
+		noHref  bool
+	}{
+		{"email", "ops@example.com", `href="mailto:ops@example.com"`, false},
+		{"mailto", "mailto:ops@example.com", `href="mailto:ops@example.com"`, false},
+		{"https", "https://help.example.com/ticket", `href="https://help.example.com/ticket"`, false},
+		{"phone", "+15550101234", `href="tel:&#43;15550101234"`, false},
+		{"tel", "tel:+15550101234", `href="tel:&#43;15550101234"`, false},
+		{"plain", "Ask your network admin", "Ask your network admin", true},
+		{"js", "javascript:alert(1)", "javascript:alert(1)", true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			site := testSite()
+			site.Contact = tc.contact
+			pages, err := ui.New(site)
+			if err != nil {
+				t.Fatal(err)
+			}
+			rr := httptest.NewRecorder()
+			pages.RenderBlock(rr, "r", "denied")
+			body := rr.Body.String()
+			if tc.noHref {
+				if strings.Contains(body, `href="javascript:`) {
+					t.Fatal("javascript href must not render")
+				}
+				if strings.Contains(body, `<a href=`) {
+					t.Fatalf("unexpected contact link: %s", body[:min(400, len(body))])
+				}
+				if !strings.Contains(body, tc.contact) {
+					t.Fatalf("missing plain contact text in %s", body[:min(400, len(body))])
+				}
+			} else if !strings.Contains(body, tc.want) {
+				t.Fatalf("missing %q in %s", tc.want, body[:min(400, len(body))])
+			}
+		})
 	}
 }
