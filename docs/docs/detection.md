@@ -49,19 +49,21 @@ behavior_path_fanout = 40
 behavior_path_fanout_score = 30
 behavior_strike_limit = 3
 behavior_strike_score = 25
-behavior_write_burst_limit = 10
-behavior_write_burst_score = 40
-behavior_write_repeat_limit = 5
-behavior_write_repeat_score = 45
+behavior_write_burst_limit = 20
+behavior_write_burst_score = 35
+behavior_write_repeat_limit = 8
+behavior_write_repeat_score = 40
 empty_form_context_score = 30
 forum_write_path_score = 25
 ```
 
 - **Burst** adds score when a client exceeds `behavior_burst_limit` in the window
 - **Path fan-out** scores clients that hit many distinct paths quickly
-- **Write burst** scores rapid POST/PUT/PATCH volume typical of forum and registration spam
-- **Write repeat** scores hammering the same write path (comment, register, reply)
+- **Write burst** scores rapid POST/PUT/PATCH volume (default 20/min) without treating normal API traffic as a hard block by itself
+- **Write repeat** only escalates repeated posts to spam-prone path segments such as `comment` / `register` / `reply`
 - **Strikes** escalate clients that keep failing challenges
+
+Empty form context applies to browser-like clients posting `application/x-www-form-urlencoded` or `multipart/form-data` (or spam-prone path segments) without Origin and Referer. Ordinary JSON API writes are not scored by that signal.
 
 Privacy hashing applies when enabled. `privacy.retention` bounds how long this state is kept.
 

@@ -170,6 +170,7 @@ func TestScoreFormSpam(t *testing.T) {
 	r := httptest.NewRequest(http.MethodPost, "/forum/reply", strings.NewReader("body=hi"))
 	r.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0) Chrome/120.0.0.0 Safari/537.36")
 	r.Header.Set("Accept", "text/html")
+	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	res := detect.ScoreDebug(r, testCfg())
 	joined := strings.Join(res.Reasons, ",")
 	if !strings.Contains(joined, "empty_form_context") {
@@ -186,6 +187,7 @@ func TestScoreFormSpam(t *testing.T) {
 	ok.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0) Chrome/120.0.0.0 Safari/537.36")
 	ok.Header.Set("Accept", "text/html")
 	ok.Header.Set("Accept-Language", "en-US")
+	ok.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	ok.Header.Set("Origin", "https://forum.example")
 	ok.Header.Set("Referer", "https://forum.example/topic/1")
 	ok.Header.Set("Sec-Fetch-Site", "same-origin")
@@ -195,6 +197,117 @@ func TestScoreFormSpam(t *testing.T) {
 	joinedClean := strings.Join(clean.Reasons, ",")
 	if strings.Contains(joinedClean, "empty_form_context") || strings.Contains(joinedClean, "forum_write_path") {
 		t.Fatalf("legitimate form post should not spam-score reasons=%v", clean.Reasons)
+	}
+}
+
+func TestScoreGeneralAPINoFalsePositive(t *testing.T) {
+	cases := []struct {
+		name   string
+		method string
+		path   string
+		ua     string
+		ctype  string
+		hdr    map[string]string
+	}{
+		{
+			name:   "json api with browser ua and origin",
+			method: http.MethodPost,
+			path:   "/api/v1/orders",
+			ua:     "Mozilla/5.0 (Windows NT 10.0) Chrome/120.0.0.0 Safari/537.36",
+			ctype:  "application/json",
+			hdr: map[string]string{
+				"Accept":          "application/json",
+				"Accept-Language": "en-US",
+				"Origin":          "https://app.example",
+				"Sec-Fetch-Site":  "same-origin",
+				"Sec-Fetch-Mode":  "cors",
+				"Sec-Fetch-Dest":  "empty",
+			},
+		},
+		{
+			name:   "json api missing origin still not form spam",
+			method: http.MethodPost,
+			path:   "/api/v1/orders",
+			ua:     "Mozilla/5.0 (Windows NT 10.0) Chrome/120.0.0.0 Safari/537.36",
+			ctype:  "application/json",
+			hdr: map[string]string{
+				"Accept":          "application/json",
+				"Accept-Language": "en-US",
+				"Sec-Fetch-Site":  "same-origin",
+				"Sec-Fetch-Mode":  "cors",
+				"Sec-Fetch-Dest":  "empty",
+			},
+		},
+		{
+			name:   "chat messages path is not forum spam",
+			method: http.MethodPost,
+			path:   "/api/messages",
+			ua:     "Mozilla/5.0 (Windows NT 10.0) Chrome/120.0.0.0 Safari/537.36",
+			ctype:  "application/json",
+			hdr: map[string]string{
+				"Accept":          "application/json",
+				"Accept-Language": "en-US",
+				"Origin":          "https://app.example",
+				"Sec-Fetch-Site":  "same-origin",
+				"Sec-Fetch-Mode":  "cors",
+				"Sec-Fetch-Dest":  "empty",
+			},
+		},
+		{
+			name:   "contacting segment does not match contact",
+			method: http.MethodPost,
+			path:   "/api/contacting",
+			ua:     "Mozilla/5.0 (Windows NT 10.0) Chrome/120.0.0.0 Safari/537.36",
+			ctype:  "application/json",
+			hdr: map[string]string{
+				"Accept":          "application/json",
+				"Accept-Language": "en-US",
+				"Origin":          "https://app.example",
+				"Sec-Fetch-Site":  "same-origin",
+				"Sec-Fetch-Mode":  "cors",
+				"Sec-Fetch-Dest":  "empty",
+			},
+		},
+		{
+			name:   "native mobile client",
+			method: http.MethodPost,
+			path:   "/api/v1/sync",
+			ua:     "MyApp/3.2 (Android 14)",
+			ctype:  "application/json",
+			hdr: map[string]string{
+				"Accept": "application/json",
+			},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			r := httptest.NewRequest(tc.method, tc.path, strings.NewReader(`{"ok":true}`))
+			r.Header.Set("User-Agent", tc.ua)
+			if tc.ctype != "" {
+				r.Header.Set("Content-Type", tc.ctype)
+			}
+			for k, v := range tc.hdr {
+				r.Header.Set(k, v)
+			}
+			res := detect.ScoreDebug(r, testCfg())
+			joined := strings.Join(res.Reasons, ",")
+			if strings.Contains(joined, "empty_form_context") || strings.Contains(joined, "forum_write_path") {
+				t.Fatalf("false positive reasons=%v score=%d", res.Reasons, res.Score)
+			}
+			if res.Score >= 40 {
+				t.Fatalf("general traffic should stay under challenge score=%d reasons=%v", res.Score, res.Reasons)
+			}
+		})
+	}
+}
+
+func TestForumWritePathSegments(t *testing.T) {
+	r := httptest.NewRequest(http.MethodPost, "/blog/comments/new", strings.NewReader("x=1"))
+	r.Header.Set("User-Agent", "Mozilla/5.0 Chrome/120")
+	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	res := detect.ScoreDebug(r, testCfg())
+	if !strings.Contains(strings.Join(res.Reasons, ","), "forum_write_path") {
+		t.Fatalf("segment comments should match reasons=%v", res.Reasons)
 	}
 }
 

@@ -6,6 +6,7 @@ package detect
 import (
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/Quad4-Software/ravenguard/internal/faststr"
@@ -77,14 +78,13 @@ var aiUA = []string{
 	"notebooklm", "gemini-deep-research",
 }
 
-// forumWritePaths are common registration and posting endpoints abused by spam bots.
+// forumWritePaths are path segments commonly abused by registration and comment spam bots.
+// Matched as whole segments so /api/contacting and /private-key do not hit.
 var forumWritePaths = []string{
-	"/comment", "/comments", "/reply", "/replies",
-	"/newthread", "/newtopic", "/new-topic", "/posting",
-	"/register", "/signup", "/sign-up", "/create-account",
-	"/contact", "/feedback", "/guestbook",
-	"/message", "/messages", "/pm/", "/private",
-	"/wp-comments-post",
+	"comment", "comments", "reply", "replies",
+	"newthread", "newtopic", "new-topic", "posting",
+	"register", "signup", "sign-up", "create-account",
+	"guestbook", "wp-comments-post",
 }
 
 var probePaths = []string{
@@ -216,13 +216,18 @@ func scoreFormSpam(r *http.Request, cfg Config, res *Result, wantReasons bool) {
 		return
 	}
 	emptyCtx := r.Header.Get("Origin") == "" && r.Header.Get("Referer") == ""
-	if emptyCtx && cfg.EmptyFormContextScore > 0 {
+	formLike := isBrowserFormContentType(r.Header.Get("Content-Type"))
+	forumPath := forumWritePath(r.URL.Path)
+
+	// Empty Origin+Referer is only scored for form posts or known spam write paths.
+	// Plain JSON/API writes from browser-like UAs are common on general sites.
+	if emptyCtx && cfg.EmptyFormContextScore > 0 && (formLike || forumPath) {
 		res.Score += cfg.EmptyFormContextScore
 		if wantReasons {
 			res.Reasons = append(res.Reasons, "empty_form_context")
 		}
 	}
-	if forumWritePath(r.URL.Path) && cfg.ForumWritePathScore > 0 {
+	if forumPath && cfg.ForumWritePathScore > 0 {
 		suspicious := emptyCtx || missingSecFetch(r)
 		if suspicious {
 			res.Score += cfg.ForumWritePathScore
@@ -231,6 +236,15 @@ func scoreFormSpam(r *http.Request, cfg Config, res *Result, wantReasons bool) {
 			}
 		}
 	}
+}
+
+func isBrowserFormContentType(ct string) bool {
+	ct = strings.ToLower(strings.TrimSpace(ct))
+	if ct == "" {
+		return false
+	}
+	return strings.HasPrefix(ct, "application/x-www-form-urlencoded") ||
+		strings.HasPrefix(ct, "multipart/form-data")
 }
 
 func isWriteMethod(method string) bool {
@@ -246,10 +260,20 @@ func forumWritePath(path string) bool {
 	if path == "" {
 		return false
 	}
-	for _, p := range forumWritePaths {
-		if faststr.ContainsFold(path, p) {
-			return true
+	start := 0
+	for i := 0; i <= len(path); i++ {
+		if i < len(path) && path[i] != '/' {
+			continue
 		}
+		if i > start {
+			seg := path[start:i]
+			for _, p := range forumWritePaths {
+				if len(seg) == len(p) && strings.EqualFold(seg, p) {
+					return true
+				}
+			}
+		}
+		start = i + 1
 	}
 	return false
 }

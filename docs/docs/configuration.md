@@ -180,8 +180,8 @@ forum_write_path_score = 25
 missing_accept_lang_score = 15
 missing_sec_fetch_score = 20
 behavior_burst_limit = 60
-behavior_write_burst_limit = 10
-behavior_write_repeat_limit = 5
+behavior_write_burst_limit = 20
+behavior_write_repeat_limit = 8
 behavior_strike_limit = 3
 
 [detect.proxy_signals]

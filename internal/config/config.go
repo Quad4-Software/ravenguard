@@ -415,8 +415,8 @@ func Default() Config {
 			BehaviorBurstLimit: 60, BehaviorBurstScore: 35,
 			BehaviorPathFanout: 40, BehaviorPathFanoutScore: 30,
 			BehaviorStrikeLimit: 3, BehaviorStrikeScore: 25,
-			BehaviorWriteBurstLimit: 10, BehaviorWriteBurstScore: 40,
-			BehaviorWriteRepeatLimit: 5, BehaviorWriteRepeatScore: 45,
+			BehaviorWriteBurstLimit: 20, BehaviorWriteBurstScore: 35,
+			BehaviorWriteRepeatLimit: 8, BehaviorWriteRepeatScore: 40,
 			EmptyFormContextScore: 30, ForumWritePathScore: 25,
 			ProxySignals: DetectProxySignals{
 				BotScoreHeader:  "CF-Bot-Score",

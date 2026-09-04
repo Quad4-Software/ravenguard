@@ -57,6 +57,26 @@ func TestBehaviorWriteBurstAndRepeat(t *testing.T) {
 	}
 }
 
+func TestBehaviorWriteRepeatSkipsGeneralAPI(t *testing.T) {
+	beh := detect.NewBehaviorTracker(detect.BehaviorConfig{
+		Window:           time.Minute,
+		BurstLimit:       1000,
+		PathFanout:       1000,
+		WriteBurstLimit:  100,
+		WriteBurstScore:  40,
+		WriteRepeatLimit: 3,
+		WriteRepeatScore: 45,
+	})
+	key := "autosave"
+	for range 6 {
+		beh.Record(key, "/api/v1/documents/save", "POST")
+	}
+	res := beh.Score(key)
+	if containsReason(res.Reasons, "behavior_write_repeat") {
+		t.Fatalf("general API autosave must not write-repeat score reasons=%v", res.Reasons)
+	}
+}
+
 func TestBehaviorStrikes(t *testing.T) {
 	beh := detect.NewBehaviorTracker(detect.BehaviorConfig{
 		Window:      time.Minute,

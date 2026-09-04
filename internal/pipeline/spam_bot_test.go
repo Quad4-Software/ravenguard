@@ -167,6 +167,27 @@ func TestWriteBurstChallengesSpammer(t *testing.T) {
 	}
 }
 
+func TestLegitimateJSONAPIPasses(t *testing.T) {
+	h := spamTestHandler(t, func(cfg *config.Config) {
+		cfg.Challenge.Mode = "detect"
+	}, nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/orders", strings.NewReader(`{"sku":"a"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0) Chrome/120.0.0.0 Safari/537.36")
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Accept-Language", "en-US")
+	req.Header.Set("Origin", "https://shop.example")
+	req.Header.Set("Sec-Fetch-Site", "same-origin")
+	req.Header.Set("Sec-Fetch-Mode", "cors")
+	req.Header.Set("Sec-Fetch-Dest", "empty")
+	req.RemoteAddr = "192.0.2.125:1"
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("general JSON API should pass code=%d body=%s", rr.Code, rr.Body.String()[:min(200, rr.Body.Len())])
+	}
+}
+
 func TestSearchCrawlersNotHardBlocked(t *testing.T) {
 	h := spamTestHandler(t, func(cfg *config.Config) {
 		cfg.Detect.Enabled = false

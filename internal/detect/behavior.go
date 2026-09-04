@@ -62,10 +62,10 @@ func NewBehaviorTracker(cfg BehaviorConfig) *BehaviorTracker {
 		cfg.StrikeLimit = 3
 	}
 	if cfg.WriteBurstLimit <= 0 {
-		cfg.WriteBurstLimit = 10
+		cfg.WriteBurstLimit = 20
 	}
 	if cfg.WriteRepeatLimit <= 0 {
-		cfg.WriteRepeatLimit = 5
+		cfg.WriteRepeatLimit = 8
 	}
 	t := &BehaviorTracker{cfg: cfg}
 	for i := range t.shards {
@@ -97,11 +97,18 @@ func (t *BehaviorTracker) Record(key, path, method string) {
 	}
 	if isWriteMethod(method) {
 		e.writes++
-		if path != "" && path == e.lastWritePath {
-			e.samePathWrite++
+		// Same-path repeat scoring is limited to spam-prone write segments so
+		// general API autosave and cart updates are not challenged early.
+		if forumWritePath(path) {
+			if path != "" && path == e.lastWritePath {
+				e.samePathWrite++
+			} else {
+				e.lastWritePath = path
+				e.samePathWrite = 1
+			}
 		} else {
-			e.lastWritePath = path
-			e.samePathWrite = 1
+			e.lastWritePath = ""
+			e.samePathWrite = 0
 		}
 	}
 }
