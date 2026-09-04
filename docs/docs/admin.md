@@ -93,6 +93,18 @@ Base path: `{base_path}/api/v1`
 | POST | `/certs/{host}/renew` | renew one host |
 | GET/PUT/DELETE | `/certs/{host}` | detail, manual PEM upload, delete |
 | GET | `/logs` | in-memory log ring |
+| GET/POST | `/proxies` | list fleet proxies / enroll (returns one-time token) |
+| PUT/DELETE | `/proxies/{id}` | update metadata or remove |
+| POST | `/proxies/{id}/rotate-token` | new enrollment token |
+| POST | `/proxies/{id}/push` | push desired config to online agent |
+| GET | `/proxies/{id}/status` | live status from agent when online |
+| GET/POST | `/migrations` | list / create Move services jobs |
+| GET | `/migrations/{id}` | migration detail + DNS checklist |
+| POST | `/migrations/{id}/prep` | prep destination (routes + certs) |
+| POST | `/migrations/{id}/complete` | finish cutover after DNS |
+| POST | `/migrations/{id}/abort` | abort in-progress migration |
+
+Agent connect (no session cookie): `POST` upgrade WebSocket at `/api/v1/agent/connect` with mutual auth.
 
 ## Live vs restart-required config
 
@@ -113,6 +125,62 @@ Listen addresses, TLS mode/bind, TOML upstream URL, sandbox, secrets, challenge 
 The SPA Appearance page edits branding and theme tokens, uploads logo/favicon assets, and previews challenge/block/rate-limit pages via `/appearance/preview`. Q-Feeds changes from the Feeds page or `PUT /qfeeds` share the persisted config-overrides payload with other live fields.
 
 When admin starts with an empty route table, RavenGuard seeds a default upstream and catch-all route from `[upstream].url`.
+
+## Hub and multi-proxy fleet
+
+RavenGuard can run as separate processes:
+
+| Command | Role |
+|---------|------|
+| `ravenguard hub` | Admin SPA, SQLite, agent WebSocket accept (no public WAF) |
+| `ravenguard proxy` | Public WAF + outbound agent to the hub |
+| `ravenguard` / `ravenguard all` | Combined single-process mode (backcompat) |
+
+Preferred deploy keeps the hub on a private overlay (Tailscale, Netbird, or WireGuard). Bind `admin.listen` to the overlay IP only. Proxies set `agent.hub_url` to that address. Operators open the panel from a machine on the same mesh. Nothing management-facing needs a public A record.
+
+### Hub config
+
+```toml
+[admin]
+enabled = true
+listen = "100.64.0.10:9090"
+data_dir = "./data/admin"
+
+[hub]
+public_url = "http://100.64.0.10:9090"
+```
+
+The hub Ed25519 keypair is created under `admin.data_dir` (`hub_ed25519.key` / `.pub`). Agents verify the hub with `agent.hub_pubkey`.
+
+### Proxy agent config
+
+```toml
+[listen]
+http = ":8080"
+
+[agent]
+hub_url = "http://100.64.0.10:9090"
+token = "rgpt_..."
+hub_pubkey = "..."
+data_dir = "./data/proxy"
+```
+
+Enroll a proxy in the Proxies UI to get a one-time token and copy-paste TOML. Agents dial WebSocket at `{hub_url}/api/v1/agent/connect` with mutual auth (token, hub signature over token hash, machine fingerprint). The challenge does not echo the enrollment token. Connect attempts are rate-limited per source IP. Fingerprints cannot be reused across proxies. Universal enrollment tokens require an owner role.
+
+Ops against a registered proxy never fall back to the hub process: if the agent is offline, the API returns an error instead of mutating local state.
+
+### Move services
+
+Use **Move services** to reassign routes between proxies: prep destination (routes + certs), update DNS to the destination public IP shown in the checklist, then complete cutover.
+
+Environment:
+
+- `RG_HUB_PUBLIC_URL`
+- `RG_AGENT_HUB_URL`
+- `RG_AGENT_TOKEN`
+- `RG_AGENT_HUB_PUBKEY`
+- `RG_AGENT_NAME`
+- `RG_AGENT_DATA_DIR`
 
 ## Reverse proxy
 

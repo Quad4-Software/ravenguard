@@ -17,6 +17,15 @@ Or behind an external terminator:
 Client -> reverse proxy (TLS termination) -> RavenGuard -> origin
 ```
 
+Fleet mode (hub + agents):
+
+```text
+Public clients -> Proxy A / Proxy B (WAF)
+Operator / proxies (overlay) -> Hub (admin + agent WebSocket)
+```
+
+Proxies dial the hub outbound (Beszel-style). The hub never needs a public management port when it binds only on Tailscale/Netbird/WireGuard.
+
 Controls run at the HTTP application layer. Volumetric DDoS mitigation belongs at the network edge or CDN.
 
 ## Request pipeline
@@ -61,6 +70,8 @@ Upstream forwarding sets `X-Real-IP` and rebuilds `X-Forwarded-For` from the res
 | Sentry / GlitchTip | `internal/sentry` |
 | Landlock + seccomp-bpf | `internal/sandbox` |
 | Admin control plane | `internal/admin`, `packages/admin` |
+| Hub / proxy agent protocol | `internal/agentprotocol` |
+
 ## Detection limits
 
 Requests with known scanner or AI User-Agents or missing browser headers are scored and may be challenged or blocked. Agents that set `navigator.webdriver`, expose Playwright/Puppeteer/Selenium globals, look headless, or skip interaction fail the challenge environment probe.

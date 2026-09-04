@@ -7,6 +7,19 @@ description: Edge WAF placement, reverse proxy trust, and Docker.
 
 ## Topology
 
+### Hub + proxy fleet (overlay)
+
+Run the management plane on a private mesh host and edge proxies on public servers:
+
+```text
+ravenguard hub   # admin.bind = overlay IP only
+ravenguard proxy # public :80/:443 + agent dials hub
+```
+
+Tailscale / Netbird / WireGuard encrypt the management path. Set each proxy's public IPv4/IPv6 in the Proxies UI so Move services can show DNS cutover instructions.
+
+Combined single-host installs still use `ravenguard` / `ravenguard all` with `[admin] enabled = true`.
+
 ### Edge (recommended when RavenGuard owns TLS)
 
 ```text
@@ -213,3 +226,6 @@ timeout = "3s"
 - Keep `privacy.hash_client_ip = true` unless raw addresses are required
 - Store blocklist files on durable storage
 - Confirm the proxy forwards `X-Forwarded-Proto` (or the configured proto header)
+- Keep `admin.listen` on loopback or a private overlay. Never expose it like the public WAF port
+- For fleet mode: set each proxy public IPv4/IPv6 in the Proxies UI before Move services
+- Persist `admin.data_dir` (and `agent.data_dir` on proxies) across restarts

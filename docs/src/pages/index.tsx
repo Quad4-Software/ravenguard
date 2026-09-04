@@ -9,8 +9,8 @@ import styles from './index.module.css';
 
 const features = [
   {
-    title: 'Blocklists',
-    body: 'IP, hostname, and User-Agent deny lists from files. Reloaded on an interval without restart.',
+    title: 'Blocklists and feeds',
+    body: 'IP, hostname, and User-Agent deny lists from files, reloaded on an interval. Optional Q-Feeds malware IP and domain cache.',
   },
   {
     title: 'Rate limits and size caps',
@@ -25,12 +25,12 @@ const features = [
     body: 'Optional JavaScript proof-of-work and environment probe. Clearance is an HMAC cookie bound to the client key.',
   },
   {
-    title: 'Hashed client IPs',
-    body: 'Rate limits, behavior state, and logs use a hashed client key by default.',
+    title: 'Admin control plane',
+    body: 'Separate listen address, multi-user auth, live upstreams/routes/access, certs, and an embedded SPA. Never on the public WAF path.',
   },
   {
-    title: 'Q-Feeds',
-    body: 'Optional malware IP and domain feeds merge into the same deny path as local blocklists.',
+    title: 'Hub and proxy fleet',
+    body: 'Run ravenguard hub on a private overlay and ravenguard proxy at the edge. Agents dial outbound. Move services for DNS cutover.',
   },
 ];
 
@@ -74,12 +74,13 @@ function HomepageHeader(): ReactNode {
             {siteConfig.title}
           </Heading>
           <p className={styles.headline}>
-            HTTP Web Application Firewall and reverse proxy.
+            HTTP WAF and reverse proxy for a single edge or a multi-proxy fleet.
           </p>
           <p className={styles.lede}>
             Terminate TLS at the edge or sit behind nginx, Caddy, or Traefik.
             Blocklists, rate limits, attack filters, detect scoring, optional
-            browser challenge, then proxy to your origin.
+            browser challenge, then proxy to your origin. Manage one host or a
+            hub plus outbound agents on a private mesh.
           </p>
           <div className={styles.actions}>
             <Link className="button button--primary button--lg" to="/docs/intro">
@@ -87,8 +88,8 @@ function HomepageHeader(): ReactNode {
             </Link>
             <Link
               className="button button--outline button--lg"
-              to="/docs/architecture">
-              Architecture
+              to="/docs/admin">
+              Admin and fleet
             </Link>
           </div>
         </div>
@@ -103,6 +104,12 @@ function HomepageHeader(): ReactNode {
           <strong>RavenGuard</strong>
           <span className={styles.sep}>{'->'}</span>
           <span>Origin</span>
+          <span className={styles.topologySplit} aria-hidden="true">
+            |
+          </span>
+          <strong>Proxy</strong>
+          <span className={styles.sep}>{'->'}</span>
+          <strong>Hub</strong>
         </div>
       </div>
     </header>
@@ -111,7 +118,7 @@ function HomepageHeader(): ReactNode {
 
 export default function Home(): ReactNode {
   return (
-    <Layout description="HTTP Web Application Firewall and reverse proxy. Blocklists, rate limits, detect scoring, optional browser challenge.">
+    <Layout description="HTTP WAF and reverse proxy with blocklists, rate limits, detect scoring, browser challenge, admin control plane, and hub plus proxy fleet.">
       <HomepageHeader />
       <main>
         <section className={styles.section}>
@@ -122,8 +129,8 @@ export default function Home(): ReactNode {
               </Heading>
               <p className={styles.sectionCopy}>
                 RavenGuard is the WAF hop in front of your app. Own TLS with
-                ACME, or place it behind an existing reverse proxy with trusted
-                client IP headers.
+                ACME, place it behind an existing reverse proxy, or split the
+                admin hub from public edge proxies.
               </p>
             </div>
             <div className={styles.featureGrid}>
@@ -146,7 +153,7 @@ export default function Home(): ReactNode {
                 Request order
               </Heading>
               <p className={styles.sectionCopy}>
-                Stages run in fixed order for every request.
+                Stages run in fixed order for every request on the public WAF path.
               </p>
             </div>
             <div className={styles.pipeline}>
@@ -172,9 +179,10 @@ export default function Home(): ReactNode {
                 Build and run
               </Heading>
               <p className={styles.ctaCopy}>
-                make build, or docker compose up --build from deploy/. Set
-                upstream.url and RG_CHALLENGE_SECRET before exposing the
-                challenge path.
+                make build, or docker compose up --build from deploy/. Use
+                ravenguard for combined mode, or ravenguard hub and
+                ravenguard proxy for a fleet. Set upstream.url and
+                RG_CHALLENGE_SECRET before exposing the challenge path.
               </p>
             </div>
             <div className={styles.actions}>

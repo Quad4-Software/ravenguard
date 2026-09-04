@@ -32,7 +32,27 @@ Full example: [`configs/ravenguard.toml`](https://github.com/Quad4-Software/rave
 | `-admin-listen` | `RG_ADMIN_LISTEN` | Admin HTTP bind (default `127.0.0.1:9090`) |
 | `-admin-data-dir` | `RG_ADMIN_DATA_DIR` | Admin SQLite directory |
 
-See [Admin control plane](./admin.md) for roles, bootstrap, API tokens, and reverse-proxying the SPA.
+Process modes (first CLI argument): `all` (default), `hub`, `proxy`. See [Admin](./admin.md) for roles, bootstrap, API tokens, fleet enrollment, and reverse-proxying the SPA.
+
+## Hub and agent
+
+Used when splitting management and edge processes.
+
+```toml
+[hub]
+# public_url = "http://100.64.0.10:9090"
+
+[agent]
+# hub_url = "http://100.64.0.10:9090"
+# token = ""
+# hub_pubkey = ""
+# name = ""
+data_dir = "./data/proxy"
+```
+
+`hub.public_url` is what the Proxies UI shows for enrollment. The hub Ed25519 keypair lives under `admin.data_dir`. Proxy mode requires `agent.hub_url`, `agent.token`, `agent.hub_pubkey`, and `agent.data_dir`.
+
+Env: `RG_HUB_PUBLIC_URL`, `RG_AGENT_HUB_URL`, `RG_AGENT_TOKEN`, `RG_AGENT_HUB_PUBKEY`, `RG_AGENT_NAME`, `RG_AGENT_DATA_DIR`.
 
 ## Listen and TLS
 

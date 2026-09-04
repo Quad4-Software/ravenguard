@@ -1,8 +1,5 @@
 # RavenGuard
 
-> [!WARNING]
-> Alpha software under active development. Not ready for production.
-
 HTTP Web Application Firewall (WAF) and reverse proxy. RavenGuard sits in front of your origin, terminates TLS with automatic Let's Encrypt when you want, routes to multiple upstreams, and enforces application-layer controls:
 
 ```text
@@ -15,10 +12,18 @@ It also works behind an external reverse proxy:
 Client -> reverse proxy (TLS) -> RavenGuard -> origin
 ```
 
+Fleet mode splits management and edge:
+
+```text
+Public clients -> ravenguard proxy (WAF)
+Overlay        -> ravenguard hub (admin + agent WebSocket)
+```
+
 ## Features
 
 - Edge TLS with static PEM files or automatic Let's Encrypt (HTTP-01 / TLS-ALPN-01, durable renewals)
 - Multi-upstream host and path routing with live admin CRUD
+- Hub plus proxy fleet (`ravenguard hub` / `ravenguard proxy`) with outbound agent dial and Move services cutover
 - WAF pipeline: blocklists, threat feeds, rate limits, size/concurrency caps, attack signatures, temp bans
 - Heuristic detection for scanners, scrapers, and common AI crawler User-Agents
 - Optional JavaScript proof-of-work challenge (`@quad4/ravenguard-widget`) with clearance cookie

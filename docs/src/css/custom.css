@@ -63,25 +63,6 @@ body {
   letter-spacing: -0.01em;
 }
 
-[role='banner'] {
-  min-height: 0;
-  font-size: 0.75rem;
-  line-height: 1.2;
-  letter-spacing: 0.04em;
-  border-bottom: 1px solid var(--rg-line);
-}
-
-[role='banner'] > div {
-  padding-top: 0.35rem !important;
-  padding-bottom: 0.35rem !important;
-  font-size: inherit;
-}
-
-[data-theme='light'] [role='banner'] {
-  background-color: #e8e8e4 !important;
-  color: #3a3a3a !important;
-}
-
 .navbar-sidebar {
   background: var(--rg-bg);
   box-shadow: none;

@@ -4,7 +4,8 @@ import type * as Preset from '@docusaurus/preset-classic';
 
 const config: Config = {
   title: 'RavenGuard',
-  tagline: 'HTTP Web Application Firewall and reverse proxy.',
+  tagline:
+    'HTTP WAF and reverse proxy. Edge or fleet with a private hub.',
   favicon: 'img/favicon.ico',
 
   future: {
@@ -39,6 +40,11 @@ const config: Config = {
         theme: {
           customCss: './src/css/custom.css',
         },
+        sitemap: {
+          changefreq: 'weekly',
+          priority: 0.5,
+          filename: 'sitemap.xml',
+        },
       } satisfies Preset.Options,
     ],
   ],
@@ -49,22 +55,26 @@ const config: Config = {
       {
         name: 'description',
         content:
-          'HTTP Web Application Firewall and reverse proxy. Blocklists, rate limits, detect scoring, optional browser challenge.',
+          'HTTP WAF and reverse proxy with blocklists, rate limits, detect scoring, browser challenge, admin control plane, and hub plus proxy fleet.',
       },
       {name: 'theme-color', content: '#050505'},
+      {name: 'robots', content: 'index, follow, noai, noimageai'},
+      {name: 'googlebot', content: 'index, follow'},
+      {name: 'bingbot', content: 'index, follow'},
+      {name: 'GPTBot', content: 'noindex, nofollow'},
+      {name: 'ChatGPT-User', content: 'noindex, nofollow'},
+      {name: 'ClaudeBot', content: 'noindex, nofollow'},
+      {name: 'anthropic-ai', content: 'noindex, nofollow'},
+      {name: 'Google-Extended', content: 'noindex, nofollow'},
+      {name: 'Applebot-Extended', content: 'noindex, nofollow'},
+      {name: 'CCBot', content: 'noindex, nofollow'},
+      {name: 'Bytespider', content: 'noindex, nofollow'},
+      {name: 'PerplexityBot', content: 'noindex, nofollow'},
     ],
     colorMode: {
       defaultMode: 'dark',
       disableSwitch: false,
       respectPrefersColorScheme: true,
-    },
-    announcementBar: {
-      id: 'alpha',
-      content:
-        'Alpha. Actively developed. Not ready for production.',
-      backgroundColor: '#1a1a1a',
-      textColor: '#c4c4c4',
-      isCloseable: false,
     },
     navbar: {
       title: 'RavenGuard',
@@ -89,6 +99,11 @@ const config: Config = {
           position: 'left',
         },
         {
+          to: '/docs/admin',
+          label: 'Admin',
+          position: 'left',
+        },
+        {
           href: 'https://github.com/Quad4-Software/ravenguard',
           label: 'GitHub',
           position: 'right',
@@ -108,6 +123,20 @@ const config: Config = {
   } satisfies Preset.ThemeConfig,
 
   headTags: [
+    {
+      tagName: 'meta',
+      attributes: {
+        name: 'ai',
+        content: 'notrain, noindex',
+      },
+    },
+    {
+      tagName: 'link',
+      attributes: {
+        rel: 'llms',
+        href: '/llms.txt',
+      },
+    },
     {
       tagName: 'link',
       attributes: {

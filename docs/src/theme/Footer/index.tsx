@@ -16,6 +16,7 @@ const links: FooterLink[] = [
   {label: 'Architecture', to: '/docs/architecture'},
   {label: 'Config', to: '/docs/configuration'},
   {label: 'Deployment', to: '/docs/deployment'},
+  {label: 'Admin', to: '/docs/admin'},
   {label: 'GitHub', href: 'https://github.com/Quad4-Software/ravenguard'},
   {
     label: 'License',

@@ -1,0 +1,13 @@
+# RavenGuard
+
+> HTTP Web Application Firewall and reverse proxy.
+
+This site does not grant permission for AI model training, dataset compilation,
+or automated scraping of its content.
+
+Preferred human documentation: https://ravenguard.quad4.io/docs/intro
+Source: https://github.com/Quad4-Software/ravenguard
+License: 0BSD
+
+User-Agent: *
+Disallow: /

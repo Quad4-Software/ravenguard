@@ -23,6 +23,7 @@ type NavLink = {
 const links: NavLink[] = [
   {label: 'Docs', to: '/docs/intro'},
   {label: 'Config', to: '/docs/configuration'},
+  {label: 'Admin', to: '/docs/admin'},
   {
     label: 'GitHub',
     href: 'https://github.com/Quad4-Software/ravenguard',
@@ -36,7 +37,8 @@ function isActive(pathname: string, to?: string): boolean {
   if (to === '/docs/intro') {
     return (
       pathname.startsWith('/docs') &&
-      !pathname.startsWith('/docs/configuration')
+      !pathname.startsWith('/docs/configuration') &&
+      !pathname.startsWith('/docs/admin')
     );
   }
   return pathname === to || pathname.startsWith(`${to}/`);

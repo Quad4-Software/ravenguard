@@ -210,6 +210,11 @@
   opacity: 0.45;
 }
 
+.topologySplit {
+  opacity: 0.35;
+  margin: 0 0.15rem;
+}
+
 .section {
   padding: 5rem 0;
   border-bottom: 1px solid var(--rg-line);
