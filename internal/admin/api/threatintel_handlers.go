@@ -240,10 +240,10 @@ func (s *Server) handleThreatIntelAbuseReport(w http.ResponseWriter, r *http.Req
 	}
 	cfg := s.threatIntelCfg()
 	var body struct {
-		IP          string `json:"ip"`
-		Comment     string `json:"comment"`
-		ConfirmRaw  bool   `json:"confirm_raw"`
-		Categories  []int  `json:"categories"`
+		IP         string `json:"ip"`
+		Comment    string `json:"comment"`
+		ConfirmRaw bool   `json:"confirm_raw"`
+		Categories []int  `json:"categories"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || strings.TrimSpace(body.IP) == "" {
 		writeErr(w, http.StatusBadRequest, "ip required")
@@ -298,18 +298,18 @@ func (s *Server) handleThreatIntelConfig(w http.ResponseWriter, r *http.Request)
 	case http.MethodGet:
 		cfg := s.threatIntelCfg()
 		writeJSON(w, http.StatusOK, map[string]any{
-			"enabled":                   cfg.Enabled,
-			"export_raw_ip":             cfg.ExportRawIP,
-			"export_token_set":          cfg.ExportToken != "",
-			"abuseipdb_key_set":         cfg.AbuseIPDBKey != "",
-			"abuseipdb_min_confidence":  cfg.AbuseIPDBMinConfidence,
-			"abuseipdb_limit":           cfg.AbuseIPDBLimit,
-			"misp_url":                  cfg.MISPURL,
-			"misp_key_set":              cfg.MISPKey != "",
-			"ingest_urls":               cfg.IngestURLs,
-			"ingest_interval":           cfg.IngestInterval.Duration.String(),
-			"default_ttl":               cfg.DefaultTTL.Duration.String(),
-			"status":                    tiStatus.snapshot(),
+			"enabled":                  cfg.Enabled,
+			"export_raw_ip":            cfg.ExportRawIP,
+			"export_token_set":         cfg.ExportToken != "",
+			"abuseipdb_key_set":        cfg.AbuseIPDBKey != "",
+			"abuseipdb_min_confidence": cfg.AbuseIPDBMinConfidence,
+			"abuseipdb_limit":          cfg.AbuseIPDBLimit,
+			"misp_url":                 cfg.MISPURL,
+			"misp_key_set":             cfg.MISPKey != "",
+			"ingest_urls":              cfg.IngestURLs,
+			"ingest_interval":          cfg.IngestInterval.Duration.String(),
+			"default_ttl":              cfg.DefaultTTL.Duration.String(),
+			"status":                   tiStatus.snapshot(),
 		})
 	case http.MethodPut:
 		if !rbac.CanWriteConfig(actor.User.Role) {

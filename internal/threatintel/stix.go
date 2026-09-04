@@ -13,10 +13,10 @@ import (
 )
 
 type stixBundle struct {
-	Type    string         `json:"type"`
-	ID      string         `json:"id"`
-	Spec    string         `json:"spec_version"`
-	Objects []stixObject   `json:"objects"`
+	Type    string       `json:"type"`
+	ID      string       `json:"id"`
+	Spec    string       `json:"spec_version"`
+	Objects []stixObject `json:"objects"`
 }
 
 type stixObject struct {
@@ -95,15 +95,15 @@ func ExportSTIX(entries []agentprotocol.ThreatEntry, opt ExportOptions) ([]byte,
 func stixPattern(ioc IOC) (pattern, name string, ok bool) {
 	switch ioc.Type {
 	case TypeIPv4:
-		return fmt.Sprintf("[ipv4-addr:value = '%s']", escapeSTIX(ioc.Value)), "ipv4:"+ioc.Value, true
+		return fmt.Sprintf("[ipv4-addr:value = '%s']", escapeSTIX(ioc.Value)), "ipv4:" + ioc.Value, true
 	case TypeIPv6:
-		return fmt.Sprintf("[ipv6-addr:value = '%s']", escapeSTIX(ioc.Value)), "ipv6:"+ioc.Value, true
+		return fmt.Sprintf("[ipv6-addr:value = '%s']", escapeSTIX(ioc.Value)), "ipv6:" + ioc.Value, true
 	case TypeDomain:
-		return fmt.Sprintf("[domain-name:value = '%s']", escapeSTIX(ioc.Value)), "domain:"+ioc.Value, true
+		return fmt.Sprintf("[domain-name:value = '%s']", escapeSTIX(ioc.Value)), "domain:" + ioc.Value, true
 	case TypeUA:
 		return fmt.Sprintf("[user-agent:value = '%s']", escapeSTIX(ioc.Value)), "ua", true
 	case TypeJA4:
-		return fmt.Sprintf("[x-ja4:value = '%s']", escapeSTIX(ioc.Value)), "ja4:"+ioc.Value, true
+		return fmt.Sprintf("[x-ja4:value = '%s']", escapeSTIX(ioc.Value)), "ja4:" + ioc.Value, true
 	case TypeBind:
 		return fmt.Sprintf("[x-ravenguard-bind:value = '%s']", escapeSTIX(ioc.Value)), "bind", true
 	default:

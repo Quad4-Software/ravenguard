@@ -16,31 +16,31 @@ import (
 )
 
 type Config struct {
-	Listen     ListenConfig     `toml:"listen"`
-	TLS        TLSConfig        `toml:"tls"`
-	Upstream   UpstreamConfig   `toml:"upstream"`
-	Trust      TrustConfig      `toml:"trust"`
-	Blocklists BlocklistsConfig `toml:"blocklists"`
-	Allowlists AllowlistsConfig `toml:"allowlists"`
-	QFeeds     QFeedsConfig     `toml:"qfeeds"`
-	RateLimit  RateLimitConfig  `toml:"ratelimit"`
-	Protect    ProtectConfig    `toml:"protect"`
-	Detect     DetectConfig     `toml:"detect"`
-	Coraza     CorazaConfig     `toml:"coraza"`
-	Semantic   SemanticConfig   `toml:"semantic"`
-	ML         MLConfig         `toml:"ml"`
-	Challenge  ChallengeConfig  `toml:"challenge"`
-	Stealth    StealthConfig    `toml:"stealth"`
-	Privacy    PrivacyConfig    `toml:"privacy"`
-	UI         UIConfig         `toml:"ui"`
-	Site       SiteConfig       `toml:"site"`
-	Logging    LoggingConfig    `toml:"logging"`
-	Sentry     SentryConfig     `toml:"sentry"`
-	Sandbox    SandboxConfig    `toml:"sandbox"`
-	Admin      AdminConfig      `toml:"admin"`
-	Hub        HubConfig        `toml:"hub"`
-	Agent      AgentConfig      `toml:"agent"`
-	Tunnel     TunnelConfig     `toml:"tunnel"`
+	Listen      ListenConfig      `toml:"listen"`
+	TLS         TLSConfig         `toml:"tls"`
+	Upstream    UpstreamConfig    `toml:"upstream"`
+	Trust       TrustConfig       `toml:"trust"`
+	Blocklists  BlocklistsConfig  `toml:"blocklists"`
+	Allowlists  AllowlistsConfig  `toml:"allowlists"`
+	QFeeds      QFeedsConfig      `toml:"qfeeds"`
+	RateLimit   RateLimitConfig   `toml:"ratelimit"`
+	Protect     ProtectConfig     `toml:"protect"`
+	Detect      DetectConfig      `toml:"detect"`
+	Coraza      CorazaConfig      `toml:"coraza"`
+	Semantic    SemanticConfig    `toml:"semantic"`
+	ML          MLConfig          `toml:"ml"`
+	Challenge   ChallengeConfig   `toml:"challenge"`
+	Stealth     StealthConfig     `toml:"stealth"`
+	Privacy     PrivacyConfig     `toml:"privacy"`
+	UI          UIConfig          `toml:"ui"`
+	Site        SiteConfig        `toml:"site"`
+	Logging     LoggingConfig     `toml:"logging"`
+	Sentry      SentryConfig      `toml:"sentry"`
+	Sandbox     SandboxConfig     `toml:"sandbox"`
+	Admin       AdminConfig       `toml:"admin"`
+	Hub         HubConfig         `toml:"hub"`
+	Agent       AgentConfig       `toml:"agent"`
+	Tunnel      TunnelConfig      `toml:"tunnel"`
 	ThreatIntel ThreatIntelConfig `toml:"threatintel"`
 
 	runMode string `toml:"-"`
@@ -48,17 +48,17 @@ type Config struct {
 
 // ThreatIntelConfig configures open TI export/ingest on the hub.
 type ThreatIntelConfig struct {
-	Enabled               bool     `toml:"enabled"`
-	ExportRawIP           bool     `toml:"export_raw_ip"`
-	ExportToken           string   `toml:"export_token"`
-	AbuseIPDBKey          string   `toml:"abuseipdb_key"`
-	AbuseIPDBMinConfidence int     `toml:"abuseipdb_min_confidence"`
-	AbuseIPDBLimit        int      `toml:"abuseipdb_limit"`
-	MISPURL               string   `toml:"misp_url"`
-	MISPKey               string   `toml:"misp_key"`
-	IngestURLs            []string `toml:"ingest_urls"`
-	IngestInterval        Duration `toml:"ingest_interval"`
-	DefaultTTL            Duration `toml:"default_ttl"`
+	Enabled                bool     `toml:"enabled"`
+	ExportRawIP            bool     `toml:"export_raw_ip"`
+	ExportToken            string   `toml:"export_token"`
+	AbuseIPDBKey           string   `toml:"abuseipdb_key"`
+	AbuseIPDBMinConfidence int      `toml:"abuseipdb_min_confidence"`
+	AbuseIPDBLimit         int      `toml:"abuseipdb_limit"`
+	MISPURL                string   `toml:"misp_url"`
+	MISPKey                string   `toml:"misp_key"`
+	IngestURLs             []string `toml:"ingest_urls"`
+	IngestInterval         Duration `toml:"ingest_interval"`
+	DefaultTTL             Duration `toml:"default_ttl"`
 }
 
 // TunnelConfig configures edge tunnel accept or connector dial.
