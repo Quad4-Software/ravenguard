@@ -944,21 +944,77 @@ legend {
   flex-direction: column;
   gap: 0.5rem;
   z-index: 100;
+  pointer-events: none;
 }
 
 .toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
   background: var(--bg-raised);
   border: 1px solid var(--line);
   border-left: 2px solid var(--accent);
   color: var(--fg);
-  padding: 0.7rem 1rem;
+  padding: 0.7rem 0.75rem 0.7rem 0.85rem;
   font-size: 0.85rem;
   min-width: 16rem;
-  max-width: 22rem;
+  max-width: 24rem;
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--bg) 55%, transparent);
+}
+
+.toast-icon {
+  flex-shrink: 0;
+  margin-top: 0.1rem;
+  color: var(--accent);
+}
+
+.toast-msg {
+  flex: 1;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.toast-dismiss {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0.1rem;
+  line-height: 0;
+}
+
+.toast-dismiss:hover {
+  color: var(--fg);
+}
+
+.toast-success {
+  border-left-color: var(--ok);
+}
+
+.toast-success .toast-icon {
+  color: var(--ok);
+}
+
+.toast-warning {
+  border-left-color: var(--warn);
+}
+
+.toast-warning .toast-icon {
+  color: var(--warn);
 }
 
 .toast-error {
   border-left-color: var(--bad);
+}
+
+.toast-error .toast-icon {
+  color: var(--bad);
+}
+
+.toast-info {
+  border-left-color: var(--accent);
 }
 
 /* dialog */

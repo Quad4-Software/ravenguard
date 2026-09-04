@@ -1,4 +1,4 @@
-export type ToastKind = 'info' | 'error'
+export type ToastKind = 'info' | 'success' | 'warning' | 'error'
 
 export interface ToastItem {
   id: number
@@ -13,7 +13,7 @@ class ToastStore {
 
   push(message: string, kind: ToastKind = 'info', timeoutMs = 4000) {
     const id = nextId++
-    this.items.push({ id, kind, message })
+    this.items = [...this.items, { id, kind, message }]
     if (timeoutMs > 0) {
       setTimeout(() => this.dismiss(id), timeoutMs)
     }
@@ -22,6 +22,14 @@ class ToastStore {
 
   info(message: string) {
     return this.push(message, 'info')
+  }
+
+  success(message: string) {
+    return this.push(message, 'success', 3500)
+  }
+
+  warning(message: string) {
+    return this.push(message, 'warning', 5000)
   }
 
   error(message: string) {

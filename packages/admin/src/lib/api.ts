@@ -462,8 +462,54 @@ export interface Route {
   strip_prefix: boolean
   priority: number
   access_policy_id?: string | null
+  proxy_id?: string
   created_at: string
   updated_at: string
+}
+
+export interface ProxyNode {
+  id: string
+  name: string
+  tags: string[]
+  fingerprint: string
+  universal: boolean
+  public_ipv4: string
+  public_ipv6: string
+  listen_http: string
+  listen_https: string
+  listen_quic: string
+  hostname: string
+  agent_version: string
+  last_seen_at?: string
+  desired_revision: number
+  online?: boolean
+  created_at: string
+  updated_at: string
+  enrollment_token?: string
+}
+
+export interface DNSChecklistItem {
+  host: string
+  from_ipv4?: string
+  from_ipv6?: string
+  to_ipv4?: string
+  to_ipv6?: string
+  suggested_a?: string
+  suggested_aaaa?: string
+  note?: string
+}
+
+export interface ServiceMigration {
+  id: string
+  from_proxy_id: string
+  to_proxy_id: string
+  route_ids: string[]
+  phase: string
+  dns_checklist: DNSChecklistItem[]
+  created_by?: number
+  created_at: string
+  updated_at: string
+  detail: string
 }
 
 export interface AccessRule {
@@ -885,6 +931,76 @@ export const api = {
     },
     manage(hosts: string[]) {
       return request<{ ok: string }>('POST', '/certs/manage', { hosts })
+    },
+  },
+
+  proxies: {
+    list() {
+      return request<{
+        proxies: ProxyNode[]
+        hub_url: string
+        hub_pubkey: string
+        connect_path: string
+      }>('GET', '/proxies')
+    },
+    create(body: {
+      name: string
+      tags?: string[]
+      public_ipv4?: string
+      public_ipv6?: string
+      universal?: boolean
+    }) {
+      return request<{
+        proxy: ProxyNode
+        enrollment_token: string
+        hub_url: string
+        hub_pubkey: string
+        install: { hub_url: string; token: string; hub_pubkey: string }
+      }>('POST', '/proxies', body)
+    },
+    update(id: string, body: Partial<ProxyNode>) {
+      return request<{ proxy: ProxyNode }>('PUT', `/proxies/${encodeURIComponent(id)}`, body)
+    },
+    remove(id: string) {
+      return request<{ status: string }>('DELETE', `/proxies/${encodeURIComponent(id)}`)
+    },
+    rotateToken(id: string) {
+      return request<{
+        proxy: ProxyNode
+        enrollment_token: string
+        hub_url: string
+        hub_pubkey: string
+      }>('POST', `/proxies/${encodeURIComponent(id)}/rotate-token`)
+    },
+    push(id: string) {
+      return request<{ status: string }>('POST', `/proxies/${encodeURIComponent(id)}/push`)
+    },
+    status(id: string) {
+      return request<Status>('GET', `/proxies/${encodeURIComponent(id)}/status`)
+    },
+  },
+
+  migrations: {
+    list() {
+      return request<{ migrations: ServiceMigration[] }>('GET', '/migrations')
+    },
+    create(body: { from_proxy_id: string; to_proxy_id: string; route_ids: string[] }) {
+      return request<{ migration: ServiceMigration }>('POST', '/migrations', body)
+    },
+    get(id: string) {
+      return request<{ migration: ServiceMigration }>('GET', `/migrations/${encodeURIComponent(id)}`)
+    },
+    prep(id: string) {
+      return request<{ migration: ServiceMigration }>('POST', `/migrations/${encodeURIComponent(id)}/prep`)
+    },
+    complete(id: string) {
+      return request<{ migration: ServiceMigration }>(
+        'POST',
+        `/migrations/${encodeURIComponent(id)}/complete`,
+      )
+    },
+    abort(id: string) {
+      return request<{ migration: ServiceMigration }>('POST', `/migrations/${encodeURIComponent(id)}/abort`)
     },
   },
 }

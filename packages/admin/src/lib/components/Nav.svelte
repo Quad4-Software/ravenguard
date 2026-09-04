@@ -22,6 +22,8 @@
     Users,
     Key,
     ClipboardList,
+    Network,
+    ArrowRightLeft,
   } from '@lucide/svelte'
 
   interface NavLink {
@@ -33,6 +35,8 @@
 
   const links = $derived<NavLink[]>([
     { href: `${base}/`, label: 'Overview', show: true, icon: LayoutDashboard },
+    { href: `${base}/proxies`, label: 'Proxies', show: true, icon: Network },
+    { href: `${base}/migrations`, label: 'Move services', show: true, icon: ArrowRightLeft },
     { href: `${base}/upstreams`, label: 'Upstreams', show: true, icon: Server },
     { href: `${base}/routes`, label: 'Routes', show: true, icon: Waypoints },
     { href: `${base}/access`, label: 'Access', show: true, icon: KeyRound },
