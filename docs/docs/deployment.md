@@ -143,6 +143,14 @@ make build
 | `/etc/ravenguard/blocklists/` | IP, DNS, and UA lists |
 | `/var/lib/ravenguard/certs/` | ACME storage (when `tls.mode = acme`) |
 
+## Container image (GHCR)
+
+Multi-arch images publish to `ghcr.io/quad4-software/ravenguard` on `master` (`edge`) and version tags (`latest` plus semver). Images are distroless `nonroot` (UID 65532), carry OpenContainer labels, and include SLSA provenance/SBOM.
+
+```bash
+docker pull ghcr.io/quad4-software/ravenguard:edge
+```
+
 ## Docker Compose
 
 Use [`deploy/docker-compose.yml`](https://github.com/Quad4-Software/ravenguard/blob/main/deploy/docker-compose.yml):
@@ -150,11 +158,12 @@ Use [`deploy/docker-compose.yml`](https://github.com/Quad4-Software/ravenguard/b
 ```bash
 cd deploy
 docker compose up --build
+# or: IMAGE=ghcr.io/quad4-software/ravenguard:edge docker compose up
 ```
 
 Mount config and blocklists. Set `RG_CHALLENGE_SECRET` and `QFEEDS_API_TOKEN` when needed. Point `upstream.url` at the app service. The sample stack exposes `8080`, optional `80`/`443` for edge ACME, and TCP/UDP `8443` for manual TLS or QUIC. The `certs-data` volume is ACME renewal memory.
 
-The compose file enables Landlock and in-process seccomp-bpf via `[sandbox]` (default `best_effort`), drops all capabilities, sets `no-new-privileges`, mounts a read-only root with `/tmp` tmpfs, and applies [`deploy/seccomp-ravenguard.json`](https://github.com/Quad4-Software/ravenguard/blob/main/deploy/seccomp-ravenguard.json) so the container seccomp profile allows `landlock_*` and `seccomp`.
+The compose file runs as UID 65532, enables Landlock and in-process seccomp-bpf via `[sandbox]` (default `best_effort`), drops all capabilities, sets `no-new-privileges`, mounts a read-only root with `/tmp` tmpfs, and applies [`deploy/seccomp-ravenguard.json`](https://github.com/Quad4-Software/ravenguard/blob/main/deploy/seccomp-ravenguard.json) so the container seccomp profile allows `landlock_*` and `seccomp`.
 
 Override with `RG_SANDBOX_MODE=try` or `enforce` as needed. Hosts without Landlock still start under `try` / `best_effort`.
 

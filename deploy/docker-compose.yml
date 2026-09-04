@@ -1,8 +1,15 @@
 services:
   ravenguard:
+    # Prefer a published image: IMAGE=ghcr.io/quad4-software/ravenguard:edge
+    image: ${IMAGE:-ravenguard:local}
     build:
       context: ..
       dockerfile: deploy/Dockerfile
+      args:
+        VERSION: ${VERSION:-local}
+        REVISION: ${REVISION:-unknown}
+        CREATED: ${CREATED:-unknown}
+    user: "65532:65532"
     ports:
       - "8080:8080"
       - "80:80"

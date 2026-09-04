@@ -56,6 +56,13 @@ Docker:
 cd deploy && docker compose up --build
 ```
 
+Published images (rootless distroless, OCI labels, signed):
+
+```bash
+docker pull ghcr.io/quad4-software/ravenguard:edge
+# or a release tag, e.g. ghcr.io/quad4-software/ravenguard:1.2.3
+```
+
 ## Docs
 
 Docusaurus site in [`docs/`](docs/).

@@ -249,7 +249,27 @@ jobs:
           persist-credentials: false
 
       - name: Build image
-        run: docker build -f deploy/Dockerfile -t ravenguard:ci .
+        env:
+          REVISION: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          docker build -f deploy/Dockerfile \
+            --build-arg VERSION=ci \
+            --build-arg "REVISION=${REVISION}" \
+            --build-arg "CREATED=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            -t ravenguard:ci .
+
+      - name: Verify nonroot and OCI labels
+        run: |
+          set -euo pipefail
+          user="$(docker image inspect ravenguard:ci --format '{{.Config.User}}')"
+          if [[ "${user}" != "65532:65532" && "${user}" != "65532" && "${user}" != "nonroot:nonroot" && "${user}" != "nonroot" ]]; then
+            echo "expected nonroot user, got: ${user}" >&2
+            exit 1
+          fi
+          labels="$(docker image inspect ravenguard:ci --format '{{json .Config.Labels}}')"
+          echo "${labels}" | grep -F 'org.opencontainers.image.title'
+          echo "${labels}" | grep -F '0BSD'
 
   goreleaser-check:
     name: GoReleaser check
