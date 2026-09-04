@@ -53,7 +53,7 @@ forge_rate_cost = 4
 
 | Tier | Paths | Default effect |
 |------|-------|----------------|
-| Hot | /{owner}/{repo}/compare, blame, archive, API git/trees, git/blobs | Per-request score (default 40) plus elevated rate-limit cost |
+| Hot | `/{owner}/{repo}/compare`, blame, archive, API git/trees, git/blobs | Per-request score (default 40) plus elevated rate-limit cost |
 | Browse | src, raw, media, commit, commits | Counts toward forge burst only |
 | Never | repo home, issues, pulls, explore, smart-HTTP | No forge signal |
 

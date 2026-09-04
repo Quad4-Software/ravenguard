@@ -58,7 +58,7 @@ Ingested rows fan out to online proxies the same way operator bans do.
 
 ## API
 
-Base path: {base_path}/api/v1
+Base path: `{base_path}/api/v1`
 
 | Method | Path | Auth | Notes |
 |--------|------|------|-------|

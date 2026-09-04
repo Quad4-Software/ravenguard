@@ -307,8 +307,8 @@ func (s *Server) handleThreatIntelConfig(w http.ResponseWriter, r *http.Request)
 			"misp_url":                 cfg.MISPURL,
 			"misp_key_set":             cfg.MISPKey != "",
 			"ingest_urls":              cfg.IngestURLs,
-			"ingest_interval":          cfg.IngestInterval.Duration.String(),
-			"default_ttl":              cfg.DefaultTTL.Duration.String(),
+			"ingest_interval":          cfg.IngestInterval.String(),
+			"default_ttl":              cfg.DefaultTTL.String(),
 			"status":                   tiStatus.snapshot(),
 		})
 	case http.MethodPut:

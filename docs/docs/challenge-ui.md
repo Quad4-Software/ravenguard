@@ -45,9 +45,9 @@ Override the secret in production with RG_CHALLENGE_SECRET (minimum 16 character
 
 | Method | Path | Role |
 |--------|------|------|
-| GET | {path_prefix}/v1/challenge | Issue a signed protocol v1 challenge JSON |
-| POST | {path_prefix}/v1/verify | Verify a base64url payload (same handler as gate POST) |
-| POST | {path_prefix}/challenge | Verify payload and set the clearance cookie |
+| GET | `{path_prefix}/v1/challenge` | Issue a signed protocol v1 challenge JSON |
+| POST | `{path_prefix}/v1/verify` | Verify a base64url payload (same handler as gate POST) |
+| POST | `{path_prefix}/challenge` | Verify payload and set the clearance cookie |
 
 ## Clearance cookie
 
@@ -60,7 +60,7 @@ When TLS terminates upstream, trust.proto_header (default X-Forwarded-Proto) set
 
 ## Gate page assets
 
-The challenge interstitial loads short-named static assets under {path_prefix}/static/:
+The challenge interstitial loads short-named static assets under `{path_prefix}/static/`:
 
 | Asset | Role |
 |-------|------|

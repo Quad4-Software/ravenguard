@@ -4,6 +4,7 @@
 package semantic_test
 
 import (
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -88,7 +89,7 @@ func FuzzDecodeChain(f *testing.F) {
 	f.Fuzz(func(t *testing.T, in []byte) {
 		b := &semantic.Budget{Deadline: time.Now().Add(50 * time.Millisecond), MaxBytes: 4096, MaxDepth: 2}
 		_, err := semantic.DecodeChain(in, b)
-		if err != nil && err != semantic.ErrBudget {
+		if err != nil && !errors.Is(err, semantic.ErrBudget) {
 			t.Fatalf("unexpected %v", err)
 		}
 	})

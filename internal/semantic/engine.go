@@ -5,6 +5,7 @@
 package semantic
 
 import (
+	"errors"
 	"net/http"
 	"strings"
 	"sync"
@@ -134,12 +135,12 @@ func (e *Engine) Evaluate(r *http.Request, body []byte) Result {
 		inputs = append(inputs, []byte(rawQuery))
 	}
 	if len(body) > 0 && !skipBodyCT(r.Header.Get("Content-Type")) {
-		max := int(cfg.MaxBodyInspect)
-		if max <= 0 {
-			max = 64 << 10
+		maxBody := int(cfg.MaxBodyInspect)
+		if maxBody <= 0 {
+			maxBody = 64 << 10
 		}
-		if len(body) > max {
-			body = body[:max]
+		if len(body) > maxBody {
+			body = body[:maxBody]
 		}
 		inputs = append(inputs, body)
 	}
@@ -154,7 +155,7 @@ func (e *Engine) Evaluate(r *http.Request, body []byte) Result {
 		}
 		decoded, err := DecodeChain(in, budget)
 		if err != nil {
-			if err == ErrBudget {
+			if errors.Is(err, ErrBudget) {
 				return abortResult(mode, cfg.StrictBudget, "decode budget exceeded")
 			}
 			continue
@@ -298,12 +299,12 @@ func (e *Engine) FamilyScores(r *http.Request, body []byte) (sqli, xss, cmdi, pa
 		inputs = append(inputs, []byte(rawQuery))
 	}
 	if len(body) > 0 && !skipBodyCT(r.Header.Get("Content-Type")) {
-		max := int(cfg.MaxBodyInspect)
-		if max <= 0 {
-			max = 64 << 10
+		maxBody := int(cfg.MaxBodyInspect)
+		if maxBody <= 0 {
+			maxBody = 64 << 10
 		}
-		if len(body) > max {
-			body = body[:max]
+		if len(body) > maxBody {
+			body = body[:maxBody]
 		}
 		inputs = append(inputs, body)
 	}

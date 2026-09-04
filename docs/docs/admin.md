@@ -56,7 +56,7 @@ The last remaining owner cannot be deleted or demoted.
 
 ## API
 
-Base path: {base_path}/api/v1
+Base path: `{base_path}/api/v1`
 
 | Method | Path | Notes |
 |--------|------|-------|
@@ -85,37 +85,37 @@ Base path: {base_path}/api/v1
 | POST | /qfeeds/refresh | force feed refresh |
 | GET/PUT | /config | live safe subset + restart-required snapshot |
 | POST | /appearance/assets | upload logo or favicon (?kind=) |
-| GET | /appearance/assets/{kind} | serve uploaded asset |
+| GET | `/appearance/assets/{kind}` | serve uploaded asset |
 | POST | /appearance/preview | HTML preview (?page=) |
 | GET/POST | /users | |
-| PATCH/DELETE | /users/{id} | |
+| PATCH/DELETE | `/users/{id}` | |
 | GET/POST | /tokens | |
-| DELETE | /tokens/{id} | |
+| DELETE | `/tokens/{id}` | |
 | GET | /audit?cursor=&limit= | |
 | GET/POST | /upstreams | upstream inventory |
-| GET/PATCH/DELETE | /upstreams/{id} | |
+| GET/PATCH/DELETE | `/upstreams/{id}` | |
 | GET/POST | /routes | host/path routing |
-| GET/PATCH/DELETE | /routes/{id} | |
+| GET/PATCH/DELETE | `/routes/{id}` | |
 | GET/POST | /access-policies | password, PIN, header, CIDR, UA gates |
-| GET/PATCH/DELETE | /access-policies/{id} | |
+| GET/PATCH/DELETE | `/access-policies/{id}` | |
 | GET | /certs | certificate inventory |
 | POST | /certs/manage | ACME manage hosts |
-| POST | /certs/{host}/renew | renew one host |
-| POST | /certs/{host}/generate | generate self-signed PEM into the manual store |
-| GET/PUT/DELETE | /certs/{host} | detail, manual PEM upload, delete |
+| POST | `/certs/{host}/renew` | renew one host |
+| POST | `/certs/{host}/generate` | generate self-signed PEM into the manual store |
+| GET/PUT/DELETE | `/certs/{host}` | detail, manual PEM upload, delete |
 | GET | /logs | in-memory log ring |
 | GET/POST | /proxies | list fleet proxies / enroll (returns one-time token) |
-| PUT/DELETE | /proxies/{id} | update metadata or remove |
-| POST | /proxies/{id}/rotate-token | new enrollment token |
-| POST | /proxies/{id}/push | push desired config to online agent |
-| GET | /proxies/{id}/status | live status from agent when online |
+| PUT/DELETE | `/proxies/{id}` | update metadata or remove |
+| POST | `/proxies/{id}/rotate-token` | new enrollment token |
+| POST | `/proxies/{id}/push` | push desired config to online agent |
+| GET | `/proxies/{id}/status` | live status from agent when online |
 | GET/POST | /migrations | list / create Move services jobs |
-| GET | /migrations/{id} | migration detail + DNS checklist |
-| POST | /migrations/{id}/prep | prep destination (routes + certs) |
-| POST | /migrations/{id}/complete | finish cutover after DNS |
-| POST | /migrations/{id}/abort | abort in-progress migration |
+| GET | `/migrations/{id}` | migration detail + DNS checklist |
+| POST | `/migrations/{id}/prep` | prep destination (routes + certs) |
+| POST | `/migrations/{id}/complete` | finish cutover after DNS |
+| POST | `/migrations/{id}/abort` | abort in-progress migration |
 
-Optional JSON body for POST /certs/{host}/generate: validity and dns_names. Default DNS name is the path host. Generated certs appear with source selfsigned and can be deleted like manual uploads.
+Optional JSON body for POST `/certs/{host}/generate`: validity and dns_names. Default DNS name is the path host. Generated certs appear with source selfsigned and can be deleted like manual uploads.
 
 Agent connect (no session cookie): POST upgrade WebSocket at /api/v1/agent/connect with mutual auth.
 
@@ -185,7 +185,7 @@ hub_pubkey = "..."
 data_dir = "./data/proxy"
 ```
 
-Enroll a proxy in the Proxies UI to get a one-time token and copy-paste TOML. Agents dial WebSocket at {hub_url}/api/v1/agent/connect with mutual auth (token, hub signature over token hash, machine fingerprint). The challenge does not echo the enrollment token. Connect attempts are rate-limited per source IP. Fingerprints cannot be reused across proxies. Universal enrollment tokens require an owner role.
+Enroll a proxy in the Proxies UI to get a one-time token and copy-paste TOML. Agents dial WebSocket at `{hub_url}/api/v1/agent/connect` with mutual auth (token, hub signature over token hash, machine fingerprint). The challenge does not echo the enrollment token. Connect attempts are rate-limited per source IP. Fingerprints cannot be reused across proxies. Universal enrollment tokens require an owner role.
 
 Ops against a registered proxy never fall back to the hub process: if the agent is offline, the API returns an error instead of mutating local state.
 

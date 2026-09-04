@@ -24,7 +24,7 @@ const hexdigits = "0123456789abcdef"
 
 func New() string {
 	var rb [8]byte
-	binary.LittleEndian.PutUint64(rb[:], rand.Uint64())
+	binary.LittleEndian.PutUint64(rb[:], rand.Uint64()) //nolint:gosec // G404 ray id is not a cryptographic secret
 	n := counter.Add(1)
 	ts := uint64(time.Now().UnixNano()) // #nosec G115
 

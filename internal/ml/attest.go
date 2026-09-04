@@ -32,7 +32,7 @@ func WriteAttestation(path string, a Attestation) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, b, 0o644)
+	return os.WriteFile(path, b, 0o600)
 }
 
 // LoadAttestation reads and validates an attestation file.

@@ -6,6 +6,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -114,7 +115,7 @@ func main() {
 
 func evalLine(sem *semantic.Engine, scorer *ml.Scorer, line string, chalProb float64) (time.Duration, bool) {
 	method, path, body := parseLine(line)
-	r := httptest.NewRequest(method, "http://example.com"+path, nil)
+	r := httptest.NewRequestWithContext(context.Background(), method, "http://example.com"+path, nil)
 	start := time.Now()
 	var in ml.Input
 	if body != "" {

@@ -74,7 +74,7 @@ func (s *ShadowLog) MaybeSampleAllow(rate float64, sample Sample) {
 	if s == nil || rate <= 0 {
 		return
 	}
-	if rate >= 1 || rand.Float64() < rate {
+	if rate >= 1 || rand.Float64() < rate { //nolint:gosec // G404 sampling rate not a secret
 		s.Offer(sample)
 	}
 }

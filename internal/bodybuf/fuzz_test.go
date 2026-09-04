@@ -15,27 +15,27 @@ func FuzzCapture(f *testing.F) {
 	f.Add([]byte("hello"), int64(1024))
 	f.Add([]byte(""), int64(0))
 	f.Add([]byte("abcdef"), int64(3))
-	f.Fuzz(func(t *testing.T, body []byte, max int64) {
-		if max < 0 {
-			max = -max
+	f.Fuzz(func(t *testing.T, body []byte, maxBytes int64) {
+		if maxBytes < 0 {
+			maxBytes = -maxBytes
 		}
-		if max > 1<<20 {
-			max = 1 << 20
+		if maxBytes > 1<<20 {
+			maxBytes = 1 << 20
 		}
 		r := httptest.NewRequest(http.MethodPost, "/x", bytes.NewReader(body))
-		got, err := Capture(r, max)
+		got, err := Capture(r, maxBytes)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if max <= 0 {
+		if maxBytes <= 0 {
 			if got != nil {
 				t.Fatalf("expected nil got %q", got)
 			}
 			return
 		}
 		wantLen := len(body)
-		if int64(wantLen) > max {
-			wantLen = int(max)
+		if int64(wantLen) > maxBytes {
+			wantLen = int(maxBytes)
 		}
 		if len(got) != wantLen {
 			t.Fatalf("len=%d want %d", len(got), wantLen)

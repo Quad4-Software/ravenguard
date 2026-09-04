@@ -144,7 +144,7 @@ func tryBase64(b []byte) ([]byte, bool) {
 		return nil, false
 	}
 	for _, c := range b {
-		if !((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '+' || c == '/' || c == '=' || c == '-' || c == '_') {
+		if (c < 'A' || c > 'Z') && (c < 'a' || c > 'z') && (c < '0' || c > '9') && c != '+' && c != '/' && c != '=' && c != '-' && c != '_' {
 			return nil, false
 		}
 	}
@@ -169,7 +169,7 @@ func tryHex(b []byte) ([]byte, bool) {
 		return nil, false
 	}
 	for _, c := range b {
-		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') && (c < 'A' || c > 'F') {
 			return nil, false
 		}
 	}

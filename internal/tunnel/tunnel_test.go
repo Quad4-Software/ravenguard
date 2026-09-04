@@ -171,7 +171,7 @@ func TestLeakageTicketNotInLogs(t *testing.T) {
 		t.Fatal(err)
 	}
 	// IssueTicket returns opaque token; connector_id must not appear plainly.
-	if strings.Contains(string(raw), `"connector_id"`) {
+	if strings.Contains(raw, `"connector_id"`) {
 		t.Fatal("ticket leaked json")
 	}
 	_ = context.Background()

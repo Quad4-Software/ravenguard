@@ -666,12 +666,12 @@ func (h *Handler) guard(w http.ResponseWriter, r *http.Request) {
 	mlExtra := 0
 	semNeedChal := false
 	if !allowed {
-		if extra, needChal, stop := h.runSemanticML(w, r, ray, bindID, ipStr, host, ua); stop {
+		extra, needChal, stop := h.runSemanticML(w, r, ray, bindID, ipStr, host, ua)
+		if stop {
 			return
-		} else {
-			mlExtra = extra
-			semNeedChal = needChal
 		}
+		mlExtra = extra
+		semNeedChal = needChal
 	}
 
 	if h.limiter != nil && cfg.RateLimit.Enabled {
@@ -839,9 +839,6 @@ func (h *Handler) runSemanticML(w http.ResponseWriter, r *http.Request, ray, bin
 	if maxBody <= 0 {
 		maxBody = 64 << 10
 	}
-	if cfg.ML.Enabled && cfg.Coraza.MaxBodyInspect > 0 && cfg.Coraza.MaxBodyInspect < maxBody {
-		// keep semantic budget
-	}
 	if r.Body != nil && r.Body != http.NoBody && r.Method != http.MethodGet && r.Method != http.MethodHead {
 		var err error
 		body, err = bodybuf.Capture(r, maxBody)
@@ -876,9 +873,6 @@ func (h *Handler) runSemanticML(w http.ResponseWriter, r *http.Request, ray, bin
 				h.recordEvent(r, ray, bindID, ipStr, host, ua, requestlog.ActionSemantic, "Semantic detect match", semRes.Score, details)
 				if mode == "challenge" && semRes.NeedChal {
 					needChal = true
-				}
-				if mode == "shadow" {
-					// log only
 				}
 				if semRes.Score >= 50 {
 					needChal = needChal || mode == "challenge" || mode == "block"

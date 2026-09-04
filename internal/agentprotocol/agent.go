@@ -291,7 +291,7 @@ func (a *Agent) pullThreats(ctx context.Context) {
 	if len(result.Entries) == 0 {
 		return
 	}
-	applyRaw, _ := json.Marshal(ThreatApplyPayload{Revision: result.Revision, Entries: result.Entries})
+	applyRaw, _ := json.Marshal(ThreatApplyPayload(result))
 	if a.Dispatcher != nil {
 		_, _ = a.Dispatcher.Handle(ctx, OpThreatApply, applyRaw)
 	}

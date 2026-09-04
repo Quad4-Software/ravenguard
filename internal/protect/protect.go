@@ -186,22 +186,20 @@ func (g *Guard) Acquire(key string) bool {
 	if key == "" {
 		return true
 	}
-	for {
-		v, _ := g.clients.LoadOrStore(key, &clientConc{})
-		c := v.(*clientConc)
-		n := c.n.Add(1)
-		if int(n) > cfg.MaxConcurrentClient {
-			c.n.Add(-1)
-			g.global.Add(-1)
-			return false
-		}
-		// Sweep may delete idle entries. If our slot vanished after Add,
-		// re-publish the same counter so Release and later Acquires stay consistent.
-		if cur, ok := g.clients.Load(key); !ok || cur != c {
-			g.clients.Store(key, c)
-		}
-		return true
+	v, _ := g.clients.LoadOrStore(key, &clientConc{})
+	c := v.(*clientConc)
+	n := c.n.Add(1)
+	if int(n) > cfg.MaxConcurrentClient {
+		c.n.Add(-1)
+		g.global.Add(-1)
+		return false
 	}
+	// Sweep may delete idle entries. If our slot vanished after Add,
+	// re-publish the same counter so Release and later Acquires stay consistent.
+	if cur, ok := g.clients.Load(key); !ok || cur != c {
+		g.clients.Store(key, c)
+	}
+	return true
 }
 
 func (g *Guard) Release(key string) {

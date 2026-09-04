@@ -43,7 +43,7 @@ ticket = "..." # hub or operator issued HMAC ticket
 web = "http://127.0.0.1:8080"
 ```
 
-Point a route upstream at tunnel://<connector_id>/web.
+Point a route upstream at `tunnel://<connector_id>/web`.
 
 Combined single-host installs still use ravenguard / ravenguard all with [admin] enabled = true.
 

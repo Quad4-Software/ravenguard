@@ -83,7 +83,7 @@ func ContainsBytes(haystack []byte, needle string) bool {
 	if len(needle) == 0 {
 		return true
 	}
-	return bytes.Index(haystack, unsafeStringBytes(needle)) >= 0
+	return bytes.Contains(haystack, unsafeStringBytes(needle))
 }
 
 // TrimSpace returns a substring of s with leading and trailing ASCII spaces removed.
