@@ -16,28 +16,28 @@ challenge_score = 40
 block_score = 90
 ```
 
-- At `challenge_score`, send the browser challenge (when challenge is enabled)
-- At `block_score`, or after repeated challenge strikes, hard-block
+- At challenge_score, send the browser challenge (when challenge is enabled)
+- At block_score, or after repeated challenge strikes, hard-block
 
 ## HTTP heuristics
 
 | Signal | Config key | Default |
 |--------|------------|---------|
-| Missing User-Agent | `missing_ua_score` | Empty UA |
-| Scanner UA | `scanner_ua_score` | Known scanner / tool strings |
-| AI crawler UA | `ai_ua_score` | Common AI fetch agents |
-| Probe paths | `probe_path_score` | Exploit and recon URLs |
-| Odd methods | `odd_method_score` | Unusual HTTP methods |
-| Missing Accept | `missing_accept_score` | Incomplete browser headers |
-| Missing Accept-Language | `missing_accept_lang_score` | Incomplete browser headers |
-| Missing Sec-Fetch | `missing_sec_fetch_score` | Missing modern browser hints |
-| Sec-CH-UA mismatch | `sec_ch_ua_mismatch_score` | Client hints disagree |
-| `*/*` Accept as browser | `star_accept_browser_score` | Overly generic Accept |
-| Empty form context | `empty_form_context_score` | Browser-like POST/PUT/PATCH missing Origin and Referer |
-| Forum write path | `forum_write_path_score` | Suspicious POSTs to comment/register/reply style paths |
-| Forge expensive (hot) | `forge_expensive_score` | Gitea/Forgejo compare, blame, archive (and API git trees/blobs) |
+| Missing User-Agent | missing_ua_score | Empty UA |
+| Scanner UA | scanner_ua_score | Known scanner / tool strings |
+| AI crawler UA | ai_ua_score | Common AI fetch agents |
+| Probe paths | probe_path_score | Exploit and recon URLs |
+| Odd methods | odd_method_score | Unusual HTTP methods |
+| Missing Accept | missing_accept_score | Incomplete browser headers |
+| Missing Accept-Language | missing_accept_lang_score | Incomplete browser headers |
+| Missing Sec-Fetch | missing_sec_fetch_score | Missing modern browser hints |
+| Sec-CH-UA mismatch | sec_ch_ua_mismatch_score | Client hints disagree |
+| */* Accept as browser | star_accept_browser_score | Overly generic Accept |
+| Empty form context | empty_form_context_score | Browser-like POST/PUT/PATCH missing Origin and Referer |
+| Forum write path | forum_write_path_score | Suspicious POSTs to comment/register/reply style paths |
+| Forge expensive (hot) | forge_expensive_score | Gitea/Forgejo compare, blame, archive (and API git trees/blobs) |
 
-Raise `challenge_score` to challenge less often. Lower it to challenge earlier.
+Raise challenge_score to challenge less often. Lower it to challenge earlier.
 
 ## Forge expensive routes
 
@@ -53,19 +53,19 @@ forge_rate_cost = 4
 
 | Tier | Paths | Default effect |
 |------|-------|----------------|
-| Hot | `/{owner}/{repo}/compare`, `blame`, `archive`, API `git/trees`, `git/blobs` | Per-request score (default 40) plus elevated rate-limit cost |
-| Browse | `src`, `raw`, `media`, `commit`, `commits` | Counts toward forge burst only |
+| Hot | /{owner}/{repo}/compare, blame, archive, API git/trees, git/blobs | Per-request score (default 40) plus elevated rate-limit cost |
+| Browse | src, raw, media, commit, commits | Counts toward forge burst only |
 | Never | repo home, issues, pulls, explore, smart-HTTP | No forge signal |
 
-- One hot hit reaches `challenge_score` under defaults (intended against rotating scrapers on compare/blame/archive)
-- Browse paths such as `/src` do not score alone. Burst fires after `behavior_forge_burst_limit` hot or browse hits in the window
-- Git smart-HTTP (`info/refs`, `git-upload-pack`, `git-receive-pack`) is excluded so `git clone` and fetch stay unaffected
+- One hot hit reaches challenge_score under defaults (intended against rotating scrapers on compare/blame/archive)
+- Browse paths such as /src do not score alone. Burst fires after behavior_forge_burst_limit hot or browse hits in the window
+- Git smart-HTTP (info/refs, git-upload-pack, git-receive-pack) is excluded so git clone and fetch stay unaffected
 - Clients with a valid challenge clearance cookie pass hot paths without re-challenge
-- CI jobs that download archives should use `[allowlists]` (detect is skipped for allowlisted clients)
+- CI jobs that download archives should use allowlists (detect is skipped for allowlisted clients)
 
-Forge signals alone stay below `block_score` at defaults (hot 40 + burst 35 = 75). Hard block still needs other signals or challenge strikes.
+Forge signals alone stay below block_score at defaults (hot 40 + burst 35 = 75). Hard block still needs other signals or challenge strikes.
 
-To treat `/src` like Cloudflare path challenges, lower `behavior_forge_burst_limit` or raise browse paths into the hot tier in a future config. v1 keeps `/src` browse-only.
+To treat /src like Cloudflare path challenges, lower behavior_forge_burst_limit or raise browse paths into the hot tier in a future config. v1 keeps /src browse-only.
 
 ## Behavior windows
 
@@ -90,16 +90,16 @@ forge_expensive_score = 40
 forge_rate_cost = 4
 ```
 
-- **Burst** adds score when a client exceeds `behavior_burst_limit` in the window
+- **Burst** adds score when a client exceeds behavior_burst_limit in the window
 - **Path fan-out** scores clients that hit many distinct paths quickly
 - **Write burst** scores rapid POST/PUT/PATCH volume (default 20/min) without treating normal API traffic as a hard block by itself
-- **Write repeat** only escalates repeated posts to spam-prone path segments such as `comment` / `register` / `reply`
+- **Write repeat** only escalates repeated posts to spam-prone path segments such as comment / register / reply
 - **Forge burst** scores clients that hit many forge hot or browse paths in the window
 - **Strikes** escalate clients that keep failing challenges
 
-Empty form context applies to browser-like clients posting `application/x-www-form-urlencoded` or `multipart/form-data` (or spam-prone path segments) without Origin and Referer. Ordinary JSON API writes are not scored by that signal.
+Empty form context applies to browser-like clients posting application/x-www-form-urlencoded or multipart/form-data (or spam-prone path segments) without Origin and Referer. Ordinary JSON API writes are not scored by that signal.
 
-Privacy hashing applies when enabled. `privacy.retention` bounds how long this state is kept.
+Privacy hashing applies when enabled. privacy.retention bounds how long this state is kept.
 
 ## High 404 policy
 
@@ -122,7 +122,7 @@ ja4_header = "X-JA4"
 low_score_points = 40
 ```
 
-TLS fingerprints are not reconstructed after the reverse proxy. Forward edge headers such as `X-JA4` or Cloudflare bot scores to reuse them.
+TLS fingerprints are not reconstructed after the reverse proxy. Forward edge headers such as X-JA4 or Cloudflare bot scores to reuse them.
 
 ## Combined with protect
 
@@ -132,7 +132,7 @@ Protect handles size caps, concurrency, exploit probes, and temp bans. Detection
 
 - Obvious scanners and scrapers are scored and challenged or blocked
 - Built-in AI UA scoring covers major training crawlers, answer-engine indexers, and user-triggered fetch agents (OpenAI, Anthropic, Perplexity, Google AI, Meta, Apple Intelligence token, and others)
-- Sample `ua_files` hard-block AI agents and common scraper libraries while leaving search crawlers such as Googlebot and Applebot alone
+- Sample ua_files hard-block AI agents and common scraper libraries while leaving search crawlers such as Googlebot and Applebot alone
 - Automation that fails the challenge env probe (webdriver, Playwright, Puppeteer, Selenium, headless) is denied clearance
 - Browser-like agents that spoof headers and solve PoW can still pass
-- Verified search-bot allowlisting is not implemented. Do not treat User-Agent strings alone as proof of legitimacy. Use `[allowlists]` only for sources you control (office CIDRs, health-check UAs, shared header tokens)
+- Verified search-bot allowlisting is not implemented. Do not treat User-Agent strings alone as proof of legitimacy. Use allowlists only for sources you control (office CIDRs, health-check UAs, shared header tokens)

@@ -13,6 +13,7 @@ const sidebars: SidebarsConfig = {
         'configuration',
         'admin',
         'blocklists',
+        'threatintel',
         'challenge-ui',
         'requests',
       ],

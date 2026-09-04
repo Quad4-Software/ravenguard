@@ -19,7 +19,7 @@ ravenguard connector # optional: outbound tunnel to edge for private origins
 
 Tailscale / Netbird / WireGuard encrypt the management path. Set each proxy's public IPv4/IPv6 in the Proxies UI so Move services can show DNS cutover instructions.
 
-Fleet threat sharing: bans and scraper signals propagate through the hub ledger automatically when agents are online. See Architecture for the threat model.
+Fleet threat sharing: bans and scraper signals propagate through the hub ledger automatically when agents are online. Open TI export and feed ingest live on the hub. See Architecture and [Threat intel](./threatintel.md).
 
 ### Tunnel connector (private origin)
 
@@ -43,9 +43,9 @@ ticket = "..." # hub or operator issued HMAC ticket
 web = "http://127.0.0.1:8080"
 ```
 
-Point a route upstream at `tunnel://<connector_id>/web`.
+Point a route upstream at tunnel://<connector_id>/web.
 
-Combined single-host installs still use `ravenguard` / `ravenguard all` with `[admin] enabled = true`.
+Combined single-host installs still use ravenguard / ravenguard all with [admin] enabled = true.
 
 ### Edge (recommended when RavenGuard owns TLS)
 
@@ -77,9 +77,9 @@ redirect_http = true
 mode = "edge"
 ```
 
-Persist `storage_dir` across restarts. That directory holds the ACME account and certificates. Deleting it forces re-issue and can hit Let's Encrypt rate limits. Bring up with `staging = true`, then flip to production.
+Persist storage_dir across restarts. That directory holds the ACME account and certificates. Deleting it forces re-issue and can hit Let's Encrypt rate limits. Bring up with staging = true, then flip to production.
 
-Use `trust.mode = "edge"` so RavenGuard ignores `X-Real-IP`, `X-Forwarded-For`, and related forwarded client headers. Client IP comes from the direct TCP peer only.
+Use trust.mode = "edge" so RavenGuard ignores X-Real-IP, X-Forwarded-For, and related forwarded client headers. Client IP comes from the direct TCP peer only.
 
 ### Behind an external reverse proxy
 
@@ -96,13 +96,13 @@ proto_header = "X-Forwarded-Proto"
 proxy_protocol = false
 ```
 
-`proto_header` sets the clearance cookie Secure flag when TLS ends at the proxy.
+proto_header sets the clearance cookie Secure flag when TLS ends at the proxy.
 
-Override the CIDR list with `RG_TRUSTED_PROXIES` (comma-separated). Keep the [admin control plane](./admin.md) on a private bind (default `127.0.0.1:9090`) or behind a locked-down reverse proxy path. Never publish it like the public WAF port.
+Override the CIDR list with RG_TRUSTED_PROXIES (comma-separated). Keep the [admin control plane](./admin.md) on a private bind (default 127.0.0.1:9090) or behind a locked-down reverse proxy path. Never publish it like the public WAF port.
 
 ## Reverse proxy snippets
 
-Forward `X-Real-IP`, `X-Forwarded-For`, and `X-Forwarded-Proto`. Pass WebSocket `Upgrade` and `Connection` headers. Point RavenGuard `trust.trusted_proxies` (or `RG_TRUSTED_PROXIES`) at the proxy addresses only.
+Forward X-Real-IP, X-Forwarded-For, and X-Forwarded-Proto. Pass WebSocket Upgrade and Connection headers. Point RavenGuard trust.trusted_proxies (or RG_TRUSTED_PROXIES) at the proxy addresses only.
 
 ### nginx
 
@@ -165,7 +165,7 @@ http:
         passHostHeader: true
 ```
 
-Traefik sets `X-Forwarded-*` for trusted hops. Ensure RavenGuard `trusted_proxies` matches the Traefik source addresses. For WebSockets, use an entrypoint that allows upgrades (default HTTP routers do).
+Traefik sets X-Forwarded-* for trusted hops. Ensure RavenGuard trusted_proxies matches the Traefik source addresses. For WebSockets, use an entrypoint that allows upgrades (default HTTP routers do).
 
 ## Binary
 
@@ -178,14 +178,14 @@ make build
 
 | Path | Purpose |
 |------|---------|
-| `/usr/local/bin/ravenguard` | Binary |
-| `/etc/ravenguard/ravenguard.toml` | Config |
-| `/etc/ravenguard/blocklists/` | IP, DNS, and UA lists |
-| `/var/lib/ravenguard/certs/` | ACME storage (when `tls.mode = acme`) |
+| /usr/local/bin/ravenguard | Binary |
+| /etc/ravenguard/ravenguard.toml | Config |
+| /etc/ravenguard/blocklists/ | IP, DNS, and UA lists |
+| /var/lib/ravenguard/certs/ | ACME storage (when tls.mode = acme) |
 
 ## Container image (GHCR)
 
-Multi-arch images publish to `ghcr.io/quad4-software/ravenguard` on `master` (`edge`) and version tags (`latest` plus semver). Images are distroless `nonroot` (UID 65532), carry OpenContainer labels, and include SLSA provenance/SBOM.
+Multi-arch images publish to ghcr.io/quad4-software/ravenguard on master (edge) and version tags (latest plus semver). Images are distroless nonroot (UID 65532), carry OpenContainer labels, and include SLSA provenance/SBOM.
 
 ```bash
 docker pull ghcr.io/quad4-software/ravenguard:edge
@@ -193,7 +193,7 @@ docker pull ghcr.io/quad4-software/ravenguard:edge
 
 ## Docker Compose
 
-Use [`deploy/docker-compose.yml`](https://github.com/Quad4-Software/ravenguard/blob/main/deploy/docker-compose.yml):
+Use [deploy/docker-compose.yml](https://github.com/Quad4-Software/ravenguard/blob/main/deploy/docker-compose.yml):
 
 ```bash
 cd deploy
@@ -201,25 +201,25 @@ docker compose up --build
 # or: IMAGE=ghcr.io/quad4-software/ravenguard:edge docker compose up
 ```
 
-Mount config and blocklists. Set `RG_CHALLENGE_SECRET` and `QFEEDS_API_TOKEN` when needed. Point `upstream.url` at the app service. The sample stack exposes `8080`, optional `80`/`443` for edge ACME, and TCP/UDP `8443` for manual TLS or QUIC. The `certs-data` volume is ACME renewal memory.
+Mount config and blocklists. Set RG_CHALLENGE_SECRET and QFEEDS_API_TOKEN when needed. Point upstream.url at the app service. The sample stack exposes 8080, optional 80/443 for edge ACME, and TCP/UDP 8443 for manual TLS or QUIC. The certs-data volume is ACME renewal memory.
 
-The compose file runs as UID 65532, enables Landlock and in-process seccomp-bpf via `[sandbox]` (default `best_effort`), drops all capabilities, sets `no-new-privileges`, mounts a read-only root with `/tmp` tmpfs, and applies [`deploy/seccomp-ravenguard.json`](https://github.com/Quad4-Software/ravenguard/blob/main/deploy/seccomp-ravenguard.json) so the container seccomp profile allows `landlock_*` and `seccomp`.
+The compose file runs as UID 65532, enables Landlock and in-process seccomp-bpf via [sandbox] (default best_effort), drops all capabilities, sets no-new-privileges, mounts a read-only root with /tmp tmpfs, and applies [deploy/seccomp-ravenguard.json](https://github.com/Quad4-Software/ravenguard/blob/main/deploy/seccomp-ravenguard.json) so the container seccomp profile allows landlock_* and seccomp.
 
-Override with `RG_SANDBOX_MODE=try` or `enforce` as needed. Hosts without Landlock still start under `try` / `best_effort`.
+Override with RG_SANDBOX_MODE=try or enforce as needed. Hosts without Landlock still start under try / best_effort.
 
-When adding upstreams on new TCP ports from the admin panel under `sandbox.mode = enforce`, either restart after the change or pre-open ports with `[sandbox.landlock] connect_tcp`. Prefer `best_effort` or `try` for dynamic routing during bring-up.
+When adding upstreams on new TCP ports from the admin panel under sandbox.mode = enforce, either restart after the change or pre-open ports with [sandbox.landlock] connect_tcp. Prefer best_effort or try for dynamic routing during bring-up.
 
 ## PROXY protocol and real IP
 
-Set `trust.mode = "behind_proxy"`, list every hop in `trust.trusted_proxies` (or `RG_TRUSTED_PROXIES`), and choose one of:
+Set trust.mode = "behind_proxy", list every hop in trust.trusted_proxies (or RG_TRUSTED_PROXIES), and choose one of:
 
-- `trust.real_ip_header = "X-Real-IP"` (one trusted hop)
-- `trust.real_ip_header = "X-Forwarded-For"` (rightmost untrusted hop)
-- `trust.proxy_protocol = true` (PROXY protocol v1/v2 from the trusted peer)
+- trust.real_ip_header = "X-Real-IP" (one trusted hop)
+- trust.real_ip_header = "X-Forwarded-For" (rightmost untrusted hop)
+- trust.proxy_protocol = true (PROXY protocol v1/v2 from the trusted peer)
 
-With `trust.mode = "edge"`, forwarded headers and PROXY protocol client addresses are not used for trust decisions. Prefer edge when RavenGuard terminates TLS directly.
+With trust.mode = "edge", forwarded headers and PROXY protocol client addresses are not used for trust decisions. Prefer edge when RavenGuard terminates TLS directly.
 
-Untrusted forwarded headers without a tight `trusted_proxies` list allow client IP spoofing. RavenGuard will not start in `behind_proxy` mode without that list.
+Untrusted forwarded headers without a tight trusted_proxies list allow client IP spoofing. RavenGuard will not start in behind_proxy mode without that list.
 
 ## Unix upstream
 
@@ -232,9 +232,9 @@ response_header_timeout = "30s"
 
 ## HTTPS and WebSocket origins
 
-Point `upstream.url` at `https://` when RavenGuard should speak TLS to the app. Use `ws://` / `wss://` as aliases for the same host when documenting WebSocket apps (they map to `http` / `https` for the reverse proxy).
+Point upstream.url at https:// when RavenGuard should speak TLS to the app. Use ws:// / wss:// as aliases for the same host when documenting WebSocket apps (they map to http / https for the reverse proxy).
 
-Ensure the reverse proxy forwards `Upgrade` and `Connection` for WebSocket paths. When challenge is enabled, clients must obtain a clearance cookie over a normal HTTP(S) page load before the WebSocket handshake will be proxied.
+Ensure the reverse proxy forwards Upgrade and Connection for WebSocket paths. When challenge is enabled, clients must obtain a clearance cookie over a normal HTTP(S) page load before the WebSocket handshake will be proxied.
 
 ## Upstream health
 
@@ -249,10 +249,11 @@ timeout = "3s"
 ## Production checklist
 
 - Replace the example challenge secret
-- Keep `ui.test_mode = false`
-- Keep `privacy.hash_client_ip = true` unless raw addresses are required
+- Keep ui.test_mode = false
+- Keep privacy.hash_client_ip = true unless raw addresses are required
 - Store blocklist files on durable storage
-- Confirm the proxy forwards `X-Forwarded-Proto` (or the configured proto header)
-- Keep `admin.listen` on loopback or a private overlay. Never expose it like the public WAF port
+- Confirm the proxy forwards X-Forwarded-Proto (or the configured proto header)
+- Keep admin.listen on loopback or a private overlay. Never expose it like the public WAF port
 - For fleet mode: set each proxy public IPv4/IPv6 in the Proxies UI before Move services
-- Persist `admin.data_dir` (and `agent.data_dir` on proxies) across restarts
+- Persist admin.data_dir (and agent.data_dir on proxies) across restarts
+- For open TI exports, leave export_raw_ip off unless you intentionally share addresses

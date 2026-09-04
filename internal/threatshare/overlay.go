@@ -20,12 +20,13 @@ const (
 	maxKeyLen         = 256
 )
 
-// Overlay holds shared UA/IP/JA4 blocks applied from the fleet ledger.
+// Overlay holds shared UA/IP/JA4/DNS blocks applied from the fleet ledger.
 type Overlay struct {
 	mu      sync.RWMutex
 	ua      map[string]time.Time
 	ip      map[string]time.Time
 	ja4     map[string]time.Time
+	dns     map[string]time.Time
 	seen    map[string]struct{}
 	maxEnts int
 }
@@ -38,6 +39,7 @@ func NewOverlay(maxEntries int) *Overlay {
 		ua:      make(map[string]time.Time),
 		ip:      make(map[string]time.Time),
 		ja4:     make(map[string]time.Time),
+		dns:     make(map[string]time.Time),
 		seen:    make(map[string]struct{}),
 		maxEnts: maxEntries,
 	}
@@ -120,6 +122,12 @@ func ApplyOne(prot *protect.Guard, ov *Overlay, e agentprotocol.ThreatEntry, now
 		}
 		ov.putJA4(e.Key, exp)
 		return true
+	case agentprotocol.ThreatKeyDNS:
+		if ov == nil {
+			return false
+		}
+		ov.putDNS(e.Key, exp)
+		return true
 	default:
 		return false
 	}
@@ -152,6 +160,12 @@ func (o *Overlay) putJA4(key string, exp time.Time) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	o.ja4[strings.ToLower(key)] = exp
+}
+
+func (o *Overlay) putDNS(key string, exp time.Time) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	o.dns[strings.ToLower(strings.TrimSuffix(key, "."))] = exp
 }
 
 func (o *Overlay) UABlocked(ua string) bool {
@@ -196,6 +210,27 @@ func (o *Overlay) JA4Blocked(ja4 string) bool {
 	return ok && now.Before(exp)
 }
 
+// DNSBlocked reports whether host or a parent suffix is in the shared DNS set.
+func (o *Overlay) DNSBlocked(host string) bool {
+	if o == nil || host == "" {
+		return false
+	}
+	host = strings.ToLower(strings.TrimSuffix(strings.TrimSpace(host), "."))
+	now := time.Now()
+	o.mu.RLock()
+	defer o.mu.RUnlock()
+	for h := host; ; {
+		if exp, ok := o.dns[h]; ok && now.Before(exp) {
+			return true
+		}
+		i := strings.IndexByte(h, '.')
+		if i < 0 {
+			return false
+		}
+		h = h[i+1:]
+	}
+}
+
 // Sweep removes expired overlay entries.
 func (o *Overlay) Sweep() {
 	if o == nil {
@@ -219,6 +254,11 @@ func (o *Overlay) Sweep() {
 			delete(o.ja4, k)
 		}
 	}
+	for k, exp := range o.dns {
+		if now.After(exp) {
+			delete(o.dns, k)
+		}
+	}
 	if len(o.seen) > o.maxEnts/2 {
 		o.seen = make(map[string]struct{}, len(o.seen)/2)
 	}
@@ -234,6 +274,7 @@ func (o *Overlay) Stats() map[string]int {
 		"ua":   len(o.ua),
 		"ip":   len(o.ip),
 		"ja4":  len(o.ja4),
+		"dns":  len(o.dns),
 		"seen": len(o.seen),
 	}
 }

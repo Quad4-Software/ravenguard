@@ -59,7 +59,13 @@ describe('nav visibility', () => {
     const hrefs = visibleNavHrefs('', 'viewer')
     expect(hrefs).toContain('/')
     expect(hrefs).toContain('/proxies')
+    expect(hrefs).toContain('/threatintel')
+    expect(hrefs).toContain('/bans')
     expect(hrefs).not.toContain('/users')
+  })
+
+  it('maps Threat intel icon in Nav', () => {
+    expect(navSrc).toContain("'/threatintel': Shield")
   })
 
   it('includes Users for admins', () => {

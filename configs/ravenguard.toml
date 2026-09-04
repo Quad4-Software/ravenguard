@@ -297,11 +297,25 @@ data_dir = "./data/admin"
 session_ttl = "12h"
 cookie_secure = "auto"
 
+# Open threat intel on the hub (STIX/CSV export, feed ingest, AbuseIPDB/MISP).
+[threatintel]
+enabled = true
+export_raw_ip = false
+# export_token = ""
+# abuseipdb_key = ""
+abuseipdb_min_confidence = 80
+abuseipdb_limit = 10000
+# misp_url = ""
+# misp_key = ""
+# ingest_urls = []
+ingest_interval = "1h"
+default_ttl = "24h"
+
 # Hub public URL shown in proxy enrollment (use overlay IP/hostname when private).
 [hub]
 # public_url = "http://100.64.0.10:9090"
 
-# Outbound agent (used by `ravenguard proxy`). Leave empty in combined mode.
+# Outbound agent (used by ravenguard proxy). Leave empty in combined mode.
 [agent]
 # hub_url = "http://100.64.0.10:9090"
 # token = ""

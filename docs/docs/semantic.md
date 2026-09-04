@@ -19,12 +19,12 @@ skip_path_prefixes = ["/_rg"]
 
 Modes:
 
-- `shadow` log only (default)
-- `challenge` raise challenge when score is high
-- `block` hard block on high-confidence matches
+- **shadow** log only (default)
+- **challenge** raise challenge when score is high
+- **block** hard block on high-confidence matches
 
 CPU and decode budgets abort analysis to avoid decode bombs. In shadow mode budget aborts fail open.
 
 ## Pipeline
 
-Semantic runs after Coraza and builtin attack signatures, before detect score merge. Body capture is shared via `bodybuf` when needed.
+Semantic runs after Coraza and builtin attack signatures, before detect score merge. Body capture is shared via bodybuf when needed.

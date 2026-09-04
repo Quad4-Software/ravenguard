@@ -162,6 +162,7 @@ const (
 	ThreatKeyIP     = "ip"
 	ThreatKeyIPHash = "ip_hash"
 	ThreatKeyJA4    = "ja4"
+	ThreatKeyDNS    = "dns"
 )
 
 // ThreatEntry is one shared threat signal (privacy-safe by default).

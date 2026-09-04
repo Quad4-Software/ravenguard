@@ -24,7 +24,9 @@ Overlay        -> ravenguard hub
 - Automatic Let's Encrypt, static PEM, or self-signed certificates
 - Host and path routing to multiple upstreams
 - Hub and proxy fleet with live admin cutover
+- Optional connector tunnels for private origins
 - Blocklists, rate limits, attack filters, and temp bans
+- Fleet threat sharing plus open TI export/ingest (STIX, CSV, AbuseIPDB, MISP)
 - Optional Coraza / OWASP CRS engine and per-route OpenAPI schema gates
 - Optional semantic payload analysis and pure-Go ML scoring (shadow by default, FP-gated enforce)
 - Ray ID request lookup in the admin UI
@@ -63,7 +65,7 @@ docker pull ghcr.io/quad4-software/ravenguard:edge
 ./bin/ravenguard -config configs/ravenguard.toml
 ```
 
-Process modes: `all` (default), `hub`, or `proxy` via the first CLI argument or `RG_MODE`.
+Process modes: all (default), hub, proxy, or connector via the first CLI argument or RG_MODE.
 
 See [Getting started](docs/docs/intro.md) and [Configuration](docs/docs/configuration.md).
 

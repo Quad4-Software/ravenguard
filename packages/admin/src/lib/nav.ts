@@ -19,6 +19,7 @@ export const NAV_LINK_SPECS: NavLinkSpec[] = [
   { path: '/requests', label: 'Requests' },
   { path: '/logs', label: 'Logs' },
   { path: '/bans', label: 'Bans' },
+  { path: '/threatintel', label: 'Threat intel' },
   { path: '/blocklists', label: 'Blocklists' },
   { path: '/qfeeds', label: 'Q-Feeds' },
   { path: '/appearance', label: 'Appearance' },

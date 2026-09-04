@@ -8,32 +8,32 @@ description: TOML, environment variables, and CLI flags.
 Precedence (highest wins):
 
 1. CLI flags
-2. Environment variables (`RG_*`)
-3. TOML file (`-config` / `RG_CONFIG`)
+2. Environment variables (RG_*)
+3. TOML file (-config / RG_CONFIG)
 4. Built-in defaults
 
-Full example: [`configs/ravenguard.toml`](https://github.com/Quad4-Software/ravenguard/blob/main/configs/ravenguard.toml).
+Full example: [configs/ravenguard.toml](https://github.com/Quad4-Software/ravenguard/blob/main/configs/ravenguard.toml).
 
 ## Common flags
 
 | Flag | Env | Meaning |
 |------|-----|---------|
-| `-config` | `RG_CONFIG` | TOML path |
-| `-listen-http` | `RG_LISTEN_HTTP` | HTTP bind |
-| `-listen-https` | `RG_LISTEN_HTTPS` | HTTPS bind |
-| `-listen-quic` | `RG_LISTEN_QUIC` | HTTP/3 bind |
-| `-upstream` | `RG_UPSTREAM_URL` | Origin URL (`http://`, `https://`, `ws://`, `wss://`, `unix://`) |
-| `-challenge-secret` | `RG_CHALLENGE_SECRET` | HMAC secret (min 16 chars, not `change-me*`) |
-| `-public-url` | `RG_SITE_PUBLIC_URL` | Canonical / Open Graph base URL |
-| `-test-mode` | `RG_UI_TEST_MODE` | Enable `/_rg/test` UI previews |
-| `-log-level` | `RG_LOG_LEVEL` | `debug` / `info` / `warn` / `error` |
-| `-log-format` | `RG_LOG_FORMAT` | `text` / `json` |
-| `-admin-enabled` | `RG_ADMIN_ENABLED` | Enable admin control plane |
-| `-admin-listen` | `RG_ADMIN_LISTEN` | Admin HTTP bind (default `127.0.0.1:9090`) |
-| `-admin-data-dir` | `RG_ADMIN_DATA_DIR` | Admin SQLite directory |
-| (first arg) | `RG_MODE` | Process mode: all (default), hub, or proxy |
+| -config | RG_CONFIG | TOML path |
+| -listen-http | RG_LISTEN_HTTP | HTTP bind |
+| -listen-https | RG_LISTEN_HTTPS | HTTPS bind |
+| -listen-quic | RG_LISTEN_QUIC | HTTP/3 bind |
+| -upstream | RG_UPSTREAM_URL | Origin URL (http://, https://, ws://, wss://, unix://) |
+| -challenge-secret | RG_CHALLENGE_SECRET | HMAC secret (min 16 chars, not change-me*) |
+| -public-url | RG_SITE_PUBLIC_URL | Canonical / Open Graph base URL |
+| -test-mode | RG_UI_TEST_MODE | Enable /_rg/test UI previews |
+| -log-level | RG_LOG_LEVEL | debug / info / warn / error |
+| -log-format | RG_LOG_FORMAT | text / json |
+| -admin-enabled | RG_ADMIN_ENABLED | Enable admin control plane |
+| -admin-listen | RG_ADMIN_LISTEN | Admin HTTP bind (default 127.0.0.1:9090) |
+| -admin-data-dir | RG_ADMIN_DATA_DIR | Admin SQLite directory |
+| (first arg) | RG_MODE | Process mode: all (default), hub, proxy, or connector |
 
-Set the mode with `ravenguard hub` / `ravenguard proxy`, or with `RG_MODE` when the process manager cannot set a custom command. CLI mode wins over the env var. Pair with `RG_CONFIG` when the hub uses a different TOML than the edge. See [Admin](./admin.md) for roles, bootstrap, API tokens, fleet enrollment, and reverse-proxying the SPA.
+Set the mode with ravenguard hub / ravenguard proxy / ravenguard connector, or with RG_MODE when the process manager cannot set a custom command. CLI mode wins over the env var. Pair with RG_CONFIG when the hub uses a different TOML than the edge. See [Admin](./admin.md) for roles, bootstrap, API tokens, fleet enrollment, and reverse-proxying the SPA.
 
 ## Hub and agent
 
@@ -51,9 +51,9 @@ Used when splitting management and edge processes.
 data_dir = "./data/proxy"
 ```
 
-`hub.public_url` is what the Proxies UI shows for enrollment. The hub Ed25519 keypair lives under `admin.data_dir`. Proxy mode requires `agent.hub_url`, `agent.token`, `agent.hub_pubkey`, and `agent.data_dir`.
+hub.public_url is what the Proxies UI shows for enrollment. The hub Ed25519 keypair lives under admin.data_dir. Proxy mode requires agent.hub_url, agent.token, agent.hub_pubkey, and agent.data_dir.
 
-Env: `RG_HUB_PUBLIC_URL`, `RG_AGENT_HUB_URL`, `RG_AGENT_TOKEN`, `RG_AGENT_HUB_PUBKEY`, `RG_AGENT_NAME`, `RG_AGENT_DATA_DIR`, `RG_MODE`, `RG_CONFIG`.
+Env: RG_HUB_PUBLIC_URL, RG_AGENT_HUB_URL, RG_AGENT_TOKEN, RG_AGENT_HUB_PUBKEY, RG_AGENT_NAME, RG_AGENT_DATA_DIR, RG_MODE, RG_CONFIG.
 
 ## Listen and TLS
 
@@ -85,11 +85,11 @@ mode = "off" # off | files | acme | selfsigned
 # validity = "365d"
 ```
 
-`tls.mode = "acme"` issues and renews certificates via Let's Encrypt. Account keys and certs live under `storage_dir` and survive restarts. HTTP-01 uses `listen.http`. Route hosts from the admin panel are added to the managed inventory automatically.
+tls.mode = "acme" issues and renews certificates via Let's Encrypt. Account keys and certs live under storage_dir and survive restarts. HTTP-01 uses listen.http. Route hosts from the admin panel are added to the managed inventory automatically.
 
-`tls.mode = "selfsigned"` generates an ECDSA P-256 certificate on first start under `tls.selfsigned.storage_dir` and reuses it across restarts until it is near expiry or the configured hosts change. Suitable for local development. Browsers will warn until you trust the cert.
+tls.mode = "selfsigned" generates an ECDSA P-256 certificate on first start under tls.selfsigned.storage_dir and reuses it across restarts until it is near expiry or the configured hosts change. Suitable for local development. Browsers will warn until you trust the cert.
 
-CLI helper for PEM files used with `tls.mode = "files"`:
+CLI helper for PEM files used with tls.mode = "files":
 
 ```bash
 ./bin/ravenguard cert generate \
@@ -99,9 +99,9 @@ CLI helper for PEM files used with `tls.mode = "files"`:
   -validity 365d
 ```
 
-Env: `RG_TLS_MODE`, `RG_TLS_CERT_FILE`, `RG_TLS_KEY_FILE`, `RG_ACME_EMAIL`, `RG_ACME_STORAGE_DIR`, `RG_ACME_HOSTS`, `RG_ACME_STAGING`, `RG_ACME_AGREE_TOS`, `RG_SELFSIGNED_STORAGE_DIR`, `RG_SELFSIGNED_HOSTS`.
+Env: RG_TLS_MODE, RG_TLS_CERT_FILE, RG_TLS_KEY_FILE, RG_ACME_EMAIL, RG_ACME_STORAGE_DIR, RG_ACME_HOSTS, RG_ACME_STAGING, RG_ACME_AGREE_TOS, RG_SELFSIGNED_STORAGE_DIR, RG_SELFSIGNED_HOSTS.
 
-Behind-proxy layout: keep `tls.mode = "off"` and plain HTTP listen. Edge layout: `tls.mode = "acme"`, `files`, or `selfsigned` with `trust.mode = "edge"`.
+Behind-proxy layout: keep tls.mode = "off" and plain HTTP listen. Edge layout: tls.mode = "acme", files, or selfsigned with trust.mode = "edge".
 
 ## Upstream
 
@@ -125,9 +125,9 @@ interval = "10s"
 timeout = "3s"
 ```
 
-`ws://` and `wss://` are scheme aliases for the same TCP origin as `http://` and `https://`. WebSocket traffic is an HTTP upgrade on that connection. When `[challenge]` is enabled, upgrades require an existing clearance cookie from a prior page load (browsers cannot run the JS puzzle during a handshake). Forward WebSocket upgrades from your reverse proxy to RavenGuard.
+ws:// and wss:// are scheme aliases for the same TCP origin as http:// and https://. WebSocket traffic is an HTTP upgrade on that connection. When [challenge] is enabled, upgrades require an existing clearance cookie from a prior page load (browsers cannot run the JS puzzle during a handshake). Forward WebSocket upgrades from your reverse proxy to RavenGuard.
 
-Env: `RG_UPSTREAM_URL`, `RG_UPSTREAM_HEALTH_ENABLED`, `RG_UPSTREAM_HEALTH_PATH`.
+Env: RG_UPSTREAM_URL, RG_UPSTREAM_HEALTH_ENABLED, RG_UPSTREAM_HEALTH_PATH.
 
 ## Trust
 
@@ -140,9 +140,9 @@ proto_header = "X-Forwarded-Proto"
 proxy_protocol = false
 ```
 
-`behind_proxy` refuses to start without `trusted_proxies`. `edge` ignores forwarded client headers.
+behind_proxy refuses to start without trusted_proxies. edge ignores forwarded client headers.
 
-Env: `RG_TRUST_MODE`, `RG_TRUSTED_PROXIES` (comma-separated CIDRs), `RG_REAL_IP_HEADER`, `RG_PROTO_HEADER`, `RG_PROXY_PROTOCOL`.
+Env: RG_TRUST_MODE, RG_TRUSTED_PROXIES (comma-separated CIDRs), RG_REAL_IP_HEADER, RG_PROTO_HEADER, RG_PROXY_PROTOCOL.
 
 ## Blocklists, allowlists, and Q-Feeds
 
@@ -168,7 +168,28 @@ refresh = "1h"
 on_error = "fail_open"
 ```
 
-Details: [Blocklists and feeds](./blocklists.md).
+Details: [Blocklists and feeds](./blocklists.md). Open TI export and feed ingest (STIX, CSV, AbuseIPDB, MISP): [Threat intel](./threatintel.md).
+
+## Threat intel
+
+Hub-side interchange for the fleet threat ledger. Defaults keep raw IPs out of exports.
+
+```toml
+[threatintel]
+enabled = true
+export_raw_ip = false
+# export_token = ""
+# abuseipdb_key = ""
+abuseipdb_min_confidence = 80
+abuseipdb_limit = 10000
+# misp_url = ""
+# misp_key = ""
+# ingest_urls = []
+ingest_interval = "1h"
+default_ttl = "24h"
+```
+
+See [Threat intel](./threatintel.md).
 
 ## Rate limit
 
@@ -182,7 +203,7 @@ per_path = false
 challenge_over = true
 ```
 
-When `challenge_over` is true, over-limit clients may receive a challenge instead of an immediate reject, depending on challenge settings.
+When challenge_over is true, over-limit clients may receive a challenge instead of an immediate reject, depending on challenge settings.
 
 ## Protect
 
@@ -205,7 +226,7 @@ Blocks common path and query exploit probes. Caps body, URL, and header size. Li
 
 ## Detect
 
-HTTP scoring adds points for scanner and AI User-Agents, forum spam tools, empty form context on writes, missing browser headers, probe paths, Gitea/Forgejo expensive routes, behavior bursts, write repeats, path fan-out, and optional proxy bot-score headers. Scores at `challenge_score` trigger the JS challenge. `block_score` or repeated challenge strikes hard-block.
+HTTP scoring adds points for scanner and AI User-Agents, forum spam tools, empty form context on writes, missing browser headers, probe paths, Gitea/Forgejo expensive routes, behavior bursts, write repeats, path fan-out, and optional proxy bot-score headers. Scores at challenge_score trigger the JS challenge. block_score or repeated challenge strikes hard-block.
 
 ```toml
 [detect]
@@ -233,7 +254,7 @@ ja4_header = "X-JA4"
 low_score_points = 40
 ```
 
-`forge_expensive_score` applies to hot forge paths only (`compare`, `blame`, `archive`). Browse paths (`src`, `raw`, `commit`) count toward `behavior_forge_burst_*` only. See [Detection](./detection.md#forge-expensive-routes).
+forge_expensive_score applies to hot forge paths only (compare, blame, archive). Browse paths (src, raw, commit) count toward behavior_forge_burst_* only. See [Detection](./detection.md#forge-expensive-routes).
 
 Full knobs: [Detection](./detection.md).
 
@@ -297,25 +318,63 @@ lang = "en"
 # widget_input_name = "rg"
 ```
 
-`mode = "attack"` forces the visible interactive gate for every challenged request. In `detect` / `always`, low and elevated risk use the invisible auto-PoW gate. High risk and failed invisible attempts escalate to interactive. When captcha is enabled the interactive gate is always issued so captcha cannot be skipped via API-only PoW.
+mode = "attack" forces the visible interactive gate for every challenged request. In detect / always, low and elevated risk use the invisible auto-PoW gate. High risk and failed invisible attempts escalate to interactive. When captcha is enabled the interactive gate is always issued so captcha cannot be skipped via API-only PoW.
 
 | Stealth key | Default | Meaning |
 |-------------|---------|---------|
-| `ray_header` | `X-RavenGuard-Ray` | Response header for ray IDs. Empty string omits the header |
-| `element_name` | `rg-check` | Custom element tag on the challenge page |
-| `bootstrap_global` | `__g__` | `window[...]` bootstrap object name |
-| `access_cookie_name` | `rg_access` | Access-policy clearance cookie |
-| `hide_brand_mark` | `false` | Hide footer brand image |
-| `generic_copy` | `false` | Prefer generic titles and `Ref` instead of branded copy |
-| `serve_manifest` | `true` | Serve `/site.webmanifest` |
-| `serve_root_icons` | `true` | Serve `/favicon.ico` and `/apple-touch-icon.png` |
-| `widget_input_name` | `rg` | Hidden form field name for the widget |
+| ray_header | X-RavenGuard-Ray | Response header for ray IDs. Empty string omits the header |
+| element_name | rg-check | Custom element tag on the challenge page |
+| bootstrap_global | __g__ | window[...] bootstrap object name |
+| access_cookie_name | rg_access | Access-policy clearance cookie |
+| hide_brand_mark | false | Hide footer brand image |
+| generic_copy | false | Prefer generic titles and Ref instead of branded copy |
+| serve_manifest | true | Serve /site.webmanifest |
+| serve_root_icons | true | Serve /favicon.ico and /apple-touch-icon.png |
+| widget_input_name | rg | Hidden form field name for the widget |
 
-Appearance colors map to CSS variables `--bg`, `--fg`, `--accent`, `--theme`, `--font-sans`, and `--font-mono` on public pages. See [Challenge and UI](./challenge-ui.md).
+Appearance colors map to CSS variables --bg, --fg, --accent, --theme, --font-sans, and --font-mono on public pages. See [Challenge and UI](./challenge-ui.md).
 
-`ui.contact` (env `RG_UI_CONTACT`) is optional free text shown on block, rate-limit, upstream, and error pages. Email addresses, phone numbers, and `http(s)` / `mailto:` / `tel:` values are rendered as links.
+ui.contact (env RG_UI_CONTACT) is optional free text shown on block, rate-limit, upstream, and error pages. Email addresses, phone numbers, and http(s) / mailto: / tel: values are rendered as links.
 
-Env: `RG_CHALLENGE_ENABLED`, `RG_CHALLENGE_MODE`, `RG_CHALLENGE_ALGORITHM`, `RG_CHALLENGE_DIFFICULTY`, `RG_CHALLENGE_COOKIE_NAME`, `RG_CHALLENGE_PATH_PREFIX`, `RG_CAPTCHA_ENABLED`, `RG_CAPTCHA_PROVIDER`, `RG_CAPTCHA_TOKEN`, `RG_UI_BRAND`, `RG_UI_STATUS_TEXT`, `RG_UI_CONTACT`, `RG_SITE_DESCRIPTION`, `RG_SITE_OG_IMAGE`, `RG_SITE_THEME_COLOR`, `RG_SITE_ROBOTS`, `RG_SITE_LANG`, `RG_STEALTH_RAY_HEADER`, `RG_STEALTH_ELEMENT_NAME`, `RG_STEALTH_BOOTSTRAP_GLOBAL`, `RG_STEALTH_ACCESS_COOKIE_NAME`, `RG_STEALTH_HIDE_BRAND_MARK`, `RG_STEALTH_GENERIC_COPY`.
+Env: RG_CHALLENGE_ENABLED, RG_CHALLENGE_MODE, RG_CHALLENGE_ALGORITHM, RG_CHALLENGE_DIFFICULTY, RG_CHALLENGE_COOKIE_NAME, RG_CHALLENGE_PATH_PREFIX, RG_CAPTCHA_ENABLED, RG_CAPTCHA_PROVIDER, RG_CAPTCHA_TOKEN, RG_UI_BRAND, RG_UI_STATUS_TEXT, RG_UI_CONTACT, RG_SITE_DESCRIPTION, RG_SITE_OG_IMAGE, RG_SITE_THEME_COLOR, RG_SITE_ROBOTS, RG_SITE_LANG, RG_STEALTH_RAY_HEADER, RG_STEALTH_ELEMENT_NAME, RG_STEALTH_BOOTSTRAP_GLOBAL, RG_STEALTH_ACCESS_COOKIE_NAME, RG_STEALTH_HIDE_BRAND_MARK, RG_STEALTH_GENERIC_COPY.
+
+## Coraza, semantic, and ML
+
+Optional engines. Full knobs live on dedicated pages:
+
+- [Coraza](./coraza.md)
+- [Semantic analysis](./semantic.md)
+- [Machine learning](./ml.md)
+
+```toml
+[coraza]
+enabled = false
+mode = "block"
+
+[semantic]
+enabled = false
+mode = "shadow"
+
+[ml]
+enabled = false
+mode = "shadow"
+```
+
+## Tunnel (connector)
+
+Edge accept and connector dial share the tunnel table. See [Deployment](./deployment.md#tunnel-connector-private-origin).
+
+```toml
+[tunnel]
+# enabled = true
+# ticket_key = ""
+# edge_id = "edge-1"
+# edge_url = "wss://edge.example.com/api/v1/tunnel/connect"
+# ticket = ""
+# require_tls = true
+# [tunnel.origins]
+# web = "http://127.0.0.1:8080"
+```
 
 ## Privacy and logging
 
@@ -336,14 +395,14 @@ See [Privacy](./privacy.md).
 
 ## Other env vars
 
-- `RG_TLS_CERT_FILE`, `RG_TLS_KEY_FILE`
-- `RG_SELFSIGNED_STORAGE_DIR`, `RG_SELFSIGNED_HOSTS`
-- `RG_QFEEDS_ENABLED`, `RG_QFEEDS_API_TOKEN` (or `QFEEDS_API_TOKEN`)
-- `RG_PRIVACY_HASH_CLIENT_IP`, `RG_PRIVACY_IP_HASH_SECRET`, `RG_PRIVACY_LOG_IP`, `RG_PRIVACY_NOTICE_URL`
+- RG_TLS_CERT_FILE, RG_TLS_KEY_FILE
+- RG_SELFSIGNED_STORAGE_DIR, RG_SELFSIGNED_HOSTS
+- RG_QFEEDS_ENABLED, RG_QFEEDS_API_TOKEN (or QFEEDS_API_TOKEN)
+- RG_PRIVACY_HASH_CLIENT_IP, RG_PRIVACY_IP_HASH_SECRET, RG_PRIVACY_LOG_IP, RG_PRIVACY_NOTICE_URL
 
 ## Sandbox (Landlock + seccomp-bpf)
 
-Linux-only. Default is `best_effort` so older kernels keep running.
+Linux-only. Default is best_effort so older kernels keep running.
 
 ```toml
 [sandbox]
@@ -364,11 +423,11 @@ deny_action = "errno"  # errno | kill_thread | kill_process | trap | log
 
 | Mode | Behavior |
 |------|----------|
-| `off` | Disabled |
-| `try` | Apply with graceful ABI degrade. Failure is logged and ignored |
-| `best_effort` | Soft-fail. Landlock uses `BestEffort()` so missing LSM still succeeds |
-| `enforce` | Hard-fail startup if Landlock ABI or seccomp cannot be applied |
+| off | Disabled |
+| try | Apply with graceful ABI degrade. Failure is logged and ignored |
+| best_effort | Soft-fail. Landlock uses BestEffort() so missing LSM still succeeds |
+| enforce | Hard-fail startup if Landlock ABI or seccomp cannot be applied |
 
-Env: `RG_SANDBOX_MODE`, `RG_SANDBOX_LANDLOCK_MODE`, `RG_SANDBOX_SECCOMP_MODE`, `RG_SANDBOX_SECCOMP_DENY_ACTION`, `RG_SANDBOX_LANDLOCK_RESTRICT_NET`, `RG_SANDBOX_LANDLOCK_RESTRICT_SCOPED`, `RG_SANDBOX_LANDLOCK_IGNORE_MISSING`.
+Env: RG_SANDBOX_MODE, RG_SANDBOX_LANDLOCK_MODE, RG_SANDBOX_SECCOMP_MODE, RG_SANDBOX_SECCOMP_DENY_ACTION, RG_SANDBOX_LANDLOCK_RESTRICT_NET, RG_SANDBOX_LANDLOCK_RESTRICT_SCOPED, RG_SANDBOX_LANDLOCK_IGNORE_MISSING.
 
 When Landlock network rules are enabled, listeners use classic TCP (not Multipath TCP) so bind/connect rules apply.

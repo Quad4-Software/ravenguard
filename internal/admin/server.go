@@ -31,6 +31,7 @@ type Server struct {
 	tlsCfg  *tls.Config
 	handler http.Handler
 	store   *store.Store
+	api     *api.Server
 }
 
 type Options struct {
@@ -229,12 +230,21 @@ func New(opts Options) (*Server, error) {
 		tlsCfg:  tlsCfg,
 		handler: securityHeaders(mux),
 		store:   st,
+		api:     apiSrv,
 	}, nil
 }
 
 // Store returns the admin SQLite store.
 func (s *Server) Store() *store.Store {
 	return s.store
+}
+
+// API returns the mounted admin API server.
+func (s *Server) API() *api.Server {
+	if s == nil {
+		return nil
+	}
+	return s.api
 }
 
 func (s *Server) Close() error {
@@ -245,6 +255,9 @@ func (s *Server) Close() error {
 }
 
 func (s *Server) Run(ctx context.Context) error {
+	if s.api != nil {
+		go s.api.RunThreatIntelPoller(ctx)
+	}
 	var wg sync.WaitGroup
 	errCh := make(chan error, 2)
 

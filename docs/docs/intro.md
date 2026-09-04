@@ -51,8 +51,9 @@ make build
 | all (default) | Combined WAF and optional admin |
 | hub | Admin SPA, SQLite, agent accept |
 | proxy | Public WAF and outbound agent to the hub |
+| connector | Outbound tunnel dialer to an edge (no public WAF) |
 
-Set the mode with the first CLI argument (`ravenguard hub`) or `RG_MODE` when the process manager cannot set a custom command:
+Set the mode with the first CLI argument (ravenguard hub) or RG_MODE when the process manager cannot set a custom command:
 
 ```bash
 RG_MODE=hub
@@ -78,7 +79,7 @@ Point at an upstream and a production challenge secret:
 
 ## Local HTTPS with self-signed TLS
 
-For development without Let's Encrypt, set `tls.mode = "selfsigned"`, enable `listen.https`, and keep `trust.mode = "edge"`:
+For development without Let's Encrypt, set tls.mode to selfsigned, enable listen.https, and keep trust.mode as edge:
 
 ```toml
 [listen]
@@ -94,7 +95,7 @@ hosts = ["localhost", "127.0.0.1"]
 validity = "365d"
 ```
 
-Or write PEM files and use `tls.mode = "files"`:
+Or write PEM files and use tls.mode files:
 
 ```bash
 ./bin/ravenguard cert generate -hosts localhost,127.0.0.1 -cert ./certs/fullchain.pem -key ./certs/privkey.pem
@@ -113,10 +114,10 @@ The compose file builds RavenGuard, mounts sample config and blocklists, and pro
 
 ## First checks
 
-1. Set `trust.mode` to `behind_proxy` with every trusted hop in `trusted_proxies`, or use `edge` when RavenGuard owns TLS.
-2. Prefer `real_ip_header = "X-Real-IP"` when the proxy sets a single client address.
-3. Set `RG_CHALLENGE_SECRET` (min 16 characters, not a `change-me` placeholder) before exposing the challenge path.
-4. Keep `ui.test_mode` off outside local preview.
+1. Set trust.mode to behind_proxy with every trusted hop in trusted_proxies, or use edge when RavenGuard owns TLS.
+2. Prefer real_ip_header X-Real-IP when the proxy sets a single client address.
+3. Set RG_CHALLENGE_SECRET (min 16 characters, not a change-me placeholder) before exposing the challenge path.
+4. Keep ui.test_mode off outside local preview.
 5. For fleet installs, bind the hub to an overlay IP only and enroll proxies from the Proxies UI.
 
 ## Next
@@ -124,4 +125,5 @@ The compose file builds RavenGuard, mounts sample config and blocklists, and pro
 - [Architecture](./architecture.md) for the request pipeline and fleet topology
 - [Deployment](./deployment.md) for proxy, Docker, and hub layouts
 - [Admin](./admin.md) for the control plane, agents, and Move services
+- [Threat intel](./threatintel.md) for STIX/CSV export and feed ingest
 - [Configuration](./configuration.md) for TOML, env, and flags

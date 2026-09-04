@@ -7,6 +7,8 @@ description: IP, hostname, and User-Agent deny lists, allowlists, plus optional 
 
 Blocklists deny clients before rate limits and detection run. Allowlists skip detect and challenge for trusted clients.
 
+Fleet threat intel (STIX/CSV ingest, AbuseIPDB, MISP) feeds the shared ledger and overlay, not these file lists. See [Threat intel](./threatintel.md).
+
 ## File-based blocklists
 
 ```toml
@@ -17,11 +19,11 @@ ua_files = ["/etc/ravenguard/blocklists/ua.txt"]
 reload_interval = "30s"
 ```
 
-Lists reload on `reload_interval` without restarting. Update files in place on durable storage.
+Lists reload on reload_interval without restarting. Update files in place on durable storage.
 
 ### IP lists
 
-One IPv4/IPv6 address or CIDR per line. Blank lines and `#` comments are ignored.
+One IPv4/IPv6 address or CIDR per line. Blank lines and # comments are ignored.
 
 ```text
 # scanners
@@ -47,7 +49,7 @@ SomeBadBot
 Bytespider
 ```
 
-Sample files: [`testdata/blocklists/`](https://github.com/Quad4-Software/ravenguard/tree/main/testdata/blocklists).
+Sample files: [testdata/blocklists/](https://github.com/Quad4-Software/ravenguard/tree/main/testdata/blocklists).
 
 ## File-based allowlists
 
@@ -65,18 +67,18 @@ Any single match is enough (IP **or** User-Agent substring **or** header). Empty
 
 ### Header lists
 
-One `Header-Name: value` pair per line. The header name is matched case-insensitively. The value must match exactly.
+One Header-Name: value pair per line. The header name is matched case-insensitively. The value must match exactly.
 
 ```text
 X-RG-Allow: trusted
 X-Internal-Token: replace-me
 ```
 
-Sample files: [`testdata/allowlists/`](https://github.com/Quad4-Software/ravenguard/tree/main/testdata/allowlists).
+Sample files: [testdata/allowlists/](https://github.com/Quad4-Software/ravenguard/tree/main/testdata/allowlists).
 
 ## Q-Feeds
 
-Optional threat-intel feeds merge into the same deny path:
+Optional commercial threat feeds merge into the same deny path as file blocklists:
 
 ```toml
 [qfeeds]
@@ -91,12 +93,12 @@ on_error = "fail_open"
 
 | Setting | Meaning |
 |---------|---------|
-| `feeds` | Feed names to pull |
-| `refresh` | In-memory cache refresh interval |
-| `on_error` | `fail_open` continues serving if refresh fails. `fail_closed` denies on feed errors |
-| `limit` | Optional cap on cached entries |
+| feeds | Feed names to pull |
+| refresh | In-memory cache refresh interval |
+| on_error | fail_open continues serving if refresh fails. fail_closed denies on feed errors |
+| limit | Optional cap on cached entries |
 
-Env: `RG_QFEEDS_ENABLED`, `RG_QFEEDS_API_TOKEN`, or `QFEEDS_API_TOKEN`.
+Env: RG_QFEEDS_ENABLED, RG_QFEEDS_API_TOKEN, or QFEEDS_API_TOKEN.
 
 ## Notes
 
@@ -104,4 +106,5 @@ Env: `RG_QFEEDS_ENABLED`, `RG_QFEEDS_API_TOKEN`, or `QFEEDS_API_TOKEN`.
 - Use detect scoring for ambiguous traffic rather than large UA deny lists
 - Use allowlists for health checks, office CIDRs, or shared header tokens that should skip detect and challenge
 - Search-bot User-Agents are not DNS-verified. Do not blanket-block known crawler names unless that is intentional. Prefer allowlists only for sources you control
-- Choose `reload_interval` for ops response time without excessive disk reads
+- Choose reload_interval for ops response time without excessive disk reads
+- For cross-fleet and external IOC exchange, use [Threat intel](./threatintel.md) instead of copying huge deny files to every edge

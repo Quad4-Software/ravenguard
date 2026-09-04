@@ -520,3 +520,109 @@ func multipartPNG(t *testing.T, filename, kind string, data []byte) (*bytes.Buff
 	}
 	return &buf, w.FormDataContentType()
 }
+
+func TestThreatIntelConfigRedactsKeys(t *testing.T) {
+	dir := t.TempDir()
+	st, err := store.Open(filepath.Join(dir, "data"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = st.Close() }()
+	hash, _ := auth.HashPassword("bootstrap-pass-1")
+	if _, err := st.BootstrapOwner("owner", hash); err != nil {
+		t.Fatal(err)
+	}
+	cfg := config.Default()
+	cfg.ThreatIntel.Enabled = true
+	cfg.ThreatIntel.ExportToken = "export-secret-token"
+	cfg.ThreatIntel.AbuseIPDBKey = "abuseipdb-secret-key"
+	cfg.ThreatIntel.MISPKey = "misp-secret-key"
+	cfg.ThreatIntel.MISPURL = "https://misp.example"
+	rt := ops.NewRuntime(cfg, protect.New(protect.Config{Enabled: true, BanTTL: time.Minute}), blocklist.New(), nil, nil, nil, nil)
+	srv := &api.Server{
+		Store:   st,
+		Runtime: rt,
+		Admin: config.AdminConfig{
+			BasePath:   "/",
+			SessionTTL: config.Duration{Duration: time.Hour},
+		},
+		Lockout: auth.NewLockout(),
+	}
+	mux := http.NewServeMux()
+	srv.Mount(mux, "/")
+
+	loginBody, _ := json.Marshal(map[string]string{"username": "owner", "password": "bootstrap-pass-1"})
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", bytes.NewReader(loginBody))
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("login %d", rec.Code)
+	}
+	var loginResp struct {
+		CSRFToken string `json:"csrf_token"`
+	}
+	_ = json.Unmarshal(rec.Body.Bytes(), &loginResp)
+	var sessionCookie *http.Cookie
+	for _, c := range rec.Result().Cookies() {
+		if c.Name == "rg_admin_session" {
+			sessionCookie = c
+		}
+	}
+	if sessionCookie == nil {
+		t.Fatal("missing session")
+	}
+
+	cfgReq := httptest.NewRequest(http.MethodGet, "/api/v1/threatintel/config", nil)
+	cfgReq.AddCookie(sessionCookie)
+	cfgRec := httptest.NewRecorder()
+	mux.ServeHTTP(cfgRec, cfgReq)
+	if cfgRec.Code != http.StatusOK {
+		t.Fatalf("config %d %s", cfgRec.Code, cfgRec.Body.String())
+	}
+	raw := cfgRec.Body.String()
+	for _, secret := range []string{"export-secret-token", "abuseipdb-secret-key", "misp-secret-key"} {
+		if strings.Contains(raw, secret) {
+			t.Fatalf("secret leaked: %s", secret)
+		}
+	}
+	var view map[string]any
+	if err := json.Unmarshal(cfgRec.Body.Bytes(), &view); err != nil {
+		t.Fatal(err)
+	}
+	if view["export_token_set"] != true || view["abuseipdb_key_set"] != true || view["misp_key_set"] != true {
+		t.Fatalf("expected *_set flags: %+v", view)
+	}
+
+	csv := "type,value,ttl_seconds\nipv4,198.51.100.44,600\nua,badbot,600\n"
+	ingestReq := httptest.NewRequest(http.MethodPost, "/api/v1/threatintel/ingest?format=csv", strings.NewReader(csv))
+	ingestReq.AddCookie(sessionCookie)
+	ingestReq.Header.Set("X-CSRF-Token", loginResp.CSRFToken)
+	ingestReq.Header.Set("Content-Type", "text/csv")
+	ingestRec := httptest.NewRecorder()
+	mux.ServeHTTP(ingestRec, ingestReq)
+	if ingestRec.Code != http.StatusOK {
+		t.Fatalf("ingest %d %s", ingestRec.Code, ingestRec.Body.String())
+	}
+
+	exportReq := httptest.NewRequest(http.MethodGet, "/api/v1/threatintel/export.stix", nil)
+	exportReq.AddCookie(sessionCookie)
+	exportRec := httptest.NewRecorder()
+	mux.ServeHTTP(exportRec, exportReq)
+	if exportRec.Code != http.StatusOK {
+		t.Fatalf("export %d %s", exportRec.Code, exportRec.Body.String())
+	}
+	if strings.Contains(exportRec.Body.String(), "198.51.100.44") {
+		t.Fatal("raw ip leaked in default export")
+	}
+	if !strings.Contains(exportRec.Body.String(), "badbot") {
+		t.Fatal("expected ua in export")
+	}
+
+	tokenReq := httptest.NewRequest(http.MethodGet, "/api/v1/threatintel/export.csv", nil)
+	tokenReq.Header.Set("Authorization", "Bearer export-secret-token")
+	tokenRec := httptest.NewRecorder()
+	mux.ServeHTTP(tokenRec, tokenReq)
+	if tokenRec.Code != http.StatusOK {
+		t.Fatalf("export bearer %d %s", tokenRec.Code, tokenRec.Body.String())
+	}
+}

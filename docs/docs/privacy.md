@@ -21,16 +21,17 @@ retention = "30m"
 With hashing on:
 
 - Rate limits, 404 tracking, behavior windows, and clearance binding use a hashed key
-- Logs use a hash instead of the raw address when `log_ip = "hash"`
-- In-memory soft state is bounded by `retention`
-- Fleet threat sharing uses the same bind hash as the ban key when `key_type=bind` (keep `ip_hash_secret` / challenge secret aligned via fleet defaults). Admin threat listings show redacted keys only. Raw IP share (`key_type=ip`) is opt-in for operators who accept that risk.
+- Logs use a hash instead of the raw address when log_ip is hash
+- In-memory soft state is bounded by retention
+- Fleet threat sharing uses the same bind hash as the ban key when key_type is bind (keep ip_hash_secret / challenge secret aligned via fleet defaults). Admin threat listings show redacted keys only. Raw IP share (key_type ip) is opt-in for operators who accept that risk.
+- Threat intel STIX/CSV export omits raw IPs unless export_raw_ip is enabled. Bind, UA, domain, and JA4 indicators still export. See [Threat intel](./threatintel.md).
 
 ## Secrets
 
-If `ip_hash_secret` is empty, hashing material is derived from `challenge.secret`. In production:
+If ip_hash_secret is empty, hashing material is derived from challenge.secret. In production:
 
-1. Set a strong `RG_CHALLENGE_SECRET`
-2. Optionally set `RG_PRIVACY_IP_HASH_SECRET` to rotate hashes independently of challenge cookies
+1. Set a strong RG_CHALLENGE_SECRET
+2. Optionally set RG_PRIVACY_IP_HASH_SECRET to rotate hashes independently of challenge cookies
 
 Rotating either secret invalidates derived identities and clearance cookies that depended on them.
 
@@ -38,11 +39,11 @@ Rotating either secret invalidates derived identities and clearance cookies that
 
 | Mode | Behavior |
 |------|----------|
-| `off` | Do not log client IP material |
-| `hash` | Log the privacy hash (default) |
-| `full` | Log the resolved client IP |
+| off | Do not log client IP material |
+| hash | Log the privacy hash (default) |
+| full | Log the resolved client IP |
 
-Use `hash` or `off` unless debugging requires raw addresses.
+Use hash or off unless debugging requires raw addresses.
 
 ## Challenge page notice
 
@@ -55,7 +56,7 @@ When set, the challenge page includes a link to that URL.
 
 ## Env vars
 
-- `RG_PRIVACY_HASH_CLIENT_IP`
-- `RG_PRIVACY_IP_HASH_SECRET`
-- `RG_PRIVACY_LOG_IP`
-- `RG_PRIVACY_NOTICE_URL`
+- RG_PRIVACY_HASH_CLIENT_IP
+- RG_PRIVACY_IP_HASH_SECRET
+- RG_PRIVACY_LOG_IP
+- RG_PRIVACY_NOTICE_URL

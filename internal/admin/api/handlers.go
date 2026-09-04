@@ -82,6 +82,14 @@ func (s *Server) Mount(mux *http.ServeMux, base string) {
 	mux.HandleFunc(api+"/status/history", s.auth(s.handleStatusHistory))
 	mux.HandleFunc(api+"/bans", s.auth(s.handleBans))
 	mux.HandleFunc(api+"/threat", s.auth(s.handleThreat))
+	mux.HandleFunc(api+"/threatintel/export.stix", s.authOrExportToken(s.handleThreatIntelExportSTIX))
+	mux.HandleFunc(api+"/threatintel/export.csv", s.authOrExportToken(s.handleThreatIntelExportCSV))
+	mux.HandleFunc(api+"/threatintel/ingest", s.auth(s.csrf(s.handleThreatIntelIngest)))
+	mux.HandleFunc(api+"/threatintel/ingest/url", s.auth(s.csrf(s.handleThreatIntelIngestURL)))
+	mux.HandleFunc(api+"/threatintel/abuseipdb/sync", s.auth(s.csrf(s.handleThreatIntelAbuseSync)))
+	mux.HandleFunc(api+"/threatintel/abuseipdb/report", s.auth(s.csrf(s.handleThreatIntelAbuseReport)))
+	mux.HandleFunc(api+"/threatintel/misp/sync", s.auth(s.csrf(s.handleThreatIntelMISPSync)))
+	mux.HandleFunc(api+"/threatintel/config", s.auth(s.handleThreatIntelConfig))
 	mux.HandleFunc(api+"/tunnel/tickets", s.auth(s.csrf(s.handleTunnelTicket)))
 	mux.HandleFunc(api+"/blocklists", s.auth(s.handleBlocklists))
 	mux.HandleFunc(api+"/blocklists/reload", s.auth(s.csrf(s.handleBlocklistReload)))
@@ -156,6 +164,22 @@ func actorFrom(r *http.Request) Actor {
 
 func (s *Server) auth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		actor, ok := s.resolveActor(r)
+		if !ok {
+			writeErr(w, http.StatusUnauthorized, "unauthorized")
+			return
+		}
+		next(w, r.WithContext(context.WithValue(r.Context(), actorKey, actor)))
+	}
+}
+
+// authOrExportToken allows session/API auth or a configured threatintel export bearer token.
+func (s *Server) authOrExportToken(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if s.allowThreatIntelExport(r) {
+			next(w, r)
+			return
+		}
 		actor, ok := s.resolveActor(r)
 		if !ok {
 			writeErr(w, http.StatusUnauthorized, "unauthorized")

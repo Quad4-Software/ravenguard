@@ -698,6 +698,33 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   return data as T
 }
 
+async function requestRaw<T>(method: string, path: string, body: string, contentType: string): Promise<T> {
+  const headers: Record<string, string> = { 'Content-Type': contentType }
+  if (mutatingMethods.has(method) && csrfToken) {
+    headers['X-CSRF-Token'] = csrfToken
+  }
+  const res = await fetch(apiURL(path), {
+    method,
+    headers,
+    credentials: 'same-origin',
+    body,
+  })
+  const text = await res.text()
+  let data: Record<string, unknown> = {}
+  if (text) {
+    try {
+      data = JSON.parse(text) as Record<string, unknown>
+    } catch {
+      throw new APIError(res.status, res.ok ? 'invalid json response' : `request failed (${res.status})`)
+    }
+  }
+  if (!res.ok) {
+    const message = typeof data.error === 'string' ? data.error : `request failed (${res.status})`
+    throw new APIError(res.status, message)
+  }
+  return data as T
+}
+
 export const api = {
   auth: {
     login(username: string, password: string) {
@@ -771,6 +798,64 @@ export const api = {
     },
     create(body: { key_type: string; key: string; reason?: string; ttl?: string }) {
       return request<{ revision: number; stored: number }>('POST', '/threat', body)
+    },
+  },
+
+  threatintel: {
+    config() {
+      return request<{
+        enabled: boolean
+        export_raw_ip: boolean
+        export_token_set: boolean
+        abuseipdb_key_set: boolean
+        abuseipdb_min_confidence: number
+        abuseipdb_limit: number
+        misp_url: string
+        misp_key_set: boolean
+        ingest_urls: string[]
+        ingest_interval: string
+        default_ttl: string
+        status: Record<string, unknown>
+      }>('GET', '/threatintel/config')
+    },
+    putConfig(body: Record<string, unknown>) {
+      return request<{ status: string }>('PUT', '/threatintel/config', body)
+    },
+    ingest(body: string, format: 'csv' | 'stix') {
+      return requestRaw<{ accepted: number; skipped: number; stored: number; revision: number }>(
+        'POST',
+        `/threatintel/ingest?format=${format}`,
+        body,
+        format === 'stix' ? 'application/json' : 'text/csv',
+      )
+    },
+    ingestURL(url: string, format?: string) {
+      return request<{ accepted: number; skipped: number; stored: number; revision: number }>(
+        'POST',
+        '/threatintel/ingest/url',
+        { url, format },
+      )
+    },
+    abuseSync() {
+      return request<{ accepted: number; skipped: number; stored: number; revision: number }>(
+        'POST',
+        '/threatintel/abuseipdb/sync',
+      )
+    },
+    abuseReport(body: { ip: string; comment?: string; confirm_raw: boolean; categories?: number[] }) {
+      return request<{ status: string }>('POST', '/threatintel/abuseipdb/report', body)
+    },
+    mispSync() {
+      return request<{ accepted: number; skipped: number; stored: number; revision: number }>(
+        'POST',
+        '/threatintel/misp/sync',
+      )
+    },
+    exportSTIXURL() {
+      return apiURL('/threatintel/export.stix')
+    },
+    exportCSVURL() {
+      return apiURL('/threatintel/export.csv')
     },
   },
 

@@ -78,6 +78,7 @@ type threatOverlay interface {
 	UABlocked(ua string) bool
 	IPBlocked(ip net.IP) bool
 	JA4Blocked(ja4 string) bool
+	DNSBlocked(host string) bool
 }
 
 type threatReporter interface {
@@ -588,6 +589,10 @@ func (h *Handler) guard(w http.ResponseWriter, r *http.Request) {
 	if tov != nil {
 		if tov.IPBlocked(clientIP) {
 			h.emitBlock(w, r, ray, bindID, ipStr, host, ua, "Shared IP block", 0, nil)
+			return
+		}
+		if tov.DNSBlocked(host) {
+			h.emitBlock(w, r, ray, bindID, ipStr, host, ua, "Shared host block", 0, nil)
 			return
 		}
 		if tov.UABlocked(ua) {

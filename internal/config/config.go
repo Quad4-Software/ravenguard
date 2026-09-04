@@ -41,8 +41,24 @@ type Config struct {
 	Hub        HubConfig        `toml:"hub"`
 	Agent      AgentConfig      `toml:"agent"`
 	Tunnel     TunnelConfig     `toml:"tunnel"`
+	ThreatIntel ThreatIntelConfig `toml:"threatintel"`
 
 	runMode string `toml:"-"`
+}
+
+// ThreatIntelConfig configures open TI export/ingest on the hub.
+type ThreatIntelConfig struct {
+	Enabled               bool     `toml:"enabled"`
+	ExportRawIP           bool     `toml:"export_raw_ip"`
+	ExportToken           string   `toml:"export_token"`
+	AbuseIPDBKey          string   `toml:"abuseipdb_key"`
+	AbuseIPDBMinConfidence int     `toml:"abuseipdb_min_confidence"`
+	AbuseIPDBLimit        int      `toml:"abuseipdb_limit"`
+	MISPURL               string   `toml:"misp_url"`
+	MISPKey               string   `toml:"misp_key"`
+	IngestURLs            []string `toml:"ingest_urls"`
+	IngestInterval        Duration `toml:"ingest_interval"`
+	DefaultTTL            Duration `toml:"default_ttl"`
 }
 
 // TunnelConfig configures edge tunnel accept or connector dial.
@@ -614,6 +630,13 @@ func Default() Config {
 		},
 		Agent: AgentConfig{
 			DataDir: "./data/proxy",
+		},
+		ThreatIntel: ThreatIntelConfig{
+			Enabled:                true,
+			AbuseIPDBMinConfidence: 80,
+			AbuseIPDBLimit:         10000,
+			IngestInterval:         Duration{time.Hour},
+			DefaultTTL:             Duration{24 * time.Hour},
 		},
 	}
 }

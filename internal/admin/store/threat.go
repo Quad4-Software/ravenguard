@@ -87,7 +87,7 @@ func (s *Store) InsertThreatEntries(sourceProxyID string, entries []agentprotoco
 		}
 		switch e.KeyType {
 		case agentprotocol.ThreatKeyBind, agentprotocol.ThreatKeyUA, agentprotocol.ThreatKeyIP,
-			agentprotocol.ThreatKeyIPHash, agentprotocol.ThreatKeyJA4:
+			agentprotocol.ThreatKeyIPHash, agentprotocol.ThreatKeyJA4, agentprotocol.ThreatKeyDNS:
 		default:
 			continue
 		}
