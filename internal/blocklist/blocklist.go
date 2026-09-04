@@ -94,7 +94,7 @@ type Stats struct {
 	IPCount    int       `json:"ip_count"`
 	DNSCount   int       `json:"dns_count"`
 	UACount    int       `json:"ua_count"`
-	LastReload time.Time `json:"last_reload,omitempty"`
+	LastReload time.Time `json:"last_reload"`
 }
 
 func (s *Sets) Stats() Stats {

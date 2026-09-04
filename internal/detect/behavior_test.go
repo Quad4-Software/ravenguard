@@ -4,6 +4,7 @@
 package detect_test
 
 import (
+	"slices"
 	"strconv"
 	"testing"
 	"time"
@@ -101,10 +102,5 @@ func TestBehaviorStrikes(t *testing.T) {
 }
 
 func containsReason(reasons []string, want string) bool {
-	for _, r := range reasons {
-		if r == want {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(reasons, want)
 }

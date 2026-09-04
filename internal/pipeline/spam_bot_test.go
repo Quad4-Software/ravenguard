@@ -141,7 +141,7 @@ func TestWriteBurstChallengesSpammer(t *testing.T) {
 		cfg.Detect.MissingSecFetchScore = 0
 	}, beh)
 
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		req := httptest.NewRequest(http.MethodPost, "/register", strings.NewReader("u=bot"))
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0) Chrome/120.0.0.0 Safari/537.36")

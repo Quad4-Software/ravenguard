@@ -773,10 +773,7 @@ func (h *Handler) serveChallenge(w http.ResponseWriter, _ *http.Request, ray, bi
 	}
 	mode := h.cfg.Challenge.Mode
 	prevRisk, prevGate := h.chal.TakeChallenge(bindID)
-	risk = challenge.FloorRiskForMode(mode, risk)
-	if prevRisk > risk {
-		risk = prevRisk
-	}
+	risk = max(prevRisk, challenge.FloorRiskForMode(mode, risk))
 	gate := challenge.ResolveGate(mode, risk, prevGate, h.cfg.Challenge.Captcha.Enabled)
 	h.chal.RememberChallenge(bindID, risk, gate)
 	captchaOn := h.cfg.Challenge.Captcha.Enabled && gate == challenge.GateInteractive

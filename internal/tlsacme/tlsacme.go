@@ -52,8 +52,8 @@ type Config struct {
 type HostCertStatus struct {
 	Hostname          string    `json:"hostname"`
 	State             string    `json:"state"`
-	NotBefore         time.Time `json:"not_before,omitempty"`
-	NotAfter          time.Time `json:"not_after,omitempty"`
+	NotBefore         time.Time `json:"not_before"`
+	NotAfter          time.Time `json:"not_after"`
 	DaysLeft          int       `json:"days_left,omitempty"`
 	Issuer            string    `json:"issuer,omitempty"`
 	Subject           string    `json:"subject,omitempty"`
@@ -328,10 +328,7 @@ func fillHostCertFromLeaf(st *HostCertStatus, leaf *x509.Certificate) {
 	}
 	st.NotBefore = leaf.NotBefore
 	st.NotAfter = leaf.NotAfter
-	days := int(time.Until(leaf.NotAfter).Hours() / 24)
-	if days < 0 {
-		days = 0
-	}
+	days := max(int(time.Until(leaf.NotAfter).Hours()/24), 0)
 	st.DaysLeft = days
 	st.Subject = leaf.Subject.String()
 	if leaf.SerialNumber != nil {

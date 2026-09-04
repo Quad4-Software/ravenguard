@@ -104,7 +104,7 @@ type Stats struct {
 	IPCount     int       `json:"ip_count"`
 	UACount     int       `json:"ua_count"`
 	HeaderCount int       `json:"header_count"`
-	LastReload  time.Time `json:"last_reload,omitempty"`
+	LastReload  time.Time `json:"last_reload"`
 }
 
 // Stats returns current sizes and last reload time.

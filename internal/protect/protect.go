@@ -301,8 +301,8 @@ func (g *Guard) Sweep(maxAge time.Duration) {
 type BanInfo struct {
 	Key         string    `json:"key"`
 	Strikes     int       `json:"strikes"`
-	BannedUntil time.Time `json:"banned_until,omitempty"`
-	WindowStart time.Time `json:"window_start,omitempty"`
+	BannedUntil time.Time `json:"banned_until"`
+	WindowStart time.Time `json:"window_start"`
 	Active      bool      `json:"active"`
 }
 
