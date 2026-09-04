@@ -175,11 +175,11 @@ func TestUAToThreatEntry(t *testing.T) {
 func TestIngestRace(t *testing.T) {
 	sink := &memSink{}
 	var wg sync.WaitGroup
-	for i := 0; i < 16; i++ {
+	for i := range 16 {
 		wg.Add(1)
 		go func(n int) {
 			defer wg.Done()
-			for j := 0; j < 20; j++ {
+			for range 20 {
 				_, _ = threatintel.IngestIOCs(sink, "race", []threatintel.IOC{
 					{Type: threatintel.TypeDomain, Value: "x.example", TTLSeconds: 60},
 				}, time.Minute)

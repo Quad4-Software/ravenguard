@@ -30,8 +30,8 @@ type IOC struct {
 	Source     string    `json:"source,omitempty"`
 	Confidence int       `json:"confidence,omitempty"`
 	Tags       []string  `json:"tags,omitempty"`
-	FirstSeen  time.Time `json:"first_seen,omitempty"`
-	LastSeen   time.Time `json:"last_seen,omitempty"`
+	FirstSeen  time.Time `json:"first_seen"`
+	LastSeen   time.Time `json:"last_seen"`
 }
 
 // ExportOptions controls privacy of exports.

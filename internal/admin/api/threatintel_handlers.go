@@ -20,7 +20,7 @@ import (
 
 type threatIntelStatus struct {
 	mu         sync.RWMutex
-	LastOK     time.Time `json:"last_ok,omitempty"`
+	LastOK     time.Time `json:"last_ok"`
 	LastError  string    `json:"last_error,omitempty"`
 	LastSource string    `json:"last_source,omitempty"`
 	LastStored int       `json:"last_stored,omitempty"`

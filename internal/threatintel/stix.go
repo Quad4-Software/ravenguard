@@ -181,8 +181,8 @@ func parseSTIXPattern(pattern string) (IOC, bool) {
 		{"[x-ravenguard-bind:value = '", TypeBind},
 	}
 	for _, p := range patterns {
-		if strings.HasPrefix(pattern, p.prefix) {
-			rest := strings.TrimPrefix(pattern, p.prefix)
+		if after, ok := strings.CutPrefix(pattern, p.prefix); ok {
+			rest := after
 			val, _, ok := strings.Cut(rest, "']")
 			if !ok {
 				continue
