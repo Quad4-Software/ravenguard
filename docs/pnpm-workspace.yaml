@@ -17,10 +17,12 @@ dangerouslyAllowAllBuilds: false
 overrides:
   uuid: ^14.0.0
   serialize-javascript: ^7.0.5
+  fastq: 1.20.3
 
 minimumReleaseAgeExclude:
   - uuid
   - serialize-javascript
+  - fastq
 
 # Explicit lifecycle script allowlist only.
 allowBuilds:
