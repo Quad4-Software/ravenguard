@@ -23,13 +23,14 @@ type RouteRow struct {
 	StripPrefix    bool      `json:"strip_prefix"`
 	Priority       int       `json:"priority"`
 	AccessPolicyID *string   `json:"access_policy_id,omitempty"`
+	ProxyID        string    `json:"proxy_id,omitempty"`
 	CreatedAt      time.Time `json:"created_at"`
 	UpdatedAt      time.Time `json:"updated_at"`
 }
 
 func (s *Store) ListRoutes() ([]RouteRow, error) {
 	rows, err := s.db.Query(`SELECT id, name, enabled, hosts_json, path_prefix, upstream_id,
-		strip_prefix, priority, access_policy_id, created_at, updated_at
+		strip_prefix, priority, access_policy_id, COALESCE(proxy_id,''), created_at, updated_at
 		FROM routes ORDER BY priority DESC, name ASC, id ASC`)
 	if err != nil {
 		return nil, err
@@ -48,7 +49,7 @@ func (s *Store) ListRoutes() ([]RouteRow, error) {
 
 func (s *Store) GetRoute(id string) (RouteRow, error) {
 	row := s.db.QueryRow(`SELECT id, name, enabled, hosts_json, path_prefix, upstream_id,
-		strip_prefix, priority, access_policy_id, created_at, updated_at
+		strip_prefix, priority, access_policy_id, COALESCE(proxy_id,''), created_at, updated_at
 		FROM routes WHERE id = ?`, id)
 	rt, err := scanRoute(row)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -87,10 +88,10 @@ func (s *Store) CreateRoute(rt RouteRow) (RouteRow, error) {
 	now := nowUTC()
 	_, err = s.db.Exec(`INSERT INTO routes(
 		id, name, enabled, hosts_json, path_prefix, upstream_id,
-		strip_prefix, priority, access_policy_id, created_at, updated_at
-	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		strip_prefix, priority, access_policy_id, proxy_id, created_at, updated_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		id, rt.Name, boolInt(rt.Enabled), string(hosts), rt.PathPrefix, rt.UpstreamID,
-		boolInt(rt.StripPrefix), rt.Priority, nullStringPtr(rt.AccessPolicyID), now, now,
+		boolInt(rt.StripPrefix), rt.Priority, nullStringPtr(rt.AccessPolicyID), strings.TrimSpace(rt.ProxyID), now, now,
 	)
 	if err != nil {
 		return RouteRow{}, err
@@ -126,10 +127,10 @@ func (s *Store) UpdateRoute(id string, rt RouteRow) (RouteRow, error) {
 	}
 	res, err := s.db.Exec(`UPDATE routes SET
 		name = ?, enabled = ?, hosts_json = ?, path_prefix = ?, upstream_id = ?,
-		strip_prefix = ?, priority = ?, access_policy_id = ?, updated_at = ?
+		strip_prefix = ?, priority = ?, access_policy_id = ?, proxy_id = ?, updated_at = ?
 		WHERE id = ?`,
 		rt.Name, boolInt(rt.Enabled), string(hosts), rt.PathPrefix, rt.UpstreamID,
-		boolInt(rt.StripPrefix), rt.Priority, nullStringPtr(rt.AccessPolicyID), nowUTC(), id,
+		boolInt(rt.StripPrefix), rt.Priority, nullStringPtr(rt.AccessPolicyID), strings.TrimSpace(rt.ProxyID), nowUTC(), id,
 	)
 	if err != nil {
 		return RouteRow{}, err
@@ -180,7 +181,7 @@ func scanRoute(row routeScanner) (RouteRow, error) {
 	var created, updated string
 	err := row.Scan(
 		&rt.ID, &rt.Name, &enabled, &hosts, &rt.PathPrefix, &rt.UpstreamID,
-		&strip, &rt.Priority, &policy, &created, &updated,
+		&strip, &rt.Priority, &policy, &rt.ProxyID, &created, &updated,
 	)
 	if err != nil {
 		return RouteRow{}, err

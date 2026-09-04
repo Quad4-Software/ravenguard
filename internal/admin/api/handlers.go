@@ -19,6 +19,7 @@ import (
 	"github.com/Quad4-Software/ravenguard/internal/admin/ops"
 	"github.com/Quad4-Software/ravenguard/internal/admin/rbac"
 	"github.com/Quad4-Software/ravenguard/internal/admin/store"
+	"github.com/Quad4-Software/ravenguard/internal/agentprotocol"
 	"github.com/Quad4-Software/ravenguard/internal/config"
 	"github.com/Quad4-Software/ravenguard/internal/iputil"
 	"github.com/Quad4-Software/ravenguard/internal/ui"
@@ -42,6 +43,11 @@ type Server struct {
 	CertDetail       func(hostname string) (any, error)
 	ACMEManage       func(ctx context.Context, hosts []string) error
 	Pages            *ui.Pages
+	AgentRegistry    *agentprotocol.Registry
+	HubKeys          *agentprotocol.KeyPair
+	HubPublicURL     string
+	LocalTarget      ops.ProxyTarget
+	OnAgentReady     func(ctx context.Context, proxyID string)
 }
 
 type ctxKey int
@@ -92,6 +98,10 @@ func (s *Server) Mount(mux *http.ServeMux, base string) {
 	mux.HandleFunc(api+"/certs", s.auth(s.handleCerts))
 	mux.HandleFunc(api+"/certs/", s.auth(s.handleCertsPath))
 	mux.HandleFunc(api+"/logs", s.auth(s.handleLogs))
+	mux.HandleFunc(api+"/proxies", s.auth(s.csrf(s.handleProxies)))
+	mux.HandleFunc(api+"/proxies/", s.auth(s.csrf(s.handleProxyID)))
+	mux.HandleFunc(api+"/migrations", s.auth(s.csrf(s.handleMigrations)))
+	mux.HandleFunc(api+"/migrations/", s.auth(s.csrf(s.handleMigrationID)))
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {

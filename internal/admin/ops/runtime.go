@@ -46,6 +46,7 @@ type Runtime struct {
 	ManualCertPut    func(hostname, certPEM, keyPEM string) error
 	ManualCertDelete func(hostname string) error
 	CertDetail       func(hostname string) (any, error)
+	CertExport       func(hostname string) (certPEM, keyPEM string, err error)
 	ACMEManage       func(ctx context.Context, hosts []string) error
 
 	challengeEnabled atomic.Bool

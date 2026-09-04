@@ -33,8 +33,8 @@ type Detail struct {
 	Hostname          string    `json:"hostname"`
 	Source            string    `json:"source"`
 	State             string    `json:"state"`
-	NotBefore         time.Time `json:"not_before,omitempty"`
-	NotAfter          time.Time `json:"not_after,omitempty"`
+	NotBefore         time.Time `json:"not_before"`
+	NotAfter          time.Time `json:"not_after"`
 	DaysLeft          int       `json:"days_left,omitempty"`
 	Issuer            string    `json:"issuer,omitempty"`
 	Subject           string    `json:"subject,omitempty"`
@@ -191,6 +191,28 @@ func (s *ManualStore) Detail(hostname string) (Detail, error) {
 		return Detail{}, fmt.Errorf("tlscerts: not found: %s", host)
 	}
 	return detailFromCert(host, SourceManual, false, cert, ""), nil
+}
+
+// Export returns PEM material for migration over the authenticated agent channel.
+func (s *ManualStore) Export(hostname string) (certPEM, keyPEM string, err error) {
+	host, err := normalizeHost(hostname)
+	if err != nil {
+		return "", "", err
+	}
+	s.mu.RLock()
+	_, ok := s.cache[host]
+	s.mu.RUnlock()
+	if !ok {
+		return "", "", fmt.Errorf("tlscerts: not found: %s", host)
+	}
+	certPath := filepath.Join(s.dir, host, "fullchain.pem")
+	keyPath := filepath.Join(s.dir, host, "privkey.pem")
+	certBytes, err1 := os.ReadFile(certPath)
+	keyBytes, err2 := os.ReadFile(keyPath)
+	if err1 != nil || err2 != nil {
+		return "", "", fmt.Errorf("tlscerts: export read failed")
+	}
+	return string(certBytes), string(keyBytes), nil
 }
 
 // DetailFromLeaf fills a Detail from an x509 certificate leaf.

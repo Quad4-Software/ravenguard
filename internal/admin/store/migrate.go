@@ -100,6 +100,44 @@ var migrations = []string{
 		created_at TEXT NOT NULL,
 		updated_at TEXT NOT NULL
 	)`,
+	`CREATE TABLE IF NOT EXISTS proxies (
+		id TEXT PRIMARY KEY,
+		name TEXT NOT NULL,
+		tags_json TEXT NOT NULL DEFAULT '[]',
+		fingerprint TEXT NOT NULL DEFAULT '',
+		token_hash TEXT NOT NULL UNIQUE,
+		universal INTEGER NOT NULL DEFAULT 0,
+		public_ipv4 TEXT NOT NULL DEFAULT '',
+		public_ipv6 TEXT NOT NULL DEFAULT '',
+		listen_http TEXT NOT NULL DEFAULT '',
+		listen_https TEXT NOT NULL DEFAULT '',
+		listen_quic TEXT NOT NULL DEFAULT '',
+		hostname TEXT NOT NULL DEFAULT '',
+		agent_version TEXT NOT NULL DEFAULT '',
+		last_seen_at TEXT,
+		desired_revision INTEGER NOT NULL DEFAULT 0,
+		desired_json TEXT NOT NULL DEFAULT '',
+		created_at TEXT NOT NULL,
+		updated_at TEXT NOT NULL
+	)`,
+	`CREATE TABLE IF NOT EXISTS fleet_defaults (
+		id INTEGER PRIMARY KEY CHECK (id = 1),
+		safe_config TEXT NOT NULL DEFAULT '{}',
+		updated_at TEXT NOT NULL
+	)`,
+	`CREATE TABLE IF NOT EXISTS service_migrations (
+		id TEXT PRIMARY KEY,
+		from_proxy_id TEXT NOT NULL,
+		to_proxy_id TEXT NOT NULL,
+		route_ids_json TEXT NOT NULL DEFAULT '[]',
+		phase TEXT NOT NULL DEFAULT 'created',
+		dns_checklist_json TEXT NOT NULL DEFAULT '[]',
+		created_by INTEGER,
+		created_at TEXT NOT NULL,
+		updated_at TEXT NOT NULL,
+		detail TEXT NOT NULL DEFAULT ''
+	)`,
+	`ALTER TABLE routes ADD COLUMN proxy_id TEXT NOT NULL DEFAULT ''`,
 }
 
 func migrate(db *sql.DB) error {

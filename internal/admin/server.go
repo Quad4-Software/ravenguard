@@ -22,6 +22,7 @@ import (
 	"github.com/Quad4-Software/ravenguard/internal/admin/ops"
 	"github.com/Quad4-Software/ravenguard/internal/admin/store"
 	"github.com/Quad4-Software/ravenguard/internal/admin/ui"
+	"github.com/Quad4-Software/ravenguard/internal/agentprotocol"
 	"github.com/Quad4-Software/ravenguard/internal/config"
 )
 
@@ -47,6 +48,11 @@ type Options struct {
 	CertDetail           func(hostname string) (any, error)
 	ACMEManage           func(ctx context.Context, hosts []string) error
 	BootstrapUpstreamURL string
+	AgentRegistry        *agentprotocol.Registry
+	HubKeys              *agentprotocol.KeyPair
+	HubPublicURL         string
+	LocalTarget          ops.ProxyTarget
+	MountAgentConnect    bool
 }
 
 func New(opts Options) (*Server, error) {
@@ -156,10 +162,30 @@ func New(opts Options) (*Server, error) {
 		ManualCertDelete: opts.ManualCertDelete,
 		CertDetail:       opts.CertDetail,
 		ACMEManage:       opts.ACMEManage,
+		AgentRegistry:    opts.AgentRegistry,
+		HubKeys:          opts.HubKeys,
+		HubPublicURL:     opts.HubPublicURL,
+		LocalTarget:      opts.LocalTarget,
 	}
 
 	mux := http.NewServeMux()
 	apiSrv.Mount(mux, opts.Config.BasePath)
+	if opts.MountAgentConnect && opts.AgentRegistry != nil && opts.HubKeys != nil {
+		hub := &agentprotocol.Hub{
+			Keys:     *opts.HubKeys,
+			Lookup:   st,
+			Registry: opts.AgentRegistry,
+			OnReady: func(ctx context.Context, sess *agentprotocol.Session) {
+				state, err := st.DesiredState(sess.ProxyID)
+				if err != nil || state.Revision == 0 {
+					return
+				}
+				_, _ = sess.Call(ctx, agentprotocol.OpDesiredApply, state)
+			},
+		}
+		p := strings.TrimSuffix(opts.Config.BasePath, "/")
+		mux.HandleFunc(p+agentprotocol.ConnectPath, hub.HandleConnect)
+	}
 	mux.Handle("/", ui.Handler(opts.Config.BasePath))
 
 	var tlsCfg *tls.Config
