@@ -435,7 +435,7 @@ func Default() Config {
 			Brand: "RavenGuard", StatusText: "Checking your browser before accessing this site.",
 		},
 		Site: SiteConfig{
-			Description: "RavenGuard application guard",
+			Description: "RavenGuard Web Application Firewall",
 			ThemeColor:  "#050505",
 			Robots:      "noindex, nofollow",
 			Lang:        "en",
@@ -779,7 +779,7 @@ func normalize(c *Config) {
 		c.Site.Lang = "en"
 	}
 	if c.Site.Description == "" {
-		c.Site.Description = c.UI.Brand + " application guard"
+		c.Site.Description = c.UI.Brand + " Web Application Firewall"
 	}
 	if c.UI.Brand == "" {
 		c.UI.Brand = "RavenGuard"

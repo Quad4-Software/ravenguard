@@ -4,7 +4,7 @@ import type * as Preset from '@docusaurus/preset-classic';
 
 const config: Config = {
   title: 'RavenGuard',
-  tagline: 'HTTP guard between reverse proxy and origin.',
+  tagline: 'HTTP Web Application Firewall and reverse proxy.',
   favicon: 'img/favicon.ico',
 
   future: {
@@ -49,7 +49,7 @@ const config: Config = {
       {
         name: 'description',
         content:
-          'HTTP application guard between reverse proxy and origin. Blocklists, rate limits, detect scoring, optional browser challenge.',
+          'HTTP Web Application Firewall and reverse proxy. Blocklists, rate limits, detect scoring, optional browser challenge.',
       },
       {name: 'theme-color', content: '#050505'},
     ],

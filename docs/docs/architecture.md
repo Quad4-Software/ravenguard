@@ -1,9 +1,11 @@
 ---
 title: Architecture
-description: Client resolution, filter stages, and upstream forwarding.
+description: WAF pipeline, client resolution, and upstream forwarding.
 ---
 
 # Architecture
+
+RavenGuard is an HTTP WAF that reverse-proxies to your origin after filtering.
 
 ```text
 Client -> RavenGuard (TLS / ACME) -> WAF + access -> origin(s)
@@ -15,7 +17,7 @@ Or behind an external terminator:
 Client -> reverse proxy (TLS termination) -> RavenGuard -> origin
 ```
 
-RavenGuard applies application-layer controls at the HTTP layer. Volumetric DDoS mitigation belongs at the edge or CDN.
+Controls run at the HTTP application layer. Volumetric DDoS mitigation belongs at the network edge or CDN.
 
 ## Request pipeline
 

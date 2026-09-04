@@ -3,13 +3,13 @@
 > [!WARNING]
 > Alpha software under active development. Not ready for production.
 
-HTTP edge reverse proxy and application guard. RavenGuard can terminate TLS with automatic Let's Encrypt, route to multiple upstreams, enforce access gates, and run WAF-style controls:
+HTTP Web Application Firewall (WAF) and reverse proxy. RavenGuard sits in front of your origin, terminates TLS with automatic Let's Encrypt when you want, routes to multiple upstreams, and enforces application-layer controls:
 
 ```text
 Client -> RavenGuard (:80/:443) -> origin(s)
 ```
 
-It still works behind an external reverse proxy when you prefer that topology:
+It also works behind an external reverse proxy:
 
 ```text
 Client -> reverse proxy (TLS) -> RavenGuard -> origin
@@ -19,17 +19,15 @@ Client -> reverse proxy (TLS) -> RavenGuard -> origin
 
 - Edge TLS with static PEM files or automatic Let's Encrypt (HTTP-01 / TLS-ALPN-01, durable renewals)
 - Multi-upstream host and path routing with live admin CRUD
-- Per-route access gates: password, PIN, IP allowlist, header secret, User-Agent allowlist
-- Optional placement behind nginx, Caddy, or Traefik with trusted proxy headers
-- Proxies to HTTP, HTTPS, WebSocket (`ws`/`wss` URL aliases), or unix-socket upstreams
-- IP, hostname, and User-Agent blocklists with periodic reload
-- IP, User-Agent, and header allowlists that skip detect and challenge
-- Per-client rate limits
+- WAF pipeline: blocklists, threat feeds, rate limits, size/concurrency caps, attack signatures, temp bans
 - Heuristic detection for scanners, scrapers, and common AI crawler User-Agents
-- Concurrency limits, request size caps, temporary bans for repeat offenders
-- Blocks common path and query exploit probes
 - Optional JavaScript proof-of-work challenge (`@quad4/ravenguard-widget`) with clearance cookie
 - Adaptive PoW effort (SHA-256 / PBKDF2) from detect risk bands
+- Per-route access gates: password, PIN, IP allowlist, header secret, User-Agent allowlist
+- IP, hostname, and User-Agent blocklists with periodic reload
+- IP, User-Agent, and header allowlists that skip detect and challenge
+- Optional placement behind nginx, Caddy, or Traefik with trusted proxy headers
+- Proxies to HTTP, HTTPS, WebSocket (`ws`/`wss` URL aliases), or unix-socket upstreams
 - Embeddable form widget sharing the same protocol as the gate interstitial
 - Optional admin control plane on a separate listen address (multi-user, argon2id, embedded SPA)
 - WebSocket upgrades require an existing clearance cookie when challenge is enabled

@@ -1,12 +1,12 @@
 ---
 sidebar_position: 1
 title: Getting started
-description: Build RavenGuard and place it between a reverse proxy and an origin.
+description: Build RavenGuard and place the WAF in front of your origin.
 ---
 
 # Getting started
 
-RavenGuard is an HTTP edge reverse proxy and application guard. Primary topology:
+RavenGuard is an HTTP Web Application Firewall (WAF) and reverse proxy. Primary topology:
 
 ```text
 Client -> RavenGuard (:80/:443) -> origin(s)
@@ -18,7 +18,7 @@ It can also sit behind an external reverse proxy:
 Client -> reverse proxy (TLS) -> RavenGuard -> origin
 ```
 
-It terminates TLS (static PEM or automatic Let's Encrypt), routes by host and path, applies WAF-style controls and optional access gates, then forwards to HTTP, HTTPS, WebSocket, or unix-socket upstreams.
+It terminates TLS (static PEM or automatic Let's Encrypt), routes by host and path, runs the WAF pipeline (blocklists, rate limits, attack filters, detect scoring, optional PoW challenge), applies optional access gates, then forwards to HTTP, HTTPS, WebSocket, or unix-socket upstreams.
 
 Optional [admin control plane](./admin.md): separate listen address, multi-user auth (argon2id), live upstream/route/access editing, and an embedded SPA.
 

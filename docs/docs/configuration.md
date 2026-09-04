@@ -229,7 +229,7 @@ test_mode = false
 
 [site]
 # public_url = "https://example.com"
-description = "RavenGuard application guard"
+description = "RavenGuard Web Application Firewall"
 theme_color = "#050505"
 robots = "noindex, nofollow"
 lang = "en"

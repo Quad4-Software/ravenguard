@@ -37,7 +37,7 @@ const features = [
 const pipeline = [
   {
     title: 'Client IP',
-    body: 'Resolve from trusted X-Real-IP, X-Forwarded-For, or PROXY protocol.',
+    body: 'Resolve from the direct peer, trusted X-Real-IP, X-Forwarded-For, or PROXY protocol.',
   },
   {
     title: 'Deny and throttle',
@@ -49,7 +49,7 @@ const pipeline = [
   },
   {
     title: 'Proxy',
-    body: 'Forward to HTTP or unix upstreams. Rebuild X-Real-IP and X-Forwarded-For from the resolved client.',
+    body: 'Forward to HTTP, HTTPS, WebSocket, or unix upstreams. Rebuild X-Real-IP and X-Forwarded-For from the resolved client.',
   },
 ];
 
@@ -74,12 +74,12 @@ function HomepageHeader(): ReactNode {
             {siteConfig.title}
           </Heading>
           <p className={styles.headline}>
-            HTTP guard between reverse proxy and origin.
+            HTTP Web Application Firewall and reverse proxy.
           </p>
           <p className={styles.lede}>
-            No TLS termination. Filters requests, then proxies to HTTP or unix
-            upstream. Blocklists, rate limits, attack filters, detect scoring,
-            optional browser challenge.
+            Terminate TLS at the edge or sit behind nginx, Caddy, or Traefik.
+            Blocklists, rate limits, attack filters, detect scoring, optional
+            browser challenge, then proxy to your origin.
           </p>
           <div className={styles.actions}>
             <Link className="button button--primary button--lg" to="/docs/intro">
@@ -100,8 +100,6 @@ function HomepageHeader(): ReactNode {
         <div className={styles.topologyInner}>
           <strong>Client</strong>
           <span className={styles.sep}>{'->'}</span>
-          <span>Reverse proxy</span>
-          <span className={styles.sep}>{'->'}</span>
           <strong>RavenGuard</strong>
           <span className={styles.sep}>{'->'}</span>
           <span>Origin</span>
@@ -113,7 +111,7 @@ function HomepageHeader(): ReactNode {
 
 export default function Home(): ReactNode {
   return (
-    <Layout description="HTTP application guard between reverse proxy and origin. Blocklists, rate limits, detect scoring, optional browser challenge.">
+    <Layout description="HTTP Web Application Firewall and reverse proxy. Blocklists, rate limits, detect scoring, optional browser challenge.">
       <HomepageHeader />
       <main>
         <section className={styles.section}>
@@ -123,8 +121,9 @@ export default function Home(): ReactNode {
                 What it does
               </Heading>
               <p className={styles.sectionCopy}>
-                TLS terminates at nginx, Caddy, or Traefik. RavenGuard runs on
-                the private hop and filters what reaches the origin.
+                RavenGuard is the WAF hop in front of your app. Own TLS with
+                ACME, or place it behind an existing reverse proxy with trusted
+                client IP headers.
               </p>
             </div>
             <div className={styles.featureGrid}>

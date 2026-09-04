@@ -1,6 +1,6 @@
 ---
 title: Deployment
-description: Reverse proxy placement, Docker, and real-IP trust settings.
+description: Edge WAF placement, reverse proxy trust, and Docker.
 ---
 
 # Deployment
@@ -58,7 +58,7 @@ proxy_protocol = false
 
 `proto_header` sets the clearance cookie Secure flag when TLS ends at the proxy.
 
-Override the CIDR list with `RG_TRUSTED_PROXIES` (comma-separated). Keep the [admin control plane](./admin.md) on a private bind (default `127.0.0.1:9090`) or behind a locked-down reverse proxy path. Never publish it like the public guard port.
+Override the CIDR list with `RG_TRUSTED_PROXIES` (comma-separated). Keep the [admin control plane](./admin.md) on a private bind (default `127.0.0.1:9090`) or behind a locked-down reverse proxy path. Never publish it like the public WAF port.
 
 ## Reverse proxy snippets
 

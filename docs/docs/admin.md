@@ -1,6 +1,6 @@
 # Admin control plane
 
-RavenGuard can run a separate management listener with multi-user auth, an embedded SPA, and a JSON API. The admin surface is never mounted on the public guard pipeline.
+RavenGuard can run a separate management listener with multi-user auth, an embedded SPA, and a JSON API. The admin surface is never mounted on the public WAF pipeline.
 
 ## Enable
 

@@ -1,5 +1,5 @@
 # RavenGuard example config
-# Edge topology: Client -> RavenGuard (:80/:443 TLS) -> origin
+# Edge WAF: Client -> RavenGuard (:80/:443 TLS) -> origin
 # Optional: Client -> reverse proxy -> RavenGuard (HTTP) -> origin
 
 [listen]
@@ -188,7 +188,7 @@ test_mode = false
 
 [site]
 # public_url = "https://example.com"
-description = "RavenGuard application guard"
+description = "RavenGuard Web Application Firewall"
 # og_image = "https://example.com/_rg/static/raven.png"
 theme_color = "#050505"
 robots = "noindex, nofollow"

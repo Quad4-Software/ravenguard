@@ -214,7 +214,7 @@ func normalizeSite(site Site) Site {
 		site.StatusText = "Checking your browser before accessing this site."
 	}
 	if site.Description == "" {
-		site.Description = site.Brand + " application guard"
+		site.Description = site.Brand + " Web Application Firewall"
 	}
 	if site.ThemeColor == "" {
 		site.ThemeColor = "#050505"

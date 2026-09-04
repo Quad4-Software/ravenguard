@@ -1,5 +1,5 @@
 # Config for deploy/docker-compose.yml
-# Topology: Client -> reverse proxy -> RavenGuard -> app
+# Topology: Client -> reverse proxy -> RavenGuard (WAF) -> app
 
 [listen]
 http = ":8080"
@@ -122,7 +122,7 @@ status_text = "Checking your browser before accessing this site."
 test_mode = false
 
 [site]
-description = "RavenGuard application guard"
+description = "RavenGuard Web Application Firewall"
 theme_color = "#050505"
 robots = "noindex, nofollow"
 lang = "en"
