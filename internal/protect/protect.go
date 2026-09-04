@@ -280,8 +280,20 @@ func (g *Guard) BanNow(key string) {
 	if g == nil || !cfg.Enabled || key == "" {
 		return
 	}
+	g.BanUntil(key, time.Now().Add(cfg.BanTTL))
+}
+
+// BanUntil sets an absolute ban expiry for key.
+func (g *Guard) BanUntil(key string, until time.Time) {
+	cfg := g.live()
+	if g == nil || !cfg.Enabled || key == "" || until.IsZero() {
+		return
+	}
 	s := &g.bans[strhash.String(key)%banShards]
 	now := time.Now()
+	if until.Before(now) {
+		return
+	}
 	s.mu.Lock()
 	if old, ok := s.ents[key]; ok {
 		old.bannedUntil = time.Time{}
@@ -292,7 +304,7 @@ func (g *Guard) BanNow(key string) {
 	e := banEntryPool.Get().(*banEntry)
 	e.strikes = cfg.BanAfterStrikes
 	e.windowStart = now
-	e.bannedUntil = now.Add(cfg.BanTTL)
+	e.bannedUntil = until
 	s.ents[key] = e
 	s.mu.Unlock()
 }

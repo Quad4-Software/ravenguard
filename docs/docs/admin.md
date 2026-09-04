@@ -137,9 +137,12 @@ RavenGuard can run as separate processes:
 |------|------|
 | hub | Admin SPA, SQLite, agent WebSocket accept (no public WAF) |
 | proxy | Public WAF and outbound agent to the hub |
+| connector | Outbound tunnel dialer to an edge (no public WAF) |
 | all | Combined single-process mode (default) |
 
-Start with `ravenguard hub`, `ravenguard proxy`, or set `RG_MODE` when the process manager cannot pass a custom command. Optional `RG_CONFIG` selects the TOML path.
+Start with `ravenguard hub`, `ravenguard proxy`, `ravenguard connector`, or set `RG_MODE` when the process manager cannot pass a custom command. Optional `RG_CONFIG` selects the TOML path.
+
+**Threat share:** the Bans page lists fleet ledger entries (redacted). Creating a ban or posting to `/api/v1/threat` fans out to online proxies. Config saves also update `fleet_defaults` so privacy bind secrets stay aligned across edges.
 
 Preferred deploy keeps the hub on a private overlay (Tailscale, Netbird, or WireGuard). Bind `admin.listen` to the overlay IP only. Proxies set `agent.hub_url` to that address. Operators open the panel from a machine on the same mesh. Nothing management-facing needs a public A record.
 

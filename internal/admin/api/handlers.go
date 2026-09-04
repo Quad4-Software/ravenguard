@@ -81,6 +81,8 @@ func (s *Server) Mount(mux *http.ServeMux, base string) {
 	mux.HandleFunc(api+"/status", s.auth(s.handleStatus))
 	mux.HandleFunc(api+"/status/history", s.auth(s.handleStatusHistory))
 	mux.HandleFunc(api+"/bans", s.auth(s.handleBans))
+	mux.HandleFunc(api+"/threat", s.auth(s.handleThreat))
+	mux.HandleFunc(api+"/tunnel/tickets", s.auth(s.csrf(s.handleTunnelTicket)))
 	mux.HandleFunc(api+"/blocklists", s.auth(s.handleBlocklists))
 	mux.HandleFunc(api+"/blocklists/reload", s.auth(s.csrf(s.handleBlocklistReload)))
 	mux.HandleFunc(api+"/blocklists/entries", s.auth(s.handleBlocklistEntries))
@@ -549,6 +551,14 @@ func (s *Server) handleBans(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		s.Runtime.Protect.BanNow(body.Key)
+		_, _ = s.ingestThreat(r.Context(), "admin", []agentprotocol.ThreatEntry{{
+			KeyType:       agentprotocol.ThreatKeyBind,
+			Key:           body.Key,
+			TTLSeconds:    600,
+			Reason:        "admin ban",
+			CreatedAtUnix: time.Now().Unix(),
+			ExpiresAtUnix: time.Now().Add(10 * time.Minute).Unix(),
+		}})
 		s.audit(actor, r, "bans.create", body.Key, "")
 		writeJSON(w, http.StatusOK, map[string]string{"ok": "1"})
 	case http.MethodDelete:
@@ -834,6 +844,7 @@ func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
 		}
 		payload, _ := ops.EncodeSafeConfig(safe)
 		_ = s.Store.SetConfigOverrides(payload, actor.User.ID)
+		_ = s.Store.SetFleetDefaults(payload)
 		s.audit(actor, r, "config.update", "", "")
 		writeJSON(w, http.StatusOK, s.Runtime.ConfigView())
 	default:

@@ -70,6 +70,19 @@ type Handler struct {
 	schemas         *schemagate.Manager
 	semantic        *semantic.Engine
 	ml              *ml.Scorer
+	threatOverlay   threatOverlay
+	threatReport    threatReporter
+}
+
+type threatOverlay interface {
+	UABlocked(ua string) bool
+	IPBlocked(ip net.IP) bool
+	JA4Blocked(ja4 string) bool
+}
+
+type threatReporter interface {
+	ReportBind(key, reason string)
+	ReportUA(ua, reason string)
 }
 
 const (
@@ -286,6 +299,27 @@ func (h *Handler) SetSchemaGate(m *schemagate.Manager) {
 	h.mu.Lock()
 	h.schemas = m
 	h.mu.Unlock()
+}
+
+func (h *Handler) SetThreatOverlay(o threatOverlay) {
+	h.mu.Lock()
+	h.threatOverlay = o
+	h.mu.Unlock()
+}
+
+func (h *Handler) SetThreatReporter(r threatReporter) {
+	h.mu.Lock()
+	h.threatReport = r
+	h.mu.Unlock()
+}
+
+func (h *Handler) reportThreatBan(bindID, reason string) {
+	h.mu.RLock()
+	rep := h.threatReport
+	h.mu.RUnlock()
+	if rep != nil && bindID != "" {
+		rep.ReportBind(bindID, reason)
+	}
 }
 
 func (h *Handler) recordEvent(r *http.Request, ray, bindID, ipStr, host, ua, action, reason string, score int, details map[string]string) {
@@ -537,7 +571,31 @@ func (h *Handler) guard(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if h.lists.UABlocked(ua) {
+			h.mu.RLock()
+			rep := h.threatReport
+			h.mu.RUnlock()
+			if rep != nil {
+				rep.ReportUA(ua, "ua blocklist")
+			}
 			h.emitBlock(w, r, ray, bindID, ipStr, host, ua, "Client blocked", 0, nil)
+			return
+		}
+	}
+
+	h.mu.RLock()
+	tov := h.threatOverlay
+	h.mu.RUnlock()
+	if tov != nil {
+		if tov.IPBlocked(clientIP) {
+			h.emitBlock(w, r, ray, bindID, ipStr, host, ua, "Shared IP block", 0, nil)
+			return
+		}
+		if tov.UABlocked(ua) {
+			h.emitBlock(w, r, ray, bindID, ipStr, host, ua, "Shared client block", 0, nil)
+			return
+		}
+		if ja4 := r.Header.Get("X-JA4"); ja4 != "" && tov.JA4Blocked(ja4) {
+			h.emitBlock(w, r, ray, bindID, ipStr, host, ua, "Shared fingerprint block", 0, nil)
 			return
 		}
 	}
@@ -570,6 +628,7 @@ func (h *Handler) guard(w http.ResponseWriter, r *http.Request) {
 			if cr.ShouldBlock {
 				if h.prot != nil && h.prot.Enabled() {
 					h.prot.BanNow(bindID)
+					h.reportThreatBan(bindID, "auto ban")
 				}
 				h.recordEvent(r, ray, bindID, ipStr, host, ua, requestlog.ActionCoraza, "Coraza rule matched", 0, details)
 				h.pages.RenderBlock(w, ray, "Request blocked by WAF rules")
@@ -588,6 +647,7 @@ func (h *Handler) guard(w http.ResponseWriter, r *http.Request) {
 			if h.prot == nil || !h.prot.Enabled() || h.prot.AttackBlock() {
 				if h.prot != nil && h.prot.Enabled() {
 					h.prot.BanNow(bindID)
+					h.reportThreatBan(bindID, "auto ban")
 				}
 				h.emitBlock(w, r, ray, bindID, ipStr, host, ua, "Attack pattern blocked", 0, map[string]string{"attack": attack})
 				return
@@ -659,6 +719,7 @@ func (h *Handler) guard(w http.ResponseWriter, r *http.Request) {
 			if h.beh.StrikesExceeded(bindID) {
 				if h.prot != nil && h.prot.Enabled() {
 					h.prot.BanNow(bindID)
+					h.reportThreatBan(bindID, "auto ban")
 				}
 				h.emitBlock(w, r, ray, bindID, ipStr, host, ua, "Too many failed challenges", 0, nil)
 				return
@@ -800,6 +861,7 @@ func (h *Handler) runSemanticML(w http.ResponseWriter, r *http.Request, ray, bin
 			if semRes.ShouldBlock {
 				if h.prot != nil && h.prot.Enabled() {
 					h.prot.BanNow(bindID)
+					h.reportThreatBan(bindID, "auto ban")
 				}
 				h.recordEvent(r, ray, bindID, ipStr, host, ua, requestlog.ActionSemantic, "Semantic payload match", semRes.Score, details)
 				h.pages.RenderBlock(w, ray, "Request blocked by semantic analysis")
@@ -868,6 +930,7 @@ func (h *Handler) runSemanticML(w http.ResponseWriter, r *http.Request, ray, bin
 		h.recordEvent(r, ray, bindID, ipStr, host, ua, requestlog.ActionML, "ML block", mr.Points, details)
 		if h.prot != nil && h.prot.Enabled() {
 			h.prot.BanNow(bindID)
+			h.reportThreatBan(bindID, "auto ban")
 		}
 		h.pages.RenderBlock(w, ray, "Request blocked by ML score")
 		return 0, false, true

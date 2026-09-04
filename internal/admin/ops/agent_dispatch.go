@@ -16,6 +16,7 @@ type RuntimeDispatcher struct {
 	Runtime      *Runtime
 	ApplyRouting func(ctx context.Context, raw json.RawMessage) error
 	ApplyDesired func(ctx context.Context, state agentprotocol.DesiredState) error
+	ApplyThreat  func(ctx context.Context, entries []agentprotocol.ThreatEntry) error
 }
 
 func (d *RuntimeDispatcher) Handle(ctx context.Context, op string, payload json.RawMessage) (any, error) {
@@ -249,6 +250,18 @@ func (d *RuntimeDispatcher) Handle(ctx context.Context, op string, payload json.
 			return nil, err
 		}
 		return map[string]string{"status": "ok"}, nil
+	case agentprotocol.OpThreatApply:
+		var p agentprotocol.ThreatApplyPayload
+		if err := json.Unmarshal(payload, &p); err != nil {
+			return nil, err
+		}
+		if d.ApplyThreat == nil {
+			return nil, fmt.Errorf("threat apply unavailable")
+		}
+		if err := d.ApplyThreat(ctx, p.Entries); err != nil {
+			return nil, err
+		}
+		return map[string]any{"applied": len(p.Entries), "revision": p.Revision}, nil
 	default:
 		return nil, fmt.Errorf("unknown op %s", op)
 	}

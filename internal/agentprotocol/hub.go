@@ -186,6 +186,8 @@ type Hub struct {
 	Lookup   TokenLookup
 	Registry *Registry
 	OnReady  func(ctx context.Context, s *Session)
+	// OnAgentOp handles agent-initiated ops (threat.report, threat.pull).
+	OnAgentOp func(ctx context.Context, proxyID, op string, payload json.RawMessage) (any, error)
 
 	limitMu sync.Mutex
 	limit   map[string][]time.Time
@@ -352,10 +354,41 @@ func (h *Hub) HandleConnect(w http.ResponseWriter, r *http.Request) {
 			_ = wsjson.Write(ctx, conn, Envelope{V: ProtocolVersion, ID: env.ID, Op: OpHeartbeat, OK: ok})
 			continue
 		}
-		// Agents must not initiate control ops toward the hub.
+		if env.Op == OpThreatReport || env.Op == OpThreatPull {
+			go h.handleAgentOp(ctx, sess, env)
+			continue
+		}
+		// Agents must not initiate other control ops toward the hub.
 		f := false
 		_ = wsjson.Write(ctx, conn, Envelope{V: ProtocolVersion, ID: env.ID, Op: env.Op, OK: &f, Error: "unsupported"})
 	}
+}
+
+func (h *Hub) handleAgentOp(ctx context.Context, sess *Session, env Envelope) {
+	resp := Envelope{V: ProtocolVersion, ID: env.ID, Op: env.Op}
+	if h.OnAgentOp == nil {
+		resp.OK = okFalse()
+		resp.Error = "threat ops unavailable"
+		_ = wsjson.Write(ctx, sess.conn, resp)
+		return
+	}
+	payload, err := h.OnAgentOp(ctx, sess.ProxyID, env.Op, env.Payload)
+	if err != nil {
+		resp.OK = okFalse()
+		resp.Error = err.Error()
+	} else {
+		resp.OK = okTrue()
+		if payload != nil {
+			raw, mErr := json.Marshal(payload)
+			if mErr != nil {
+				resp.OK = okFalse()
+				resp.Error = mErr.Error()
+			} else {
+				resp.Payload = raw
+			}
+		}
+	}
+	_ = wsjson.Write(ctx, sess.conn, resp)
 }
 
 func firstNonEmpty(vals ...string) string {

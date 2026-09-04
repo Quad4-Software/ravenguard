@@ -25,6 +25,8 @@ type Config struct {
 	SetHeaders            map[string]string
 	StripPrefix           string
 	ErrorHandler          func(http.ResponseWriter, *http.Request, error)
+	// DialContext overrides the default TCP/unix dialer when set.
+	DialContext func(ctx context.Context, network, addr string) (net.Conn, error)
 }
 
 type Proxy struct {
@@ -42,6 +44,9 @@ func (p *Proxy) CloseIdleConnections() {
 
 func New(cfg Config) *Proxy {
 	dial := DialFunc(cfg.Target, cfg.ConnectTimeout)
+	if cfg.DialContext != nil {
+		dial = cfg.DialContext
+	}
 	maxIdle := cfg.MaxIdleConns
 	if maxIdle <= 0 {
 		maxIdle = 256
@@ -170,6 +175,11 @@ func NormalizeTarget(u *url.URL) *url.URL {
 		out.Scheme = "http"
 	case "wss":
 		out.Scheme = "https"
+	case "tunnel":
+		out.Scheme = "http"
+		out.Host = "tunnel.local"
+		out.Path = ""
+		out.Opaque = ""
 	}
 	return &out
 }
@@ -195,5 +205,32 @@ func ParseUpstreamURL(raw string) (*url.URL, error) {
 		path := after
 		return &url.URL{Scheme: "unix", Path: path}, nil
 	}
+	if after, ok := strings.CutPrefix(raw, "tunnel://"); ok {
+		after = strings.TrimSpace(after)
+		connectorID, upstreamID, cutOK := strings.Cut(after, "/")
+		if !cutOK || connectorID == "" || upstreamID == "" {
+			return nil, &url.Error{Op: "parse", URL: raw, Err: errBadTunnelURL}
+		}
+		return &url.URL{Scheme: "tunnel", Host: connectorID, Path: "/" + upstreamID}, nil
+	}
 	return url.Parse(raw)
+}
+
+var errBadTunnelURL = errString("tunnel:// requires connector_id/upstream_id")
+
+type errString string
+
+func (e errString) Error() string { return string(e) }
+
+// TunnelParts extracts connector and upstream ids from a tunnel:// URL.
+func TunnelParts(u *url.URL) (connectorID, upstreamID string, ok bool) {
+	if u == nil || !strings.EqualFold(u.Scheme, "tunnel") {
+		return "", "", false
+	}
+	connectorID = u.Host
+	upstreamID = strings.TrimPrefix(u.Path, "/")
+	if connectorID == "" || upstreamID == "" {
+		return "", "", false
+	}
+	return connectorID, upstreamID, true
 }

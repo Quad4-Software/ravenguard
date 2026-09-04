@@ -178,6 +178,24 @@ var migrations = []string{
 	)`,
 	`CREATE INDEX IF NOT EXISTS idx_ml_samples_created ON ml_samples(created_at)`,
 	`CREATE INDEX IF NOT EXISTS idx_ml_samples_label ON ml_samples(label)`,
+	`CREATE TABLE IF NOT EXISTS threat_meta (
+		id INTEGER PRIMARY KEY CHECK (id = 1),
+		revision INTEGER NOT NULL DEFAULT 0
+	)`,
+	`CREATE TABLE IF NOT EXISTS threat_entries (
+		id TEXT PRIMARY KEY,
+		key_type TEXT NOT NULL,
+		key_hash TEXT NOT NULL,
+		key_redacted TEXT NOT NULL DEFAULT '',
+		key_material TEXT NOT NULL,
+		ttl_deadline TEXT NOT NULL,
+		reason TEXT NOT NULL DEFAULT '',
+		source_proxy_id TEXT NOT NULL DEFAULT '',
+		revision INTEGER NOT NULL,
+		created_at TEXT NOT NULL
+	)`,
+	`CREATE INDEX IF NOT EXISTS idx_threat_entries_rev ON threat_entries(revision)`,
+	`CREATE INDEX IF NOT EXISTS idx_threat_entries_ttl ON threat_entries(ttl_deadline)`,
 }
 
 func migrate(db *sql.DB) error {

@@ -753,6 +753,37 @@ export const api = {
     },
   },
 
+  threat: {
+    list(limit = 50) {
+      return request<{
+        revision: number
+        entries: Array<{
+          id: string
+          key_type: string
+          key_redacted: string
+          ttl_deadline: string
+          reason: string
+          source_proxy_id: string
+          revision: number
+          created_at: string
+        }>
+      }>('GET', `/threat?limit=${limit}`)
+    },
+    create(body: { key_type: string; key: string; reason?: string; ttl?: string }) {
+      return request<{ revision: number; stored: number }>('POST', '/threat', body)
+    },
+  },
+
+  tunnel: {
+    issueTicket(body: { connector_id: string; edge_id?: string; ttl?: string }) {
+      return request<{ ticket: string; connector_id: string; edge_id: string; ttl: string }>(
+        'POST',
+        '/tunnel/tickets',
+        body,
+      )
+    },
+  },
+
   blocklists: {
     stats() {
       return request<BlocklistStats>('GET', '/blocklists')

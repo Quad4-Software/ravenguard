@@ -14,9 +14,36 @@ Run the management plane on a private mesh host and edge proxies on public serve
 ```text
 ravenguard hub   # admin.bind = overlay IP only
 ravenguard proxy # public :80/:443 + agent dials hub
+ravenguard connector # optional: outbound tunnel to edge for private origins
 ```
 
 Tailscale / Netbird / WireGuard encrypt the management path. Set each proxy's public IPv4/IPv6 in the Proxies UI so Move services can show DNS cutover instructions.
+
+Fleet threat sharing: bans and scraper signals propagate through the hub ledger automatically when agents are online. See Architecture for the threat model.
+
+### Tunnel connector (private origin)
+
+On the edge (enable accept + shared ticket key):
+
+```toml
+[tunnel]
+enabled = true
+ticket_key = "long-random-secret"
+edge_id = "edge-1"
+require_tls = true
+```
+
+Issue a ticket (same key) and run the connector near the origin:
+
+```toml
+[tunnel]
+edge_url = "wss://edge.example.com/api/v1/tunnel/connect"
+ticket = "..." # hub or operator issued HMAC ticket
+[tunnel.origins]
+web = "http://127.0.0.1:8080"
+```
+
+Point a route upstream at `tunnel://<connector_id>/web`.
 
 Combined single-host installs still use `ravenguard` / `ravenguard all` with `[admin] enabled = true`.
 

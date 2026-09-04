@@ -47,6 +47,9 @@ const (
 	OpCertsExport      = "certs.export"
 	OpCertsRenew       = "certs.renew"
 	OpCertsManage      = "certs.manage"
+	OpThreatReport     = "threat.report"
+	OpThreatPull       = "threat.pull"
+	OpThreatApply      = "threat.apply"
 )
 
 // Envelope is a versioned JSON RPC frame over the agent WebSocket.
@@ -148,5 +151,47 @@ type CertManagePayload struct {
 }
 
 type HeartbeatPayload struct {
-	UptimeSeconds int64 `json:"uptime_seconds"`
+	UptimeSeconds  int64 `json:"uptime_seconds"`
+	ThreatRevision int64 `json:"threat_revision,omitempty"`
+}
+
+// Threat key types for fleet sharing.
+const (
+	ThreatKeyBind   = "bind"
+	ThreatKeyUA     = "ua"
+	ThreatKeyIP     = "ip"
+	ThreatKeyIPHash = "ip_hash"
+	ThreatKeyJA4    = "ja4"
+)
+
+// ThreatEntry is one shared threat signal (privacy-safe by default).
+type ThreatEntry struct {
+	ID            string `json:"id"`
+	KeyType       string `json:"key_type"`
+	Key           string `json:"key"`
+	TTLSeconds    int64  `json:"ttl_seconds"`
+	Reason        string `json:"reason,omitempty"`
+	SourceProxyID string `json:"source_proxy_id,omitempty"`
+	CreatedAtUnix int64  `json:"created_at_unix"`
+	ExpiresAtUnix int64  `json:"expires_at_unix"`
+	Revision      int64  `json:"revision,omitempty"`
+}
+
+type ThreatReportPayload struct {
+	Entries []ThreatEntry `json:"entries"`
+}
+
+type ThreatPullPayload struct {
+	SinceRevision int64 `json:"since_revision"`
+	Limit         int   `json:"limit,omitempty"`
+}
+
+type ThreatPullResult struct {
+	Revision int64         `json:"revision"`
+	Entries  []ThreatEntry `json:"entries"`
+}
+
+type ThreatApplyPayload struct {
+	Revision int64         `json:"revision"`
+	Entries  []ThreatEntry `json:"entries"`
 }

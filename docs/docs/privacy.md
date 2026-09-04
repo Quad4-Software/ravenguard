@@ -23,6 +23,7 @@ With hashing on:
 - Rate limits, 404 tracking, behavior windows, and clearance binding use a hashed key
 - Logs use a hash instead of the raw address when `log_ip = "hash"`
 - In-memory soft state is bounded by `retention`
+- Fleet threat sharing uses the same bind hash as the ban key when `key_type=bind` (keep `ip_hash_secret` / challenge secret aligned via fleet defaults). Admin threat listings show redacted keys only. Raw IP share (`key_type=ip`) is opt-in for operators who accept that risk.
 
 ## Secrets
 

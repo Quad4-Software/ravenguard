@@ -40,8 +40,20 @@ type Config struct {
 	Admin      AdminConfig      `toml:"admin"`
 	Hub        HubConfig        `toml:"hub"`
 	Agent      AgentConfig      `toml:"agent"`
+	Tunnel     TunnelConfig     `toml:"tunnel"`
 
 	runMode string `toml:"-"`
+}
+
+// TunnelConfig configures edge tunnel accept or connector dial.
+type TunnelConfig struct {
+	Enabled    bool              `toml:"enabled"`
+	TicketKey  string            `toml:"ticket_key"`
+	EdgeID     string            `toml:"edge_id"`
+	EdgeURL    string            `toml:"edge_url"`
+	Ticket     string            `toml:"ticket"`
+	Origins    map[string]string `toml:"origins"`
+	RequireTLS bool              `toml:"require_tls"`
 }
 
 // HubConfig is reserved for hub-specific options (keypair lives under admin.data_dir).
@@ -1094,8 +1106,13 @@ func validateUpstreamURL(raw string) error {
 		return nil
 	case "unix":
 		return nil
+	case "tunnel":
+		if u.Host == "" || strings.Trim(u.Path, "/") == "" {
+			return fmt.Errorf("upstream.url tunnel:// requires connector_id/upstream_id")
+		}
+		return nil
 	default:
-		return fmt.Errorf("upstream.url scheme must be http, https, ws, wss, or unix")
+		return fmt.Errorf("upstream.url scheme must be http, https, ws, wss, unix, or tunnel")
 	}
 }
 
@@ -1107,7 +1124,7 @@ func (c *Config) SetRunMode(mode string) {
 }
 
 // ResolveRunMode picks process mode for Coolify-style deploys that cannot set a custom command.
-// Precedence: first CLI token (hub|proxy|all) then RG_MODE then all.
+// Precedence: first CLI token (hub|proxy|connector|all) then RG_MODE then all.
 func ResolveRunMode(args []string) (mode string, rest []string, err error) {
 	mode = "all"
 	if v := strings.ToLower(strings.TrimSpace(os.Getenv("RG_MODE"))); v != "" {
@@ -1116,21 +1133,31 @@ func ResolveRunMode(args []string) (mode string, rest []string, err error) {
 	rest = args
 	if len(args) > 0 {
 		switch args[0] {
-		case "hub", "proxy", "all":
+		case "hub", "proxy", "connector", "all":
 			mode = args[0]
 			rest = args[1:]
 		}
 	}
 	switch mode {
-	case "hub", "proxy", "all":
+	case "hub", "proxy", "connector", "all":
 		return mode, rest, nil
 	default:
-		return "", rest, fmt.Errorf("mode must be all, hub, or proxy (got %q)", mode)
+		return "", rest, fmt.Errorf("mode must be all, hub, proxy, or connector (got %q)", mode)
 	}
 }
 
 func (c Config) Validate() error {
 	hubOnly := c.runMode == "hub"
+	connectorOnly := c.runMode == "connector"
+	if connectorOnly {
+		if strings.TrimSpace(c.Tunnel.EdgeURL) == "" || strings.TrimSpace(c.Tunnel.Ticket) == "" {
+			return fmt.Errorf("tunnel.edge_url and tunnel.ticket are required in connector mode")
+		}
+		if len(c.Tunnel.Origins) == 0 {
+			return fmt.Errorf("tunnel.origins is required in connector mode")
+		}
+		return nil
+	}
 	if !hubOnly {
 		if c.Upstream.URL == "" {
 			return fmt.Errorf("upstream.url is required")

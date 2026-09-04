@@ -5,6 +5,7 @@ package router
 
 import (
 	"context"
+	"net"
 	"net/http"
 	"strings"
 	"sync"
@@ -70,6 +71,7 @@ type Table struct {
 	fallback       http.Handler
 	fallbackHealth *health.Checker
 	errHandler     func(http.ResponseWriter, *http.Request, error)
+	tunnelDial     func(ctx context.Context, connectorID, upstreamID string) (net.Conn, error)
 	ctx            context.Context
 	cancel         context.CancelFunc
 }
@@ -91,6 +93,13 @@ func New(parent context.Context) *Table {
 func (t *Table) SetErrorHandler(fn func(http.ResponseWriter, *http.Request, error)) {
 	t.mu.Lock()
 	t.errHandler = fn
+	t.mu.Unlock()
+}
+
+// SetTunnelDial registers the dialer used for tunnel:// upstreams.
+func (t *Table) SetTunnelDial(fn func(ctx context.Context, connectorID, upstreamID string) (net.Conn, error)) {
+	t.mu.Lock()
+	t.tunnelDial = fn
 	t.mu.Unlock()
 }
 
@@ -213,6 +222,7 @@ func (t *Table) buildProxy(up Upstream, strip bool, prefix string) (http.Handler
 	}
 	t.mu.RLock()
 	errHandler := t.errHandler
+	tunnelDial := t.tunnelDial
 	t.mu.RUnlock()
 
 	cfg := proxy.Config{
@@ -227,13 +237,22 @@ func (t *Table) buildProxy(up Upstream, strip bool, prefix string) (http.Handler
 		SetHeaders:            proxy.ParseSetHeaders(up.SetHeaders),
 		ErrorHandler:          errHandler,
 	}
+	if connectorID, upstreamID, ok := proxy.TunnelParts(target); ok {
+		if tunnelDial == nil {
+			return nil, nil, errTunnelDialUnavailable
+		}
+		cid, uid := connectorID, upstreamID
+		cfg.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
+			return tunnelDial(ctx, cid, uid)
+		}
+	}
 	if strip && prefix != "" && prefix != "/" {
 		cfg.StripPrefix = strings.TrimSuffix(prefix, "/")
 	}
 	rp := proxy.New(cfg)
 
 	var hc *health.Checker
-	if up.HealthEnabled {
+	if up.HealthEnabled && !strings.EqualFold(target.Scheme, "tunnel") {
 		hc = health.New(health.Config{
 			Enabled:  true,
 			URL:      target,
@@ -246,6 +265,12 @@ func (t *Table) buildProxy(up Upstream, strip bool, prefix string) (http.Handler
 	}
 	return rp, hc, nil
 }
+
+var errTunnelDialUnavailable = errString("tunnel dialer not configured")
+
+type errString string
+
+func (e errString) Error() string { return string(e) }
 
 // Lookup finds the best matching route for the request.
 func (t *Table) Lookup(r *http.Request) (Match, bool) {

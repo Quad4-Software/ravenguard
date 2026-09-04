@@ -192,9 +192,17 @@ func New(opts Options) (*Server, error) {
 				}
 				_, _ = sess.Call(ctx, agentprotocol.OpDesiredApply, state)
 			},
+			OnAgentOp: apiSrv.HandleAgentThreatOp,
 		}
 		p := strings.TrimSuffix(opts.Config.BasePath, "/")
 		mux.HandleFunc(p+agentprotocol.ConnectPath, hub.HandleConnect)
+		go func() {
+			t := time.NewTicker(5 * time.Minute)
+			defer t.Stop()
+			for range t.C {
+				_, _ = st.SweepThreatEntries()
+			}
+		}()
 	}
 	mux.Handle("/", ui.Handler(opts.Config.BasePath))
 

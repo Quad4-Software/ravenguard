@@ -8,6 +8,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -46,8 +47,10 @@ import (
 	"github.com/Quad4-Software/ravenguard/internal/schemagate"
 	"github.com/Quad4-Software/ravenguard/internal/semantic"
 	rgsentry "github.com/Quad4-Software/ravenguard/internal/sentry"
+	"github.com/Quad4-Software/ravenguard/internal/threatshare"
 	"github.com/Quad4-Software/ravenguard/internal/tlsacme"
 	"github.com/Quad4-Software/ravenguard/internal/tlscerts"
+	"github.com/Quad4-Software/ravenguard/internal/tunnel"
 	"github.com/Quad4-Software/ravenguard/internal/ui"
 	"github.com/Quad4-Software/ravenguard/internal/version"
 )
@@ -87,6 +90,10 @@ func main() {
 
 	if mode == "hub" {
 		runHub(cfg)
+		return
+	}
+	if mode == "connector" {
+		runConnector(cfg)
 		return
 	}
 
@@ -282,6 +289,12 @@ func runEdge(cfg config.Config, proxyOnly bool, configPath string, sentryRep *rg
 	routeTable.SetFallback(up, hc)
 	defer routeTable.Close()
 
+	tunnelReg := tunnel.NewRegistry()
+	routeTable.SetTunnelDial(func(c context.Context, connectorID, upstreamID string) (net.Conn, error) {
+		_ = c
+		return tunnelReg.Dial(connectorID, upstreamID)
+	})
+
 	accessSecret := []byte(cfg.Challenge.Secret)
 	if len(accessSecret) == 0 {
 		accessSecret = []byte(hashSecret)
@@ -298,6 +311,21 @@ func runEdge(cfg config.Config, proxyOnly bool, configPath string, sentryRep *rg
 	pipe.SetAccess(accessMgr)
 	pipe.SetAllowlists(allows)
 	pipe.SetSchemaGate(schemaMgr)
+	threatOv := threatshare.NewOverlay(0)
+	pipe.SetThreatOverlay(threatOv)
+	threatApply := &threatshare.Applier{Protect: prot, Overlay: threatOv}
+	go func() {
+		t := time.NewTicker(2 * time.Minute)
+		defer t.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+				threatOv.Sweep()
+			}
+		}
+	}()
 	reqLog := requestlog.New(2000)
 	pipe.SetRequestLog(reqLog)
 
@@ -416,6 +444,23 @@ func runEdge(cfg config.Config, proxyOnly bool, configPath string, sentryRep *rg
 	}
 
 	handler := sentryRep.Wrap(pipe)
+	if cfg.Tunnel.Enabled || cfg.Tunnel.TicketKey != "" {
+		key := []byte(cfg.Tunnel.TicketKey)
+		if len(key) == 0 {
+			key = []byte(cfg.Challenge.Secret)
+		}
+		accept := tunnel.EdgeAcceptConfig{
+			Registry:   tunnelReg,
+			TicketKey:  key,
+			EdgeID:     cfg.Tunnel.EdgeID,
+			RequireTLS: cfg.Tunnel.RequireTLS,
+		}
+		root := http.NewServeMux()
+		root.HandleFunc(tunnel.ConnectPath, accept.HandleConnect)
+		root.Handle("/", handler)
+		handler = root
+		slog.Info("tunnel accept enabled", "path", tunnel.ConnectPath)
+	}
 
 	sbCfg, err := sandbox.FromFileConfig(
 		cfg.Sandbox.Mode,
@@ -851,9 +896,19 @@ func runEdge(cfg config.Config, proxyOnly bool, configPath string, sentryRep *rg
 					return applyRoutingSnapshot(routeTable, accessMgr, schemaMgr, raw)
 				},
 				ApplyDesired: applyDesired,
+				ApplyThreat: func(c context.Context, entries []agentprotocol.ThreatEntry) error {
+					_ = c
+					threatApply.Apply(entries)
+					return nil
+				},
 			},
 			OnDesired: applyDesired,
 		}
+		rep := threatshare.NewReporter(func(c context.Context, entries []agentprotocol.ThreatEntry) error {
+			return agent.ReportThreat(c, entries)
+		}, cfg.Protect.BanTTL.Duration)
+		pipe.SetThreatReporter(rep)
+		defer rep.Close()
 		go func() {
 			if aerr := agent.Run(ctx); aerr != nil && ctx.Err() == nil {
 				slog.Error("agent", "err", aerr)

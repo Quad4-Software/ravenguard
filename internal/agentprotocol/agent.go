@@ -43,8 +43,9 @@ type Agent struct {
 	Dispatcher Dispatcher
 	OnDesired  func(ctx context.Context, state DesiredState) error
 
-	mu   sync.Mutex
-	conn *websocket.Conn
+	mu      sync.Mutex
+	conn    *websocket.Conn
+	pending map[string]chan Envelope
 }
 
 func (a *Agent) Run(ctx context.Context) error {
@@ -182,11 +183,15 @@ func (a *Agent) connectOnce(ctx context.Context) error {
 				return
 			}
 			if env.OK != nil {
+				a.deliver(env)
 				continue
 			}
 			go a.handleRequest(ctx, conn, env)
 		}
 	}()
+
+	// Catch up threat ledger after reconnect.
+	go a.pullThreats(ctx)
 
 	for {
 		select {
@@ -199,6 +204,96 @@ func (a *Agent) connectOnce(ctx context.Context) error {
 			hb, _ := json.Marshal(HeartbeatPayload{})
 			_ = wsjson.Write(ctx, conn, Envelope{V: ProtocolVersion, ID: id, Op: OpHeartbeat, Payload: hb})
 		}
+	}
+}
+
+func (a *Agent) deliver(env Envelope) {
+	a.mu.Lock()
+	ch := a.pending[env.ID]
+	a.mu.Unlock()
+	if ch == nil {
+		return
+	}
+	select {
+	case ch <- env:
+	default:
+	}
+}
+
+// Call sends an agent-initiated RPC to the hub and waits for the response.
+func (a *Agent) Call(ctx context.Context, op string, payload any) (Envelope, error) {
+	id, err := NewID()
+	if err != nil {
+		return Envelope{}, err
+	}
+	var raw json.RawMessage
+	if payload != nil {
+		raw, err = json.Marshal(payload)
+		if err != nil {
+			return Envelope{}, err
+		}
+	}
+	ch := make(chan Envelope, 1)
+	a.mu.Lock()
+	conn := a.conn
+	if a.pending == nil {
+		a.pending = make(map[string]chan Envelope)
+	}
+	a.pending[id] = ch
+	a.mu.Unlock()
+	defer func() {
+		a.mu.Lock()
+		delete(a.pending, id)
+		a.mu.Unlock()
+	}()
+	if conn == nil {
+		return Envelope{}, fmt.Errorf("agent not connected")
+	}
+	writeCtx, cancel := context.WithTimeout(ctx, time.Duration(DefaultRPCTimeout)*time.Second)
+	defer cancel()
+	if err := wsjson.Write(writeCtx, conn, Envelope{V: ProtocolVersion, ID: id, Op: op, Payload: raw}); err != nil {
+		return Envelope{}, err
+	}
+	select {
+	case <-ctx.Done():
+		return Envelope{}, ctx.Err()
+	case resp := <-ch:
+		if resp.OK != nil && !*resp.OK {
+			if resp.Error == "" {
+				return resp, fmt.Errorf("rpc failed")
+			}
+			return resp, fmt.Errorf("%s", resp.Error)
+		}
+		return resp, nil
+	case <-time.After(time.Duration(DefaultRPCTimeout) * time.Second):
+		return Envelope{}, fmt.Errorf("rpc timeout")
+	}
+}
+
+// ReportThreat sends threat.report to the hub.
+func (a *Agent) ReportThreat(ctx context.Context, entries []ThreatEntry) error {
+	if a == nil || len(entries) == 0 {
+		return nil
+	}
+	_, err := a.Call(ctx, OpThreatReport, ThreatReportPayload{Entries: entries})
+	return err
+}
+
+func (a *Agent) pullThreats(ctx context.Context) {
+	resp, err := a.Call(ctx, OpThreatPull, ThreatPullPayload{SinceRevision: 0, Limit: 500})
+	if err != nil {
+		return
+	}
+	var result ThreatPullResult
+	if err := json.Unmarshal(resp.Payload, &result); err != nil {
+		return
+	}
+	if len(result.Entries) == 0 {
+		return
+	}
+	applyRaw, _ := json.Marshal(ThreatApplyPayload{Revision: result.Revision, Entries: result.Entries})
+	if a.Dispatcher != nil {
+		_, _ = a.Dispatcher.Handle(ctx, OpThreatApply, applyRaw)
 	}
 }
 

@@ -26,6 +26,20 @@ Operator / proxies (overlay) -> Hub (admin + agent WebSocket)
 
 Proxies dial the hub outbound (Beszel-style). The hub never needs a public management port when it binds only on Tailscale/Netbird/WireGuard.
 
+### Fleet threat sharing
+
+Online proxies report bans and high-confidence blocks to the hub (`threat.report`). The hub stores a TTL ledger and fans out `threat.apply` to other edges so scrapers and temp bans propagate fleet-wide. Shared keys are privacy bind hashes or UA needles by default (see Privacy). Admin listings show redacted keys only.
+
+### Tunnel overlay (connector)
+
+Private origins can sit behind `ravenguard connector`, which dials a public edge outbound:
+
+```text
+Client -> Edge (WAF) -> tunnel stream -> Connector -> origin
+```
+
+Upstream URLs use `tunnel://<connector_id>/<upstream_id>`. The connector allowlists `upstream_id` to local origin URLs (SSRF guard). Tunnel auth uses short-lived HMAC tickets (`[tunnel] ticket_key` on the edge, `ticket` on the connector). The hub agent WebSocket stays control-plane only.
+
 Controls run at the HTTP application layer. Volumetric DDoS mitigation belongs at the network edge or CDN.
 
 ## Request pipeline

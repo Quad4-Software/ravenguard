@@ -31,6 +31,7 @@ require (
 	github.com/gorilla/mux v1.8.0 // indirect
 	github.com/gotnospirit/makeplural v0.0.0-20180622080156-a5f48d94d976 // indirect
 	github.com/gotnospirit/messageformat v0.0.0-20221001023931-dfe49f1eb092 // indirect
+	github.com/hashicorp/yamux v0.1.2 // indirect
 	github.com/kaptinlin/go-i18n v0.1.4 // indirect
 	github.com/kaptinlin/jsonschema v0.4.6 // indirect
 	github.com/klauspost/cpuid/v2 v2.3.0 // indirect
