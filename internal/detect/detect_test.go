@@ -24,6 +24,8 @@ func testCfg() detect.Config {
 		MissingSecFetchScore:   20,
 		SecCHUAMismatchScore:   25,
 		StarAcceptBrowserScore: 15,
+		EmptyFormContextScore:  30,
+		ForumWritePathScore:    25,
 		ProxyBotLowScore:       40,
 		ProxyBotHeader:         "CF-Bot-Score",
 		ProxyBotScoreHeader:    "X-Bot-Score",
@@ -70,6 +72,14 @@ func TestAIUA(t *testing.T) {
 		"PanguBot",
 		"omgilibot",
 		"webzio-extended",
+		"ChatGPT-Atlas/1.0",
+		"Claude-Code/2.1.0",
+		"DeepSeekBot/1.0",
+		"QwenBot",
+		"iaskspider/2.0",
+		"PhindBot",
+		"NotebookLM",
+		"Gemini-Deep-Research",
 	}
 	for _, ua := range ais {
 		if !detect.IsAIUA(ua) {
@@ -103,6 +113,11 @@ func TestScannerUALibraries(t *testing.T) {
 		"browser-use",
 		"scrapy/2.11",
 		"PostmanRuntime/7.36",
+		"xrumer",
+		"Scrapebox",
+		"botasaurus",
+		"langchain",
+		"skyvern",
 	}
 	for _, ua := range scanners {
 		if !detect.IsScannerUA(ua) {
@@ -148,6 +163,38 @@ func TestScoreProxyBot(t *testing.T) {
 	res := detect.ScoreDebug(r, testCfg())
 	if !strings.Contains(strings.Join(res.Reasons, ","), "proxy_bot_score") {
 		t.Fatalf("expected proxy bot score reasons=%v", res.Reasons)
+	}
+}
+
+func TestScoreFormSpam(t *testing.T) {
+	r := httptest.NewRequest(http.MethodPost, "/forum/reply", strings.NewReader("body=hi"))
+	r.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0) Chrome/120.0.0.0 Safari/537.36")
+	r.Header.Set("Accept", "text/html")
+	res := detect.ScoreDebug(r, testCfg())
+	joined := strings.Join(res.Reasons, ",")
+	if !strings.Contains(joined, "empty_form_context") {
+		t.Fatalf("expected empty_form_context reasons=%v", res.Reasons)
+	}
+	if !strings.Contains(joined, "forum_write_path") {
+		t.Fatalf("expected forum_write_path reasons=%v", res.Reasons)
+	}
+	if res.Score < 40 {
+		t.Fatalf("spam post score=%d want >=40", res.Score)
+	}
+
+	ok := httptest.NewRequest(http.MethodPost, "/forum/reply", strings.NewReader("body=hi"))
+	ok.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0) Chrome/120.0.0.0 Safari/537.36")
+	ok.Header.Set("Accept", "text/html")
+	ok.Header.Set("Accept-Language", "en-US")
+	ok.Header.Set("Origin", "https://forum.example")
+	ok.Header.Set("Referer", "https://forum.example/topic/1")
+	ok.Header.Set("Sec-Fetch-Site", "same-origin")
+	ok.Header.Set("Sec-Fetch-Mode", "navigate")
+	ok.Header.Set("Sec-Fetch-Dest", "document")
+	clean := detect.ScoreDebug(ok, testCfg())
+	joinedClean := strings.Join(clean.Reasons, ",")
+	if strings.Contains(joinedClean, "empty_form_context") || strings.Contains(joinedClean, "forum_write_path") {
+		t.Fatalf("legitimate form post should not spam-score reasons=%v", clean.Reasons)
 	}
 }
 

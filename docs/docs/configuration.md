@@ -167,7 +167,7 @@ Blocks common path and query exploit probes. Caps body, URL, and header size. Li
 
 ## Detect
 
-HTTP scoring adds points for scanner and AI User-Agents, missing browser headers, probe paths, behavior bursts, path fan-out, and optional proxy bot-score headers. Scores at `challenge_score` trigger the JS challenge. `block_score` or repeated challenge strikes hard-block.
+HTTP scoring adds points for scanner and AI User-Agents, forum spam tools, empty form context on writes, missing browser headers, probe paths, behavior bursts, write repeats, path fan-out, and optional proxy bot-score headers. Scores at `challenge_score` trigger the JS challenge. `block_score` or repeated challenge strikes hard-block.
 
 ```toml
 [detect]
@@ -175,9 +175,13 @@ enabled = true
 challenge_score = 40
 block_score = 90
 ai_ua_score = 55
+empty_form_context_score = 30
+forum_write_path_score = 25
 missing_accept_lang_score = 15
 missing_sec_fetch_score = 20
 behavior_burst_limit = 60
+behavior_write_burst_limit = 10
+behavior_write_repeat_limit = 5
 behavior_strike_limit = 3
 
 [detect.proxy_signals]

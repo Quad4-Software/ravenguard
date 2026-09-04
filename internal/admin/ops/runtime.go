@@ -349,30 +349,36 @@ type ProtectSafe struct {
 }
 
 type DetectSafe struct {
-	Enabled                 bool             `json:"enabled"`
-	ChallengeScore          int              `json:"challenge_score"`
-	BlockScore              int              `json:"block_score"`
-	MissingUAScore          int              `json:"missing_ua_score"`
-	ScannerUAScore          int              `json:"scanner_ua_score"`
-	AIUAScore               int              `json:"ai_ua_score"`
-	ProbePathScore          int              `json:"probe_path_score"`
-	OddMethodScore          int              `json:"odd_method_score"`
-	MissingAcceptScore      int              `json:"missing_accept_score"`
-	MissingAcceptLangScore  int              `json:"missing_accept_lang_score"`
-	MissingSecFetchScore    int              `json:"missing_sec_fetch_score"`
-	SecCHUAMismatchScore    int              `json:"sec_ch_ua_mismatch_score"`
-	StarAcceptBrowserScore  int              `json:"star_accept_browser_score"`
-	High404Threshold        int              `json:"high_404_threshold"`
-	High404Window           string           `json:"high_404_window"`
-	High404Action           string           `json:"high_404_action"`
-	BehaviorWindow          string           `json:"behavior_window"`
-	BehaviorBurstLimit      int              `json:"behavior_burst_limit"`
-	BehaviorBurstScore      int              `json:"behavior_burst_score"`
-	BehaviorPathFanout      int              `json:"behavior_path_fanout"`
-	BehaviorPathFanoutScore int              `json:"behavior_path_fanout_score"`
-	BehaviorStrikeLimit     int              `json:"behavior_strike_limit"`
-	BehaviorStrikeScore     int              `json:"behavior_strike_score"`
-	ProxySignals            ProxySignalsSafe `json:"proxy_signals"`
+	Enabled                  bool             `json:"enabled"`
+	ChallengeScore           int              `json:"challenge_score"`
+	BlockScore               int              `json:"block_score"`
+	MissingUAScore           int              `json:"missing_ua_score"`
+	ScannerUAScore           int              `json:"scanner_ua_score"`
+	AIUAScore                int              `json:"ai_ua_score"`
+	ProbePathScore           int              `json:"probe_path_score"`
+	OddMethodScore           int              `json:"odd_method_score"`
+	MissingAcceptScore       int              `json:"missing_accept_score"`
+	MissingAcceptLangScore   int              `json:"missing_accept_lang_score"`
+	MissingSecFetchScore     int              `json:"missing_sec_fetch_score"`
+	SecCHUAMismatchScore     int              `json:"sec_ch_ua_mismatch_score"`
+	StarAcceptBrowserScore   int              `json:"star_accept_browser_score"`
+	High404Threshold         int              `json:"high_404_threshold"`
+	High404Window            string           `json:"high_404_window"`
+	High404Action            string           `json:"high_404_action"`
+	BehaviorWindow           string           `json:"behavior_window"`
+	BehaviorBurstLimit       int              `json:"behavior_burst_limit"`
+	BehaviorBurstScore       int              `json:"behavior_burst_score"`
+	BehaviorPathFanout       int              `json:"behavior_path_fanout"`
+	BehaviorPathFanoutScore  int              `json:"behavior_path_fanout_score"`
+	BehaviorStrikeLimit      int              `json:"behavior_strike_limit"`
+	BehaviorStrikeScore      int              `json:"behavior_strike_score"`
+	BehaviorWriteBurstLimit  int              `json:"behavior_write_burst_limit"`
+	BehaviorWriteBurstScore  int              `json:"behavior_write_burst_score"`
+	BehaviorWriteRepeatLimit int              `json:"behavior_write_repeat_limit"`
+	BehaviorWriteRepeatScore int              `json:"behavior_write_repeat_score"`
+	EmptyFormContextScore    int              `json:"empty_form_context_score"`
+	ForumWritePathScore      int              `json:"forum_write_path_score"`
+	ProxySignals             ProxySignalsSafe `json:"proxy_signals"`
 }
 
 type ProxySignalsSafe struct {
@@ -489,6 +495,9 @@ func (r *Runtime) ConfigView() ConfigView {
 				BehaviorBurstLimit: cfg.Detect.BehaviorBurstLimit, BehaviorBurstScore: cfg.Detect.BehaviorBurstScore,
 				BehaviorPathFanout: cfg.Detect.BehaviorPathFanout, BehaviorPathFanoutScore: cfg.Detect.BehaviorPathFanoutScore,
 				BehaviorStrikeLimit: cfg.Detect.BehaviorStrikeLimit, BehaviorStrikeScore: cfg.Detect.BehaviorStrikeScore,
+				BehaviorWriteBurstLimit: cfg.Detect.BehaviorWriteBurstLimit, BehaviorWriteBurstScore: cfg.Detect.BehaviorWriteBurstScore,
+				BehaviorWriteRepeatLimit: cfg.Detect.BehaviorWriteRepeatLimit, BehaviorWriteRepeatScore: cfg.Detect.BehaviorWriteRepeatScore,
+				EmptyFormContextScore: cfg.Detect.EmptyFormContextScore, ForumWritePathScore: cfg.Detect.ForumWritePathScore,
 				ProxySignals: ProxySignalsSafe{
 					BotScoreHeader: cfg.Detect.ProxySignals.BotScoreHeader, BotScoreHeader2: cfg.Detect.ProxySignals.BotScoreHeader2,
 					JA4Header: cfg.Detect.ProxySignals.JA4Header, LowScorePoints: cfg.Detect.ProxySignals.LowScorePoints,
@@ -788,6 +797,24 @@ func applyDetectSafe(cfg *config.Config, safe DetectSafe) {
 	}
 	if safe.BehaviorStrikeScore > 0 {
 		cfg.Detect.BehaviorStrikeScore = safe.BehaviorStrikeScore
+	}
+	if safe.BehaviorWriteBurstLimit > 0 {
+		cfg.Detect.BehaviorWriteBurstLimit = safe.BehaviorWriteBurstLimit
+	}
+	if safe.BehaviorWriteBurstScore > 0 {
+		cfg.Detect.BehaviorWriteBurstScore = safe.BehaviorWriteBurstScore
+	}
+	if safe.BehaviorWriteRepeatLimit > 0 {
+		cfg.Detect.BehaviorWriteRepeatLimit = safe.BehaviorWriteRepeatLimit
+	}
+	if safe.BehaviorWriteRepeatScore > 0 {
+		cfg.Detect.BehaviorWriteRepeatScore = safe.BehaviorWriteRepeatScore
+	}
+	if safe.EmptyFormContextScore > 0 {
+		cfg.Detect.EmptyFormContextScore = safe.EmptyFormContextScore
+	}
+	if safe.ForumWritePathScore > 0 {
+		cfg.Detect.ForumWritePathScore = safe.ForumWritePathScore
 	}
 	setNonEmpty(&cfg.Detect.ProxySignals.BotScoreHeader, safe.ProxySignals.BotScoreHeader)
 	setNonEmpty(&cfg.Detect.ProxySignals.BotScoreHeader2, safe.ProxySignals.BotScoreHeader2)

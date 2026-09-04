@@ -20,6 +20,14 @@ puppeteer
 playwright
 selenium
 chromedriver
+botasaurus
+nodriver
+zendriver
+camoufox
+seleniumbase
+undetected_chromedriver
+skyvern
+browserless
 
 # HTTP library scrapers (non-browser)
 python-requests
@@ -29,16 +37,28 @@ scrapy
 crawl4ai
 firecrawl
 browser-use
+langchain
+crewai
+openai-agents
+
+# Forum spam and bulk poster tools
+xrumer
+Scrapebox
+GSA SER
+Senukai
+Magic Submitter
 
 # OpenAI
 GPTBot
 ChatGPT-User
 OAI-SearchBot
+ChatGPT-Atlas
 
 # Anthropic
 ClaudeBot
 Claude-User
 Claude-SearchBot
+Claude-Code
 anthropic-ai
 
 # Perplexity
@@ -51,6 +71,8 @@ Google-Agent
 Google-CloudVertexBot
 GoogleAgent-Mariner
 GoogleOther
+NotebookLM
+Gemini-Deep-Research
 
 # Meta AI training / fetch (not Facebook link-preview bots)
 meta-externalagent
@@ -74,3 +96,7 @@ DuckAssistBot
 Timpibot
 PanguBot
 webzio
+DeepSeekBot
+QwenBot
+iaskspider
+PhindBot

@@ -193,30 +193,36 @@ type ProtectConfig struct {
 }
 
 type DetectConfig struct {
-	Enabled                 bool               `toml:"enabled"`
-	ChallengeScore          int                `toml:"challenge_score"`
-	BlockScore              int                `toml:"block_score"`
-	MissingUAScore          int                `toml:"missing_ua_score"`
-	ScannerUAScore          int                `toml:"scanner_ua_score"`
-	AIUAScore               int                `toml:"ai_ua_score"`
-	ProbePathScore          int                `toml:"probe_path_score"`
-	OddMethodScore          int                `toml:"odd_method_score"`
-	MissingAcceptScore      int                `toml:"missing_accept_score"`
-	MissingAcceptLangScore  int                `toml:"missing_accept_lang_score"`
-	MissingSecFetchScore    int                `toml:"missing_sec_fetch_score"`
-	SecCHUAMismatchScore    int                `toml:"sec_ch_ua_mismatch_score"`
-	StarAcceptBrowserScore  int                `toml:"star_accept_browser_score"`
-	High404Threshold        int                `toml:"high_404_threshold"`
-	High404Window           Duration           `toml:"high_404_window"`
-	High404Action           string             `toml:"high_404_action"`
-	BehaviorWindow          Duration           `toml:"behavior_window"`
-	BehaviorBurstLimit      int                `toml:"behavior_burst_limit"`
-	BehaviorBurstScore      int                `toml:"behavior_burst_score"`
-	BehaviorPathFanout      int                `toml:"behavior_path_fanout"`
-	BehaviorPathFanoutScore int                `toml:"behavior_path_fanout_score"`
-	BehaviorStrikeLimit     int                `toml:"behavior_strike_limit"`
-	BehaviorStrikeScore     int                `toml:"behavior_strike_score"`
-	ProxySignals            DetectProxySignals `toml:"proxy_signals"`
+	Enabled                  bool               `toml:"enabled"`
+	ChallengeScore           int                `toml:"challenge_score"`
+	BlockScore               int                `toml:"block_score"`
+	MissingUAScore           int                `toml:"missing_ua_score"`
+	ScannerUAScore           int                `toml:"scanner_ua_score"`
+	AIUAScore                int                `toml:"ai_ua_score"`
+	ProbePathScore           int                `toml:"probe_path_score"`
+	OddMethodScore           int                `toml:"odd_method_score"`
+	MissingAcceptScore       int                `toml:"missing_accept_score"`
+	MissingAcceptLangScore   int                `toml:"missing_accept_lang_score"`
+	MissingSecFetchScore     int                `toml:"missing_sec_fetch_score"`
+	SecCHUAMismatchScore     int                `toml:"sec_ch_ua_mismatch_score"`
+	StarAcceptBrowserScore   int                `toml:"star_accept_browser_score"`
+	High404Threshold         int                `toml:"high_404_threshold"`
+	High404Window            Duration           `toml:"high_404_window"`
+	High404Action            string             `toml:"high_404_action"`
+	BehaviorWindow           Duration           `toml:"behavior_window"`
+	BehaviorBurstLimit       int                `toml:"behavior_burst_limit"`
+	BehaviorBurstScore       int                `toml:"behavior_burst_score"`
+	BehaviorPathFanout       int                `toml:"behavior_path_fanout"`
+	BehaviorPathFanoutScore  int                `toml:"behavior_path_fanout_score"`
+	BehaviorStrikeLimit      int                `toml:"behavior_strike_limit"`
+	BehaviorStrikeScore      int                `toml:"behavior_strike_score"`
+	BehaviorWriteBurstLimit  int                `toml:"behavior_write_burst_limit"`
+	BehaviorWriteBurstScore  int                `toml:"behavior_write_burst_score"`
+	BehaviorWriteRepeatLimit int                `toml:"behavior_write_repeat_limit"`
+	BehaviorWriteRepeatScore int                `toml:"behavior_write_repeat_score"`
+	EmptyFormContextScore    int                `toml:"empty_form_context_score"`
+	ForumWritePathScore      int                `toml:"forum_write_path_score"`
+	ProxySignals             DetectProxySignals `toml:"proxy_signals"`
 }
 
 type DetectProxySignals struct {
@@ -409,6 +415,9 @@ func Default() Config {
 			BehaviorBurstLimit: 60, BehaviorBurstScore: 35,
 			BehaviorPathFanout: 40, BehaviorPathFanoutScore: 30,
 			BehaviorStrikeLimit: 3, BehaviorStrikeScore: 25,
+			BehaviorWriteBurstLimit: 10, BehaviorWriteBurstScore: 40,
+			BehaviorWriteRepeatLimit: 5, BehaviorWriteRepeatScore: 45,
+			EmptyFormContextScore: 30, ForumWritePathScore: 25,
 			ProxySignals: DetectProxySignals{
 				BotScoreHeader:  "CF-Bot-Score",
 				BotScoreHeader2: "X-Bot-Score",

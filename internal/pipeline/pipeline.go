@@ -119,6 +119,8 @@ func New(
 			MissingSecFetchScore:   cfg.Detect.MissingSecFetchScore,
 			SecCHUAMismatchScore:   cfg.Detect.SecCHUAMismatchScore,
 			StarAcceptBrowserScore: cfg.Detect.StarAcceptBrowserScore,
+			EmptyFormContextScore:  cfg.Detect.EmptyFormContextScore,
+			ForumWritePathScore:    cfg.Detect.ForumWritePathScore,
 			ProxyBotLowScore:       cfg.Detect.ProxySignals.LowScorePoints,
 			ProxyBotHeader:         cfg.Detect.ProxySignals.BotScoreHeader,
 			ProxyBotScoreHeader:    cfg.Detect.ProxySignals.BotScoreHeader2,
@@ -257,6 +259,8 @@ func (h *Handler) ApplyConfig(cfg config.Config) {
 		MissingSecFetchScore:   cfg.Detect.MissingSecFetchScore,
 		SecCHUAMismatchScore:   cfg.Detect.SecCHUAMismatchScore,
 		StarAcceptBrowserScore: cfg.Detect.StarAcceptBrowserScore,
+		EmptyFormContextScore:  cfg.Detect.EmptyFormContextScore,
+		ForumWritePathScore:    cfg.Detect.ForumWritePathScore,
 		ProxyBotLowScore:       cfg.Detect.ProxySignals.LowScorePoints,
 		ProxyBotHeader:         cfg.Detect.ProxySignals.BotScoreHeader,
 		ProxyBotScoreHeader:    cfg.Detect.ProxySignals.BotScoreHeader2,
@@ -507,7 +511,7 @@ func (h *Handler) guard(w http.ResponseWriter, r *http.Request) {
 	detectScore := 0
 	if !allowed && cfg.Detect.Enabled {
 		if h.beh != nil {
-			h.beh.Record(bindID, r.URL.Path)
+			h.beh.Record(bindID, r.URL.Path, r.Method)
 			if h.beh.StrikesExceeded(bindID) {
 				if h.prot != nil && h.prot.Enabled() {
 					h.prot.BanNow(bindID)

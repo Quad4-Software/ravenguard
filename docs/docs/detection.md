@@ -33,6 +33,8 @@ block_score = 90
 | Missing Sec-Fetch | `missing_sec_fetch_score` | Missing modern browser hints |
 | Sec-CH-UA mismatch | `sec_ch_ua_mismatch_score` | Client hints disagree |
 | `*/*` Accept as browser | `star_accept_browser_score` | Overly generic Accept |
+| Empty form context | `empty_form_context_score` | Browser-like POST/PUT/PATCH missing Origin and Referer |
+| Forum write path | `forum_write_path_score` | Suspicious POSTs to comment/register/reply style paths |
 
 Raise `challenge_score` to challenge less often. Lower it to challenge earlier.
 
@@ -47,11 +49,19 @@ behavior_path_fanout = 40
 behavior_path_fanout_score = 30
 behavior_strike_limit = 3
 behavior_strike_score = 25
+behavior_write_burst_limit = 10
+behavior_write_burst_score = 40
+behavior_write_repeat_limit = 5
+behavior_write_repeat_score = 45
+empty_form_context_score = 30
+forum_write_path_score = 25
 ```
 
 - **Burst** adds score when a client exceeds `behavior_burst_limit` in the window
 - **Path fan-out** scores clients that hit many distinct paths quickly
-- **Strikes** escalate clients that keep tripping soft signals
+- **Write burst** scores rapid POST/PUT/PATCH volume typical of forum and registration spam
+- **Write repeat** scores hammering the same write path (comment, register, reply)
+- **Strikes** escalate clients that keep failing challenges
 
 Privacy hashing applies when enabled. `privacy.retention` bounds how long this state is kept.
 

@@ -60,6 +60,10 @@ func TestSampleUABlocklist(t *testing.T) {
 		"python-requests/2.31.0",
 		"playwright",
 		"crawl4ai",
+		"xrumer",
+		"ChatGPT-Atlas/1.0",
+		"DeepSeekBot/1.0",
+		"Claude-Code/2.1.0",
 	}
 	for _, ua := range blocked {
 		if !s.UABlocked(ua) {

@@ -22,6 +22,8 @@ type Config struct {
 	MissingSecFetchScore   int
 	SecCHUAMismatchScore   int
 	StarAcceptBrowserScore int
+	EmptyFormContextScore  int
+	ForumWritePathScore    int
 	ProxyBotLowScore       int
 	ProxyBotHeader         string
 	ProxyBotScoreHeader    string
@@ -34,7 +36,7 @@ type Result struct {
 }
 
 // scannerUA matches vulnerability scanners, HTTP libraries, SEO crawlers,
-// and headless or automation clients that commonly scrape sites.
+// headless clients, forum spam tools, and browser-automation agents.
 var scannerUA = []string{
 	"sqlmap", "nikto", "nmap", "masscan", "zgrab", "zgrab2",
 	"dirbuster", "gobuster", "wfuzz", "ffuf", "nuclei", "httpx",
@@ -49,14 +51,19 @@ var scannerUA = []string{
 	"httrack", "semrush", "ahrefs", "mj12bot", "dotbot",
 	"petalbot", "dataforseobot", "serpstat", "majestic", "rogerbot",
 	"screaming frog", "seokicks", "blexbot", "linkdexbot",
+	"xrumer", "scrapebox", "gsa ser", "senukai", "magic submitter",
+	"sape_api", "botasaurus", "nodriver", "zendriver", "camoufox",
+	"seleniumbase", "undetected_chromedriver", "uc_chrome",
+	"rebrowser", "browserless", "steel-browser", "skyvern",
+	"langchain", "crewai", "autogen/", "openai-agents",
 }
 
 // aiUA matches documented AI training crawlers, answer-engine indexers,
-// and user-triggered AI fetch agents (research snapshot mid-2026).
+// and user-triggered AI fetch or agent clients (research snapshot 2026).
 var aiUA = []string{
-	"gptbot", "chatgpt-user", "oai-searchbot",
+	"gptbot", "chatgpt-user", "oai-searchbot", "chatgpt-atlas",
 	"claudebot", "claude-user", "claude-searchbot", "claude-web",
-	"anthropic-ai", "anthropic/",
+	"claude-code", "anthropic-ai", "anthropic/",
 	"bytespider", "ccbot", "google-extended", "google-agent",
 	"google-cloudvertexbot", "googleagent-mariner", "googleother",
 	"meta-externalagent", "meta-externalfetcher", "facebookbot",
@@ -66,6 +73,18 @@ var aiUA = []string{
 	"omgili", "omgilibot", "webzio", "imagesiftbot",
 	"applebot-extended", "mistralai-user", "duckassistbot",
 	"timpibot", "pangubot", "kangaroo bot", "kangaroobot",
+	"deepseekbot", "qwenbot", "iaskspider", "phindbot",
+	"notebooklm", "gemini-deep-research",
+}
+
+// forumWritePaths are common registration and posting endpoints abused by spam bots.
+var forumWritePaths = []string{
+	"/comment", "/comments", "/reply", "/replies",
+	"/newthread", "/newtopic", "/new-topic", "/posting",
+	"/register", "/signup", "/sign-up", "/create-account",
+	"/contact", "/feedback", "/guestbook",
+	"/message", "/messages", "/pm/", "/private",
+	"/wp-comments-post",
 }
 
 var probePaths = []string{
@@ -159,6 +178,7 @@ func score(r *http.Request, cfg Config, wantReasons bool) Result {
 				res.Reasons = append(res.Reasons, "star_accept_browser")
 			}
 		}
+		scoreFormSpam(r, cfg, &res, wantReasons)
 	}
 
 	switch r.Method {
@@ -189,6 +209,49 @@ func score(r *http.Request, cfg Config, wantReasons bool) Result {
 
 	scoreProxySignals(r, cfg, &res, wantReasons)
 	return res
+}
+
+func scoreFormSpam(r *http.Request, cfg Config, res *Result, wantReasons bool) {
+	if !isWriteMethod(r.Method) {
+		return
+	}
+	emptyCtx := r.Header.Get("Origin") == "" && r.Header.Get("Referer") == ""
+	if emptyCtx && cfg.EmptyFormContextScore > 0 {
+		res.Score += cfg.EmptyFormContextScore
+		if wantReasons {
+			res.Reasons = append(res.Reasons, "empty_form_context")
+		}
+	}
+	if forumWritePath(r.URL.Path) && cfg.ForumWritePathScore > 0 {
+		suspicious := emptyCtx || missingSecFetch(r)
+		if suspicious {
+			res.Score += cfg.ForumWritePathScore
+			if wantReasons {
+				res.Reasons = append(res.Reasons, "forum_write_path")
+			}
+		}
+	}
+}
+
+func isWriteMethod(method string) bool {
+	switch method {
+	case http.MethodPost, http.MethodPut, http.MethodPatch:
+		return true
+	default:
+		return false
+	}
+}
+
+func forumWritePath(path string) bool {
+	if path == "" {
+		return false
+	}
+	for _, p := range forumWritePaths {
+		if faststr.ContainsFold(path, p) {
+			return true
+		}
+	}
+	return false
 }
 
 func scoreProxySignals(r *http.Request, cfg Config, res *Result, wantReasons bool) {

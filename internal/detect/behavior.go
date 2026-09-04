@@ -13,13 +13,17 @@ import (
 const behaviorShards = 64
 
 type BehaviorConfig struct {
-	Window          time.Duration
-	BurstLimit      int
-	BurstScore      int
-	PathFanout      int
-	PathFanoutScore int
-	StrikeLimit     int
-	StrikeScore     int
+	Window           time.Duration
+	BurstLimit       int
+	BurstScore       int
+	PathFanout       int
+	PathFanoutScore  int
+	StrikeLimit      int
+	StrikeScore      int
+	WriteBurstLimit  int
+	WriteBurstScore  int
+	WriteRepeatLimit int
+	WriteRepeatScore int
 }
 
 type BehaviorTracker struct {
@@ -33,12 +37,15 @@ type behShard struct {
 }
 
 type behEntry struct {
-	start    time.Time
-	reqs     int
-	paths    map[string]struct{}
-	strikes  int
-	lastPath string
-	seqHits  int
+	start         time.Time
+	reqs          int
+	writes        int
+	paths         map[string]struct{}
+	strikes       int
+	lastPath      string
+	seqHits       int
+	lastWritePath string
+	samePathWrite int
 }
 
 func NewBehaviorTracker(cfg BehaviorConfig) *BehaviorTracker {
@@ -54,6 +61,12 @@ func NewBehaviorTracker(cfg BehaviorConfig) *BehaviorTracker {
 	if cfg.StrikeLimit <= 0 {
 		cfg.StrikeLimit = 3
 	}
+	if cfg.WriteBurstLimit <= 0 {
+		cfg.WriteBurstLimit = 10
+	}
+	if cfg.WriteRepeatLimit <= 0 {
+		cfg.WriteRepeatLimit = 5
+	}
 	t := &BehaviorTracker{cfg: cfg}
 	for i := range t.shards {
 		t.shards[i].ents = make(map[string]*behEntry)
@@ -61,7 +74,8 @@ func NewBehaviorTracker(cfg BehaviorConfig) *BehaviorTracker {
 	return t
 }
 
-func (t *BehaviorTracker) Record(key, path string) {
+// Record notes a request for burst, fan-out, and write-spam scoring.
+func (t *BehaviorTracker) Record(key, path, method string) {
 	if t == nil || key == "" {
 		return
 	}
@@ -80,6 +94,15 @@ func (t *BehaviorTracker) Record(key, path string) {
 			e.seqHits++
 		}
 		e.lastPath = path
+	}
+	if isWriteMethod(method) {
+		e.writes++
+		if path != "" && path == e.lastWritePath {
+			e.samePathWrite++
+		} else {
+			e.lastWritePath = path
+			e.samePathWrite = 1
+		}
 	}
 }
 
@@ -142,6 +165,14 @@ func (t *BehaviorTracker) Score(key string) Result {
 	if e.seqHits >= 8 && t.cfg.PathFanoutScore > 0 {
 		res.Score += t.cfg.PathFanoutScore / 2
 		res.Reasons = append(res.Reasons, "behavior_sequential")
+	}
+	if e.writes >= t.cfg.WriteBurstLimit && t.cfg.WriteBurstScore > 0 {
+		res.Score += t.cfg.WriteBurstScore
+		res.Reasons = append(res.Reasons, "behavior_write_burst")
+	}
+	if e.samePathWrite >= t.cfg.WriteRepeatLimit && t.cfg.WriteRepeatScore > 0 {
+		res.Score += t.cfg.WriteRepeatScore
+		res.Reasons = append(res.Reasons, "behavior_write_repeat")
 	}
 	if e.strikes > 0 && t.cfg.StrikeScore > 0 {
 		res.Score += e.strikes * t.cfg.StrikeScore

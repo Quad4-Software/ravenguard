@@ -23,11 +23,37 @@ func TestBehaviorBurstAndFanout(t *testing.T) {
 	})
 	key := "client-a"
 	for i := range 5 {
-		beh.Record(key, "/p/"+strconv.Itoa(i))
+		beh.Record(key, "/p/"+strconv.Itoa(i), "GET")
 	}
 	res := beh.Score(key)
 	if res.Score < 35 {
 		t.Fatalf("score=%d", res.Score)
+	}
+}
+
+func TestBehaviorWriteBurstAndRepeat(t *testing.T) {
+	beh := detect.NewBehaviorTracker(detect.BehaviorConfig{
+		Window:           time.Minute,
+		BurstLimit:       1000,
+		PathFanout:       1000,
+		WriteBurstLimit:  4,
+		WriteBurstScore:  40,
+		WriteRepeatLimit: 3,
+		WriteRepeatScore: 45,
+	})
+	key := "spammer"
+	for range 4 {
+		beh.Record(key, "/comment", "POST")
+	}
+	res := beh.Score(key)
+	if res.Score < 40 {
+		t.Fatalf("write burst score=%d reasons=%v", res.Score, res.Reasons)
+	}
+	if !containsReason(res.Reasons, "behavior_write_burst") {
+		t.Fatalf("missing write burst reasons=%v", res.Reasons)
+	}
+	if !containsReason(res.Reasons, "behavior_write_repeat") {
+		t.Fatalf("missing write repeat reasons=%v", res.Reasons)
 	}
 }
 
@@ -52,4 +78,13 @@ func TestBehaviorStrikes(t *testing.T) {
 	if res.Score < 50 {
 		t.Fatalf("score=%d", res.Score)
 	}
+}
+
+func containsReason(reasons []string, want string) bool {
+	for _, r := range reasons {
+		if r == want {
+			return true
+		}
+	}
+	return false
 }

@@ -129,13 +129,17 @@ func main() {
 	var beh *detect.BehaviorTracker
 	if cfg.Detect.Enabled {
 		beh = detect.NewBehaviorTracker(detect.BehaviorConfig{
-			Window:          cfg.Detect.BehaviorWindow.Duration,
-			BurstLimit:      cfg.Detect.BehaviorBurstLimit,
-			BurstScore:      cfg.Detect.BehaviorBurstScore,
-			PathFanout:      cfg.Detect.BehaviorPathFanout,
-			PathFanoutScore: cfg.Detect.BehaviorPathFanoutScore,
-			StrikeLimit:     cfg.Detect.BehaviorStrikeLimit,
-			StrikeScore:     cfg.Detect.BehaviorStrikeScore,
+			Window:           cfg.Detect.BehaviorWindow.Duration,
+			BurstLimit:       cfg.Detect.BehaviorBurstLimit,
+			BurstScore:       cfg.Detect.BehaviorBurstScore,
+			PathFanout:       cfg.Detect.BehaviorPathFanout,
+			PathFanoutScore:  cfg.Detect.BehaviorPathFanoutScore,
+			StrikeLimit:      cfg.Detect.BehaviorStrikeLimit,
+			StrikeScore:      cfg.Detect.BehaviorStrikeScore,
+			WriteBurstLimit:  cfg.Detect.BehaviorWriteBurstLimit,
+			WriteBurstScore:  cfg.Detect.BehaviorWriteBurstScore,
+			WriteRepeatLimit: cfg.Detect.BehaviorWriteRepeatLimit,
+			WriteRepeatScore: cfg.Detect.BehaviorWriteRepeatScore,
 		})
 		pipeline.StartBehaviorSweeper(ctx, beh, time.Minute, retention)
 	}
