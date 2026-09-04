@@ -19,6 +19,7 @@ import (
 	"github.com/Quad4-Software/ravenguard/internal/protect"
 	"github.com/Quad4-Software/ravenguard/internal/qfeeds"
 	"github.com/Quad4-Software/ravenguard/internal/ratelimit"
+	"github.com/Quad4-Software/ravenguard/internal/version"
 )
 
 // Runtime is a façade over live guard subsystems for the admin API.
@@ -126,6 +127,8 @@ type Status struct {
 	ProtectEnabled     bool            `json:"protect_enabled"`
 	RateLimitEnabled   bool            `json:"ratelimit_enabled"`
 	DetectEnabled      bool            `json:"detect_enabled"`
+	Version            string          `json:"version"`
+	Commit             string          `json:"commit"`
 	Process            ProcessStats    `json:"process"`
 }
 
@@ -139,6 +142,8 @@ func (r *Runtime) Status() Status {
 		ProtectEnabled:   cfg.Protect.Enabled,
 		RateLimitEnabled: cfg.RateLimit.Enabled,
 		DetectEnabled:    cfg.Detect.Enabled,
+		Version:          version.Release(),
+		Commit:           version.Short(),
 		Process:          r.processView(),
 	}
 	if r.Lists != nil {

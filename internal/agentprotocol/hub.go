@@ -22,7 +22,7 @@ import (
 type TokenLookup interface {
 	LookupToken(tokenHash string) (proxyID string, fingerprint string, name string, universal bool, err error)
 	BindFingerprint(proxyID, fingerprint, name, hostname string) error
-	TouchProxy(proxyID string, listenHTTP, listenHTTPS, listenQUIC string) error
+	TouchProxy(proxyID string, listenHTTP, listenHTTPS, listenQUIC, agentVersion string) error
 	DesiredRevision(proxyID string) (int64, error)
 	DesiredState(proxyID string) (DesiredState, error)
 }
@@ -308,7 +308,8 @@ func (h *Hub) HandleConnect(w http.ResponseWriter, r *http.Request) {
 		_ = conn.Close(websocket.StatusPolicyViolation, "bind failed")
 		return
 	}
-	_ = h.Lookup.TouchProxy(proxyID, fpPayload.ListenHTTP, fpPayload.ListenHTTPS, fpPayload.ListenQUIC)
+	agentVersion := firstNonEmpty(agentVer, fpPayload.Version)
+	_ = h.Lookup.TouchProxy(proxyID, fpPayload.ListenHTTP, fpPayload.ListenHTTPS, fpPayload.ListenQUIC, agentVersion)
 
 	rev, _ := h.Lookup.DesiredRevision(proxyID)
 	okRaw, _ := json.Marshal(AuthOKPayload{ProxyID: proxyID, Revision: rev})
@@ -319,7 +320,7 @@ func (h *Hub) HandleConnect(w http.ResponseWriter, r *http.Request) {
 		ProxyID:     proxyID,
 		Fingerprint: fpPayload.Fingerprint,
 		Name:        displayName,
-		Version:     firstNonEmpty(agentVer, fpPayload.Version),
+		Version:     agentVersion,
 		conn:        conn,
 		pending:     make(map[string]chan Envelope),
 		closed:      make(chan struct{}),

@@ -11,6 +11,13 @@ REVIVE_VERSION ?= latest
 GOVULNCHECK_VERSION ?= latest
 GOIMPORTS_VERSION ?= latest
 
+# Build identity (short commit stamped into the binary).
+COMMIT ?= $(shell git rev-parse --short=7 HEAD 2>/dev/null || echo unknown)
+VERSION ?= $(shell git describe --tags --exact-match 2>/dev/null || echo dev)
+LDFLAGS ?= -s -w \
+	-X github.com/Quad4-Software/ravenguard/internal/version.Commit=$(COMMIT) \
+	-X github.com/Quad4-Software/ravenguard/internal/version.Version=$(VERSION)
+
 # Minimum total statement coverage for the cover gate (percent).
 COVER_MIN ?= 50
 
@@ -19,7 +26,7 @@ COVER_MIN ?= 50
 all: check build
 
 build:
-	CGO_ENABLED=0 $(GO) build -trimpath -ldflags="-s -w" -o bin/ravenguard ./cmd/ravenguard
+	CGO_ENABLED=0 $(GO) build -trimpath -ldflags="$(LDFLAGS)" -o bin/ravenguard ./cmd/ravenguard
 
 widget:
 	pnpm widget:build

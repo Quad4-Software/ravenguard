@@ -4,14 +4,7 @@
 package tlscerts
 
 import (
-	"crypto/ecdsa"
-	"crypto/elliptic"
-	"crypto/rand"
 	"crypto/tls"
-	"crypto/x509"
-	"crypto/x509/pkix"
-	"encoding/pem"
-	"math/big"
 	"path/filepath"
 	"testing"
 	"time"
@@ -45,7 +38,7 @@ func TestManualStoreRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if detail.Source != SourceManual || detail.Hostname != "app.example.com" {
+	if detail.Source != SourceSelfSigned || detail.Hostname != "app.example.com" {
 		t.Fatalf("detail = %#v", detail)
 	}
 	if detail.FingerprintSHA256 == "" || detail.Subject == "" {
@@ -93,28 +86,12 @@ func TestManualStoreReload(t *testing.T) {
 
 func mustSelfSigned(t *testing.T, host string) (certPEM, keyPEM []byte) {
 	t.Helper()
-	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	certPEM, keyPEM, err := Generate(GenerateOptions{
+		Hosts:    []string{host},
+		Validity: 24 * time.Hour,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	tmpl := &x509.Certificate{
-		SerialNumber: big.NewInt(1),
-		Subject:      pkix.Name{CommonName: host},
-		NotBefore:    time.Now().Add(-time.Hour),
-		NotAfter:     time.Now().Add(24 * time.Hour),
-		DNSNames:     []string{host},
-		KeyUsage:     x509.KeyUsageDigitalSignature,
-		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
-	}
-	der, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, &key.PublicKey, key)
-	if err != nil {
-		t.Fatal(err)
-	}
-	certPEM = pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})
-	keyBytes, err := x509.MarshalECPrivateKey(key)
-	if err != nil {
-		t.Fatal(err)
-	}
-	keyPEM = pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyBytes})
 	return certPEM, keyPEM
 }

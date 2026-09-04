@@ -13,7 +13,7 @@ import (
 
 // DerivePaths fills filesystem and network allowances from process paths and
 // listen/upstream settings. Caller-supplied paths in cfg are preserved.
-func DerivePaths(cfg *Config, configPath string, listenHTTP, listenHTTPS, listenQUIC, upstreamURL string, tlsCert, tlsKey, acmeStorageDir string, blocklistFiles []string, adminListen, adminHTTPS, adminDataDir string) {
+func DerivePaths(cfg *Config, configPath string, listenHTTP, listenHTTPS, listenQUIC, upstreamURL string, tlsCert, tlsKey, acmeStorageDir, selfSignedStorageDir string, blocklistFiles []string, adminListen, adminHTTPS, adminDataDir string) {
 	addUnique := func(dst *[]string, paths ...string) {
 		seen := make(map[string]struct{}, len(*dst))
 		for _, p := range *dst {
@@ -87,6 +87,9 @@ func DerivePaths(cfg *Config, configPath string, listenHTTP, listenHTTPS, listen
 	}
 	if acmeStorageDir != "" {
 		addUnique(&cfg.Landlock.RWDirs, acmeStorageDir)
+	}
+	if selfSignedStorageDir != "" {
+		addUnique(&cfg.Landlock.RWDirs, selfSignedStorageDir)
 	}
 	if adminDataDir != "" {
 		addUnique(&cfg.Landlock.RWDirs, adminDataDir)

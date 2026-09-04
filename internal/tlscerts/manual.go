@@ -172,7 +172,12 @@ func (s *ManualStore) List() []Detail {
 	sort.Strings(hosts)
 	out := make([]Detail, 0, len(hosts))
 	for _, h := range hosts {
-		out = append(out, detailFromCert(h, SourceManual, false, s.cache[h], ""))
+		cert := s.cache[h]
+		src := SourceManual
+		if cert != nil && cert.Leaf != nil {
+			src = SourceForLeaf(cert.Leaf, SourceManual)
+		}
+		out = append(out, detailFromCert(h, src, false, cert, ""))
 	}
 	s.mu.RUnlock()
 	return out
@@ -190,7 +195,11 @@ func (s *ManualStore) Detail(hostname string) (Detail, error) {
 	if cert == nil {
 		return Detail{}, fmt.Errorf("tlscerts: not found: %s", host)
 	}
-	return detailFromCert(host, SourceManual, false, cert, ""), nil
+	src := SourceManual
+	if cert.Leaf != nil {
+		src = SourceForLeaf(cert.Leaf, SourceManual)
+	}
+	return detailFromCert(host, src, false, cert, ""), nil
 }
 
 // Export returns PEM material for migration over the authenticated agent channel.

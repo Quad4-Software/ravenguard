@@ -113,6 +113,8 @@ export interface Status {
   protect_enabled: boolean
   ratelimit_enabled: boolean
   detect_enabled: boolean
+  version: string
+  commit: string
   process: ProcessStats
 }
 
@@ -925,6 +927,9 @@ export const api = {
     },
     upload(host: string, cert_pem: string, key_pem: string) {
       return request<{ ok: string }>('PUT', `/certs/${encodeURIComponent(host)}`, { cert_pem, key_pem })
+    },
+    generate(host: string, body?: { validity?: string; dns_names?: string[] }) {
+      return request<CertStatus>('POST', `/certs/${encodeURIComponent(host)}/generate`, body ?? {})
     },
     remove(host: string) {
       return request<{ ok: string }>('DELETE', `/certs/${encodeURIComponent(host)}`)

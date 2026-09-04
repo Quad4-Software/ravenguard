@@ -10,7 +10,7 @@ http = ":8080"
 # quic = ":443"
 
 [tls]
-mode = "off" # off | files | acme
+mode = "off" # off | files | acme | selfsigned
 # Static PEM (tls.mode = "files"):
 # cert_file = "/certs/fullchain.pem"
 # key_file = "/certs/privkey.pem"
@@ -25,6 +25,12 @@ mode = "off" # off | files | acme
 # http01 = true
 # tls_alpn01 = true
 # redirect_http = true
+
+# Local self-signed (tls.mode = "selfsigned"):
+# [tls.selfsigned]
+# storage_dir = "./data/selfsigned"
+# hosts = ["localhost", "127.0.0.1"]
+# validity = "365d"
 
 [upstream]
 url = "http://127.0.0.1:8000"

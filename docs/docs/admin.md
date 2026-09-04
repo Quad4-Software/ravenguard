@@ -91,6 +91,7 @@ Base path: `{base_path}/api/v1`
 | GET | `/certs` | certificate inventory |
 | POST | `/certs/manage` | ACME manage hosts |
 | POST | `/certs/{host}/renew` | renew one host |
+| POST | `/certs/{host}/generate` | generate self-signed PEM into the manual store |
 | GET/PUT/DELETE | `/certs/{host}` | detail, manual PEM upload, delete |
 | GET | `/logs` | in-memory log ring |
 | GET/POST | `/proxies` | list fleet proxies / enroll (returns one-time token) |
@@ -103,6 +104,8 @@ Base path: `{base_path}/api/v1`
 | POST | `/migrations/{id}/prep` | prep destination (routes + certs) |
 | POST | `/migrations/{id}/complete` | finish cutover after DNS |
 | POST | `/migrations/{id}/abort` | abort in-progress migration |
+
+Optional JSON body for `POST /certs/{host}/generate`: `{ "validity": "365d", "dns_names": ["alias.example"] }`. Default DNS name is the path host. Generated certs appear with source `selfsigned` and can be deleted like manual uploads.
 
 Agent connect (no session cookie): `POST` upgrade WebSocket at `/api/v1/agent/connect` with mutual auth.
 

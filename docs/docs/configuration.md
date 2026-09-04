@@ -65,7 +65,7 @@ http = ":8080"
 # quic = ":443"
 
 [tls]
-mode = "off" # off | files | acme
+mode = "off" # off | files | acme | selfsigned
 # cert_file = "/certs/fullchain.pem"
 # key_file = "/certs/privkey.pem"
 
@@ -78,13 +78,30 @@ mode = "off" # off | files | acme
 # http01 = true
 # tls_alpn01 = true
 # redirect_http = true
+
+# [tls.selfsigned]
+# storage_dir = "./data/selfsigned"
+# hosts = ["localhost", "127.0.0.1"]
+# validity = "365d"
 ```
 
 `tls.mode = "acme"` issues and renews certificates via Let's Encrypt. Account keys and certs live under `storage_dir` and survive restarts. HTTP-01 uses `listen.http`. Route hosts from the admin panel are added to the managed inventory automatically.
 
-Env: `RG_TLS_MODE`, `RG_TLS_CERT_FILE`, `RG_TLS_KEY_FILE`, `RG_ACME_EMAIL`, `RG_ACME_STORAGE_DIR`, `RG_ACME_HOSTS`, `RG_ACME_STAGING`, `RG_ACME_AGREE_TOS`.
+`tls.mode = "selfsigned"` generates an ECDSA P-256 certificate on first start under `tls.selfsigned.storage_dir` and reuses it across restarts until it is near expiry or the configured hosts change. Suitable for local development. Browsers will warn until you trust the cert.
 
-Behind-proxy layout: keep `tls.mode = "off"` and plain HTTP listen. Edge layout: `tls.mode = "acme"` or `files` with `trust.mode = "edge"`.
+CLI helper for PEM files used with `tls.mode = "files"`:
+
+```bash
+./bin/ravenguard cert generate \
+  -hosts localhost,127.0.0.1 \
+  -cert ./certs/fullchain.pem \
+  -key ./certs/privkey.pem \
+  -validity 365d
+```
+
+Env: `RG_TLS_MODE`, `RG_TLS_CERT_FILE`, `RG_TLS_KEY_FILE`, `RG_ACME_EMAIL`, `RG_ACME_STORAGE_DIR`, `RG_ACME_HOSTS`, `RG_ACME_STAGING`, `RG_ACME_AGREE_TOS`, `RG_SELFSIGNED_STORAGE_DIR`, `RG_SELFSIGNED_HOSTS`.
+
+Behind-proxy layout: keep `tls.mode = "off"` and plain HTTP listen. Edge layout: `tls.mode = "acme"`, `files`, or `selfsigned` with `trust.mode = "edge"`.
 
 ## Upstream
 
@@ -314,6 +331,7 @@ See [Privacy](./privacy.md).
 ## Other env vars
 
 - `RG_TLS_CERT_FILE`, `RG_TLS_KEY_FILE`
+- `RG_SELFSIGNED_STORAGE_DIR`, `RG_SELFSIGNED_HOSTS`
 - `RG_QFEEDS_ENABLED`, `RG_QFEEDS_API_TOKEN` (or `QFEEDS_API_TOKEN`)
 - `RG_PRIVACY_HASH_CLIENT_IP`, `RG_PRIVACY_IP_HASH_SECRET`, `RG_PRIVACY_LOG_IP`, `RG_PRIVACY_NOTICE_URL`
 

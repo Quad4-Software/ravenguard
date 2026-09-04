@@ -110,7 +110,7 @@ func (stubLookup) LookupToken(tokenHash string) (string, string, string, bool, e
 }
 
 func (stubLookup) BindFingerprint(proxyID, fingerprint, name, hostname string) error { return nil }
-func (stubLookup) TouchProxy(proxyID string, listenHTTP, listenHTTPS, listenQUIC string) error {
+func (stubLookup) TouchProxy(proxyID string, listenHTTP, listenHTTPS, listenQUIC, agentVersion string) error {
 	return nil
 }
 func (stubLookup) DesiredRevision(proxyID string) (int64, error) { return 0, nil }

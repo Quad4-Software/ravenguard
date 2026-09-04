@@ -106,10 +106,11 @@ type ListenConfig struct {
 }
 
 type TLSConfig struct {
-	Mode     string     `toml:"mode"` // off | files | acme
-	CertFile string     `toml:"cert_file"`
-	KeyFile  string     `toml:"key_file"`
-	ACME     ACMEConfig `toml:"acme"`
+	Mode       string           `toml:"mode"` // off | files | acme | selfsigned
+	CertFile   string           `toml:"cert_file"`
+	KeyFile    string           `toml:"key_file"`
+	ACME       ACMEConfig       `toml:"acme"`
+	SelfSigned SelfSignedConfig `toml:"selfsigned"`
 }
 
 // ACMEConfig configures automatic Let's Encrypt certificate management.
@@ -125,6 +126,13 @@ type ACMEConfig struct {
 	AgreeTOS     bool     `toml:"agree_tos"`
 	RenewWindow  Duration `toml:"renew_window"`
 	OnDemand     bool     `toml:"on_demand"`
+}
+
+// SelfSignedConfig configures automatic self-signed certificate generation.
+type SelfSignedConfig struct {
+	StorageDir string   `toml:"storage_dir"`
+	Hosts      []string `toml:"hosts"`
+	Validity   Duration `toml:"validity"`
 }
 
 type UpstreamConfig struct {
@@ -348,8 +356,17 @@ func (d *Duration) UnmarshalText(text []byte) error {
 		d.Duration = 0
 		return nil
 	}
-	parsed, err := time.ParseDuration(string(text))
+	s := string(text)
+	parsed, err := time.ParseDuration(s)
 	if err != nil {
+		if strings.HasSuffix(s, "d") {
+			daysStr := strings.TrimSuffix(s, "d")
+			days, perr := strconv.ParseFloat(daysStr, 64)
+			if perr == nil && days > 0 {
+				d.Duration = time.Duration(days * float64(24*time.Hour))
+				return nil
+			}
+		}
 		return err
 	}
 	d.Duration = parsed
@@ -373,6 +390,11 @@ func Default() Config {
 				HTTP01:       &http01,
 				TLSALPN01:    &tlsALPN,
 				RedirectHTTP: &redir,
+			},
+			SelfSigned: SelfSignedConfig{
+				StorageDir: "./data/selfsigned",
+				Hosts:      []string{"localhost"},
+				Validity:   Duration{365 * 24 * time.Hour},
 			},
 		},
 		Upstream: UpstreamConfig{
@@ -618,6 +640,17 @@ func applyEnv(c *Config) {
 			}
 		}
 	}
+	setStr(&c.TLS.SelfSigned.StorageDir, "RG_SELFSIGNED_STORAGE_DIR")
+	if v := os.Getenv("RG_SELFSIGNED_HOSTS"); v != "" {
+		parts := strings.Split(v, ",")
+		c.TLS.SelfSigned.Hosts = c.TLS.SelfSigned.Hosts[:0]
+		for _, p := range parts {
+			p = strings.TrimSpace(p)
+			if p != "" {
+				c.TLS.SelfSigned.Hosts = append(c.TLS.SelfSigned.Hosts, p)
+			}
+		}
+	}
 	setStr(&c.Upstream.URL, "RG_UPSTREAM_URL")
 	setStr(&c.Trust.Mode, "RG_TRUST_MODE")
 	setStr(&c.Trust.RealIPHeader, "RG_REAL_IP_HEADER")
@@ -779,6 +812,15 @@ func normalize(c *Config) {
 	c.TLS.Mode = strings.ToLower(strings.TrimSpace(c.TLS.Mode))
 	if c.TLS.ACME.StorageDir == "" {
 		c.TLS.ACME.StorageDir = "./data/certs"
+	}
+	if c.TLS.SelfSigned.StorageDir == "" {
+		c.TLS.SelfSigned.StorageDir = "./data/selfsigned"
+	}
+	if len(c.TLS.SelfSigned.Hosts) == 0 {
+		c.TLS.SelfSigned.Hosts = []string{"localhost"}
+	}
+	if c.TLS.SelfSigned.Validity.Duration <= 0 {
+		c.TLS.SelfSigned.Validity = Duration{365 * 24 * time.Hour}
 	}
 	if c.Trust.RealIPHeader == "" {
 		c.Trust.RealIPHeader = "X-Real-IP"
@@ -968,9 +1010,9 @@ func (c Config) Validate() error {
 		tlsMode = "off"
 	}
 	switch tlsMode {
-	case "off", "files", "acme":
+	case "off", "files", "acme", "selfsigned":
 	default:
-		return fmt.Errorf("tls.mode must be off, files, or acme")
+		return fmt.Errorf("tls.mode must be off, files, acme, or selfsigned")
 	}
 	needsTLS := !hubOnly && (c.Listen.HTTPS != "" || c.Listen.QUIC != "")
 	switch tlsMode {
@@ -994,9 +1036,13 @@ func (c Config) Validate() error {
 				return fmt.Errorf("listen.http is required when tls.acme.http01 is enabled")
 			}
 		}
+	case "selfsigned":
+		if needsTLS && strings.TrimSpace(c.TLS.SelfSigned.StorageDir) == "" {
+			return fmt.Errorf("tls.selfsigned.storage_dir is required when tls.mode is selfsigned and https or quic is enabled")
+		}
 	case "off":
 		if needsTLS {
-			return fmt.Errorf("tls.mode must be files or acme when listen.https or listen.quic is set")
+			return fmt.Errorf("tls.mode must be files, acme, or selfsigned when listen.https or listen.quic is set")
 		}
 	}
 	switch strings.ToLower(strings.TrimSpace(c.Trust.Mode)) {

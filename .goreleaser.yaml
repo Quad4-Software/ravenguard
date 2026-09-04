@@ -28,7 +28,7 @@ builds:
     flags:
       - -trimpath
     ldflags:
-      - -s -w
+      - -s -w -X github.com/Quad4-Software/ravenguard/internal/version.Commit={{.ShortCommit}} -X github.com/Quad4-Software/ravenguard/internal/version.Version={{.Version}}
 
 archives:
   - id: default

@@ -1,10 +1,18 @@
 <script lang="ts">
+  import { onMount } from 'svelte'
   import { page } from '$app/state'
   import { base } from '$app/paths'
   import { goto } from '$app/navigation'
+  import { api } from '$lib/api'
   import { auth } from '$lib/auth.svelte'
   import { toast } from '$lib/toast.svelte'
-  import { canManageUsers } from '$lib/rbac'
+  import {
+    NAV_LINK_SPECS,
+    joinBasePath,
+    isNavActive,
+    navLinkVisible,
+  } from '$lib/nav'
+  import { shell } from '$lib/shell.svelte'
   import type { Component } from 'svelte'
   import type { IconProps } from '@lucide/svelte'
   import {
@@ -26,49 +34,72 @@
     ArrowRightLeft,
   } from '@lucide/svelte'
 
-  interface NavLink {
-    href: string
-    label: string
-    show: boolean
-    icon: Component<IconProps>
+  const NAV_ICONS: Record<string, Component<IconProps>> = {
+    '/': LayoutDashboard,
+    '/proxies': Network,
+    '/migrations': ArrowRightLeft,
+    '/upstreams': Server,
+    '/routes': Waypoints,
+    '/access': KeyRound,
+    '/certs': BadgeCheck,
+    '/logs': ScrollText,
+    '/bans': Ban,
+    '/blocklists': ListX,
+    '/qfeeds': Rss,
+    '/appearance': Palette,
+    '/config': SlidersHorizontal,
+    '/users': Users,
+    '/tokens': Key,
+    '/audit': ClipboardList,
   }
 
-  const links = $derived<NavLink[]>([
-    { href: `${base}/`, label: 'Overview', show: true, icon: LayoutDashboard },
-    { href: `${base}/proxies`, label: 'Proxies', show: true, icon: Network },
-    { href: `${base}/migrations`, label: 'Move services', show: true, icon: ArrowRightLeft },
-    { href: `${base}/upstreams`, label: 'Upstreams', show: true, icon: Server },
-    { href: `${base}/routes`, label: 'Routes', show: true, icon: Waypoints },
-    { href: `${base}/access`, label: 'Access', show: true, icon: KeyRound },
-    { href: `${base}/certs`, label: 'Certificates', show: true, icon: BadgeCheck },
-    { href: `${base}/logs`, label: 'Logs', show: true, icon: ScrollText },
-    { href: `${base}/bans`, label: 'Bans', show: true, icon: Ban },
-    { href: `${base}/blocklists`, label: 'Blocklists', show: true, icon: ListX },
-    { href: `${base}/qfeeds`, label: 'Q-Feeds', show: true, icon: Rss },
-    { href: `${base}/appearance`, label: 'Appearance', show: true, icon: Palette },
-    { href: `${base}/config`, label: 'Config', show: true, icon: SlidersHorizontal },
-    { href: `${base}/users`, label: 'Users', show: canManageUsers(auth.role), icon: Users },
-    { href: `${base}/tokens`, label: 'Tokens', show: true, icon: Key },
-    { href: `${base}/audit`, label: 'Audit', show: true, icon: ClipboardList },
-  ])
+  let hubVersion = $state('')
+  let hubCommit = $state('')
 
-  function isActive(href: string): boolean {
-    const path: string = page.url.pathname
-    if (href === `${base}/`) return path === `${base}/` || path === base
-    return path === href || path.startsWith(`${href}/`)
-  }
+  const versionLabel = $derived.by(() => {
+    const short = hubCommit.trim().slice(0, 7)
+    if (!short) return ''
+    const v = hubVersion.trim()
+    if (!v || v === 'dev') return `ver ${short}`
+    return `ver ${v} ${short}`
+  })
+
+  const links = $derived(
+    NAV_LINK_SPECS.map((spec) => ({
+      href: joinBasePath(base, spec.path),
+      label: spec.label,
+      show: navLinkVisible(spec, auth.role),
+      icon: NAV_ICONS[spec.path],
+    })),
+  )
+
+  const settingsHref = $derived(joinBasePath(base, '/settings'))
+
+  onMount(() => {
+    void api.status
+      .get()
+      .then((s) => {
+        hubVersion = s.version ?? ''
+        hubCommit = s.commit ?? ''
+      })
+      .catch(() => {})
+  })
 
   async function handleLogout() {
+    shell.closeNav()
     await auth.logout()
     toast.info('Signed out')
     await goto(`${base}/login`)
   }
 </script>
 
-<aside class="shell-nav">
+<aside id="admin-nav" class="shell-nav">
   <div class="brand">
     <div class="brand-name">RavenGuard</div>
     <div class="brand-sub">Admin Console</div>
+    {#if versionLabel}
+      <div class="nav-version">{versionLabel}</div>
+    {/if}
   </div>
   <nav class="nav-scroll" aria-label="Admin">
     <ul class="nav-list">
@@ -76,8 +107,13 @@
         {#if link.show}
           {@const Icon = link.icon}
           <li class="nav-item">
-            <a class="nav-link" class:active={isActive(link.href)} href={link.href}>
-              <Icon class="nav-link-icon" size={17} strokeWidth={1.75} aria-hidden="true" />
+            <a
+              class="nav-link"
+              class:active={isNavActive(page.url.pathname, link.href, base)}
+              href={link.href}
+              onclick={() => shell.closeNav()}
+            >
+              <Icon class="nav-link-icon" size={18} strokeWidth={1.75} aria-hidden="true" />
               {link.label}
             </a>
           </li>
@@ -86,7 +122,12 @@
     </ul>
   </nav>
   <div class="nav-foot">
-    <a class="user-row nav-link" href={`${base}/settings`} class:active={isActive(`${base}/settings`)}>
+    <a
+      class="user-row nav-link"
+      href={settingsHref}
+      class:active={isNavActive(page.url.pathname, settingsHref, base)}
+      onclick={() => shell.closeNav()}
+    >
       <span class="username mono">{auth.user?.username ?? ''}</span>
       <span class="badge badge-{auth.role ?? 'viewer'}">{auth.role ?? ''}</span>
     </a>
@@ -95,3 +136,13 @@
     </button>
   </div>
 </aside>
+
+<style>
+  .nav-version {
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+    margin-top: 0.35rem;
+  }
+</style>

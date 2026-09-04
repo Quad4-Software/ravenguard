@@ -76,6 +76,32 @@ Point at an upstream and a production challenge secret:
   -challenge-secret "$RG_CHALLENGE_SECRET"
 ```
 
+## Local HTTPS with self-signed TLS
+
+For development without Let's Encrypt, set `tls.mode = "selfsigned"`, enable `listen.https`, and keep `trust.mode = "edge"`:
+
+```toml
+[listen]
+http = ":8080"
+https = ":8443"
+
+[tls]
+mode = "selfsigned"
+
+[tls.selfsigned]
+storage_dir = "./data/selfsigned"
+hosts = ["localhost", "127.0.0.1"]
+validity = "365d"
+```
+
+Or write PEM files and use `tls.mode = "files"`:
+
+```bash
+./bin/ravenguard cert generate -hosts localhost,127.0.0.1 -cert ./certs/fullchain.pem -key ./certs/privkey.pem
+```
+
+Browsers will warn on self-signed certificates until you trust them locally.
+
 ## Docker
 
 ```bash

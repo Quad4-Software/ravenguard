@@ -63,7 +63,7 @@ func TestDerivePaths(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	sandbox.DerivePaths(&cfg, cfgPath, ":8080", ":8443", ":8443", "http://10.0.0.5:9000", "", "", "", []string{bl}, "", "", "")
+	sandbox.DerivePaths(&cfg, cfgPath, ":8080", ":8443", ":8443", "http://10.0.0.5:9000", "", "", "", "", []string{bl}, "", "", "")
 
 	if !contains16(cfg.Landlock.BindTCP, 8080) || !contains16(cfg.Landlock.BindTCP, 8443) {
 		t.Fatalf("bind_tcp=%v", cfg.Landlock.BindTCP)
@@ -84,7 +84,7 @@ func TestDerivePaths(t *testing.T) {
 
 func TestDeriveUnixUpstream(t *testing.T) {
 	cfg := sandbox.Config{Mode: sandbox.ModeTry, Landlock: sandbox.LandlockConfig{RestrictNet: true}}
-	sandbox.DerivePaths(&cfg, "", ":8080", "", "", "unix:///var/run/app.sock", "", "", "", nil, "", "", "")
+	sandbox.DerivePaths(&cfg, "", ":8080", "", "", "unix:///var/run/app.sock", "", "", "", "", nil, "", "", "")
 	if !containsStr(cfg.Landlock.RWFiles, "/var/run/app.sock") {
 		t.Fatalf("rw_files=%v", cfg.Landlock.RWFiles)
 	}
@@ -92,7 +92,7 @@ func TestDeriveUnixUpstream(t *testing.T) {
 
 func TestDeriveWSSUpstream(t *testing.T) {
 	cfg := sandbox.Config{Mode: sandbox.ModeTry, Landlock: sandbox.LandlockConfig{RestrictNet: true}}
-	sandbox.DerivePaths(&cfg, "", ":8080", "", "", "wss://origin.example:9443", "", "", "", nil, "", "", "")
+	sandbox.DerivePaths(&cfg, "", ":8080", "", "", "wss://origin.example:9443", "", "", "", "", nil, "", "", "")
 	if !contains16(cfg.Landlock.ConnectTCP, 9443) {
 		t.Fatalf("connect_tcp=%v want 9443", cfg.Landlock.ConnectTCP)
 	}
@@ -100,7 +100,7 @@ func TestDeriveWSSUpstream(t *testing.T) {
 
 func TestDeriveWSDefaultPort(t *testing.T) {
 	cfg := sandbox.Config{Mode: sandbox.ModeTry, Landlock: sandbox.LandlockConfig{RestrictNet: true}}
-	sandbox.DerivePaths(&cfg, "", ":8080", "", "", "ws://origin.example", "", "", "", nil, "", "", "")
+	sandbox.DerivePaths(&cfg, "", ":8080", "", "", "ws://origin.example", "", "", "", "", nil, "", "", "")
 	if !contains16(cfg.Landlock.ConnectTCP, 80) {
 		t.Fatalf("connect_tcp=%v want 80", cfg.Landlock.ConnectTCP)
 	}

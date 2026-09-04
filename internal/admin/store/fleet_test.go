@@ -43,8 +43,12 @@ func TestProxyFleetCRUDAndDesired(t *testing.T) {
 	if err := st.BindFingerprint(row.ID, "fp1234567890abcdef1234567890abcdef", "edge-1b", "host1"); err != nil {
 		t.Fatal(err)
 	}
-	if err := st.TouchProxy(row.ID, ":80", ":443", ""); err != nil {
+	if err := st.TouchProxy(row.ID, ":80", ":443", "", "abc1234"); err != nil {
 		t.Fatal(err)
+	}
+	touched, err := st.GetProxy(row.ID)
+	if err != nil || touched.AgentVersion != "abc1234" {
+		t.Fatalf("agent version: %+v %v", touched, err)
 	}
 	state := agentprotocol.DesiredState{Revision: 1, SafeConfig: []byte(`{"a":1}`)}
 	if err := st.SetDesiredState(row.ID, state); err != nil {

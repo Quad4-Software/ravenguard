@@ -21,7 +21,7 @@ Overlay        -> ravenguard hub
 
 ## Features
 
-- Automatic Let's Encrypt or static PEM certificates
+- Automatic Let's Encrypt, static PEM, or self-signed certificates
 - Host and path routing to multiple upstreams
 - Hub and proxy fleet with live admin cutover
 - Blocklists, rate limits, attack filters, and temp bans

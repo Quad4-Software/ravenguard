@@ -20,7 +20,11 @@ COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 COPY --from=admin /src/internal/admin/ui/dist/ ./internal/admin/ui/dist/
-RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/ravenguard ./cmd/ravenguard
+ARG VERSION=dev
+ARG REVISION=unknown
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath \
+	-ldflags="-s -w -X github.com/Quad4-Software/ravenguard/internal/version.Commit=${REVISION} -X github.com/Quad4-Software/ravenguard/internal/version.Version=${VERSION}" \
+	-o /out/ravenguard ./cmd/ravenguard
 
 # Distroless static nonroot (UID/GID 65532). Suitable for rootless runtimes.
 FROM gcr.io/distroless/static-debian12:nonroot

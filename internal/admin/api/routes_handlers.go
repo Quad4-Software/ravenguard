@@ -13,6 +13,7 @@ import (
 	"github.com/Quad4-Software/ravenguard/internal/admin/ops"
 	"github.com/Quad4-Software/ravenguard/internal/admin/rbac"
 	"github.com/Quad4-Software/ravenguard/internal/admin/store"
+	"github.com/Quad4-Software/ravenguard/internal/tlscerts"
 )
 
 func (s *Server) handleUpstreams(w http.ResponseWriter, r *http.Request) {
@@ -461,6 +462,81 @@ func (s *Server) handleCertsPath(w http.ResponseWriter, r *http.Request) {
 		}
 		s.audit(actor, r, "certs.renew", host, "")
 		writeJSON(w, http.StatusOK, map[string]string{"ok": "1"})
+		return
+	}
+
+	if len(parts) == 2 && parts[1] == "generate" {
+		if r.Method != http.MethodPost {
+			writeErr(w, http.StatusMethodNotAllowed, "method")
+			return
+		}
+		if !rbac.CanWriteConfig(actor.User.Role) {
+			writeErr(w, http.StatusForbidden, "forbidden")
+			return
+		}
+		if !s.checkCSRF(w, r, actor) {
+			return
+		}
+		host := strings.TrimSpace(parts[0])
+		if host == "" {
+			writeErr(w, http.StatusBadRequest, "invalid host")
+			return
+		}
+		var body struct {
+			Validity string   `json:"validity"`
+			DNSNames []string `json:"dns_names"`
+		}
+		if r.Body != nil && r.ContentLength != 0 {
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				writeErr(w, http.StatusBadRequest, "invalid json")
+				return
+			}
+		}
+		validity, err := tlscerts.ParseValidity(body.Validity)
+		if err != nil {
+			writeErr(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		dnsNames := make([]string, 0, len(body.DNSNames)+1)
+		seen := map[string]struct{}{}
+		addDNS := func(h string) {
+			h = strings.ToLower(strings.TrimSpace(h))
+			if h == "" {
+				return
+			}
+			if _, ok := seen[h]; ok {
+				return
+			}
+			seen[h] = struct{}{}
+			dnsNames = append(dnsNames, h)
+		}
+		addDNS(host)
+		for _, h := range body.DNSNames {
+			addDNS(h)
+		}
+		certPEM, keyPEM, err := tlscerts.Generate(tlscerts.GenerateOptions{
+			Hosts:    dnsNames,
+			Validity: validity,
+		})
+		if err != nil {
+			writeErr(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		if err := s.manualCertPut(host, string(certPEM), string(keyPEM)); err != nil {
+			if errors.Is(err, ops.ErrManualCertUnavailable) {
+				writeErr(w, http.StatusBadRequest, "unavailable")
+				return
+			}
+			writeErr(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		s.audit(actor, r, "certs.generate", host, "selfsigned")
+		detail, err := s.certDetail(host)
+		if err != nil {
+			writeJSON(w, http.StatusOK, map[string]string{"ok": "1"})
+			return
+		}
+		writeJSON(w, http.StatusOK, detail)
 		return
 	}
 

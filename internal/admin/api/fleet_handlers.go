@@ -25,14 +25,23 @@ func (s *Server) handleProxies(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		online := map[string]bool{}
+		online := map[string]string{}
 		if s.AgentRegistry != nil {
 			for _, id := range s.AgentRegistry.ListOnline() {
-				online[id] = true
+				ver := ""
+				if sess, ok := s.AgentRegistry.Get(id); ok {
+					ver = sess.Version
+				}
+				online[id] = ver
 			}
 		}
 		for i := range list {
-			list[i].Online = online[list[i].ID]
+			if ver, ok := online[list[i].ID]; ok {
+				list[i].Online = true
+				if ver != "" {
+					list[i].AgentVersion = ver
+				}
+			}
 		}
 		hubURL := strings.TrimSpace(s.HubPublicURL)
 		pub := ""
@@ -159,7 +168,12 @@ func (s *Server) handleProxyID(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if s.AgentRegistry != nil {
-			_, row.Online = s.AgentRegistry.Get(proxyID)
+			if sess, ok := s.AgentRegistry.Get(proxyID); ok {
+				row.Online = true
+				if sess.Version != "" {
+					row.AgentVersion = sess.Version
+				}
+			}
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"proxy": row})
 	case http.MethodPut, http.MethodPatch:

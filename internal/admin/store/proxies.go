@@ -203,10 +203,12 @@ func (s *Store) BindFingerprint(proxyID, fingerprint, name, hostname string) err
 	return nil
 }
 
-func (s *Store) TouchProxy(proxyID string, listenHTTP, listenHTTPS, listenQUIC string) error {
+func (s *Store) TouchProxy(proxyID string, listenHTTP, listenHTTPS, listenQUIC, agentVersion string) error {
 	now := time.Now().UTC().Format(time.RFC3339Nano)
-	_, err := s.db.Exec(`UPDATE proxies SET listen_http=?, listen_https=?, listen_quic=?, last_seen_at=?, updated_at=? WHERE id=?`,
-		listenHTTP, listenHTTPS, listenQUIC, now, now, proxyID)
+	_, err := s.db.Exec(`UPDATE proxies SET listen_http=?, listen_https=?, listen_quic=?,
+		agent_version=CASE WHEN ? != '' THEN ? ELSE agent_version END,
+		last_seen_at=?, updated_at=? WHERE id=?`,
+		listenHTTP, listenHTTPS, listenQUIC, agentVersion, agentVersion, now, now, proxyID)
 	return err
 }
 

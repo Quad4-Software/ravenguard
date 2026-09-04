@@ -44,9 +44,14 @@ import (
 	"github.com/Quad4-Software/ravenguard/internal/tlsacme"
 	"github.com/Quad4-Software/ravenguard/internal/tlscerts"
 	"github.com/Quad4-Software/ravenguard/internal/ui"
+	"github.com/Quad4-Software/ravenguard/internal/version"
 )
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "cert" {
+		os.Exit(runCert(os.Args[2:]))
+	}
+
 	mode, args, err := config.ResolveRunMode(os.Args[1:])
 	if err != nil {
 		slog.Error("config", "err", err)
@@ -287,6 +292,7 @@ func runEdge(cfg config.Config, proxyOnly bool, configPath string, sentryRep *rg
 
 	var acmeMgr *tlsacme.Manager
 	acmeStorage := ""
+	selfSignedStorage := ""
 	if strings.EqualFold(cfg.TLS.Mode, "acme") {
 		http01 := cfg.TLS.ACME.HTTP01 == nil || *cfg.TLS.ACME.HTTP01
 		tlsALPN := cfg.TLS.ACME.TLSALPN01 == nil || *cfg.TLS.ACME.TLSALPN01
@@ -316,6 +322,13 @@ func runEdge(cfg config.Config, proxyOnly bool, configPath string, sentryRep *rg
 			if cfg.Listen.HTTPS != "" {
 				pipe.SetRedirectHTTP(true)
 			}
+		}
+	}
+	if strings.EqualFold(cfg.TLS.Mode, "selfsigned") {
+		selfSignedStorage = cfg.TLS.SelfSigned.StorageDir
+		if abs, aerr := filepath.Abs(selfSignedStorage); aerr == nil {
+			selfSignedStorage = abs
+			cfg.TLS.SelfSigned.StorageDir = abs
 		}
 	}
 
@@ -373,6 +386,12 @@ func runEdge(cfg config.Config, proxyOnly bool, configPath string, sentryRep *rg
 			os.Exit(1)
 		}
 	}
+	if selfSignedStorage != "" {
+		if err = os.MkdirAll(selfSignedStorage, 0o700); err != nil {
+			slog.Error("selfsigned storage_dir", "err", err, "path", selfSignedStorage)
+			os.Exit(1)
+		}
+	}
 
 	manualDir := ""
 	switch {
@@ -392,7 +411,7 @@ func runEdge(cfg config.Config, proxyOnly bool, configPath string, sentryRep *rg
 		os.Exit(1)
 	}
 
-	sandbox.DerivePaths(&sbCfg, configPath, cfg.Listen.HTTP, cfg.Listen.HTTPS, cfg.Listen.QUIC, cfg.Upstream.URL, cfg.TLS.CertFile, cfg.TLS.KeyFile, acmeStorage, blocklistPaths, adminListen, adminHTTPS, adminDataDir)
+	sandbox.DerivePaths(&sbCfg, configPath, cfg.Listen.HTTP, cfg.Listen.HTTPS, cfg.Listen.QUIC, cfg.Upstream.URL, cfg.TLS.CertFile, cfg.TLS.KeyFile, acmeStorage, selfSignedStorage, blocklistPaths, adminListen, adminHTTPS, adminDataDir)
 	if acmeStorage == "" && adminDataDir == "" && manualDir != "" {
 		sbCfg.Landlock.RWDirs = append(sbCfg.Landlock.RWDirs, manualDir)
 	}
@@ -699,7 +718,7 @@ func runEdge(cfg config.Config, proxyOnly bool, configPath string, sentryRep *rg
 				ListenHTTPS: cfg.Listen.HTTPS,
 				ListenQUIC:  cfg.Listen.QUIC,
 				DataDir:     cfg.Agent.DataDir,
-				Version:     "ravenguard",
+				Version:     version.Short(),
 			},
 			Dispatcher: &ops.RuntimeDispatcher{
 				Runtime: rt,
@@ -737,6 +756,34 @@ func runEdge(cfg config.Config, proxyOnly bool, configPath string, sentryRep *rg
 				}
 				return nil, nil
 			}
+		}
+	case "selfsigned":
+		certPEM, keyPEM, serr := tlscerts.EnsureFiles(selfSignedStorage, tlscerts.GenerateOptions{
+			Hosts:    append([]string(nil), cfg.TLS.SelfSigned.Hosts...),
+			Validity: cfg.TLS.SelfSigned.Validity.Duration,
+		})
+		if serr != nil {
+			slog.Error("selfsigned", "err", serr)
+			os.Exit(1)
+		}
+		cert, cerr := tls.X509KeyPair(certPEM, keyPEM)
+		if cerr != nil {
+			slog.Error("selfsigned key pair", "err", cerr)
+			os.Exit(1)
+		}
+		tlsCfg = &tls.Config{
+			Certificates: []tls.Certificate{cert},
+			MinVersion:   tls.VersionTLS12,
+			GetCertificate: func(chi *tls.ClientHelloInfo) (*tls.Certificate, error) {
+				if manualStore != nil {
+					if c, merr := manualStore.GetCertificate(chi); merr != nil {
+						return nil, merr
+					} else if c != nil {
+						return c, nil
+					}
+				}
+				return nil, nil
+			},
 		}
 	case "files":
 		// listener loads from cert/key files

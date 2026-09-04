@@ -349,3 +349,77 @@ func TestResolveRunMode(t *testing.T) {
 		t.Fatal("expected invalid RG_MODE error")
 	}
 }
+
+func TestValidateSelfSignedMode(t *testing.T) {
+	cfg := config.Default()
+	cfg.Challenge.Secret = "test-secret-16chars"
+	cfg.TLS.Mode = "selfsigned"
+	cfg.Listen.HTTPS = ":8443"
+	if err := cfg.Validate(); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg.TLS.SelfSigned.StorageDir = ""
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected storage_dir error")
+	}
+
+	cfg = config.Default()
+	cfg.Challenge.Secret = "test-secret-16chars"
+	cfg.TLS.Mode = "off"
+	cfg.Listen.HTTPS = ":8443"
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected tls.mode error when https set")
+	}
+}
+
+func TestSelfSignedEnvOverrides(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "cfg.toml")
+	if err := os.WriteFile(path, []byte(`
+[listen]
+http = ":8080"
+[upstream]
+url = "http://127.0.0.1:8000"
+[challenge]
+secret = "test-secret-16chars"
+`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Setenv("RG_TLS_MODE", "selfsigned")
+	t.Setenv("RG_SELFSIGNED_STORAGE_DIR", "/tmp/rg-ss")
+	t.Setenv("RG_SELFSIGNED_HOSTS", "dev.local, 127.0.0.1")
+	t.Setenv("RG_LISTEN_HTTPS", ":8443")
+
+	cfg, err := config.Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.TLS.Mode != "selfsigned" {
+		t.Fatalf("mode=%q", cfg.TLS.Mode)
+	}
+	if cfg.TLS.SelfSigned.StorageDir != "/tmp/rg-ss" {
+		t.Fatalf("storage_dir=%q", cfg.TLS.SelfSigned.StorageDir)
+	}
+	if len(cfg.TLS.SelfSigned.Hosts) != 2 || cfg.TLS.SelfSigned.Hosts[0] != "dev.local" || cfg.TLS.SelfSigned.Hosts[1] != "127.0.0.1" {
+		t.Fatalf("hosts=%v", cfg.TLS.SelfSigned.Hosts)
+	}
+	if cfg.Listen.HTTPS != ":8443" {
+		t.Fatalf("https=%q", cfg.Listen.HTTPS)
+	}
+}
+
+func TestDefaultSelfSigned(t *testing.T) {
+	cfg := config.Default()
+	if cfg.TLS.SelfSigned.StorageDir != "./data/selfsigned" {
+		t.Fatalf("storage_dir=%q", cfg.TLS.SelfSigned.StorageDir)
+	}
+	if len(cfg.TLS.SelfSigned.Hosts) != 1 || cfg.TLS.SelfSigned.Hosts[0] != "localhost" {
+		t.Fatalf("hosts=%v", cfg.TLS.SelfSigned.Hosts)
+	}
+	if cfg.TLS.SelfSigned.Validity.Duration <= 0 {
+		t.Fatal("expected default validity")
+	}
+}
+

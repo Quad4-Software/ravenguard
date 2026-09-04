@@ -17,6 +17,9 @@
   let certPem = $state('')
   let keyPem = $state('')
   let uploading = $state(false)
+  let genHost = $state('')
+  let genValidity = $state('365d')
+  let generating = $state(false)
   let manageHosts = $state('')
   let managing = $state(false)
   let confirmDelete = $state<string | null>(null)
@@ -82,6 +85,24 @@
     }
   }
 
+  async function generate(event: SubmitEvent) {
+    event.preventDefault()
+    const host = genHost.trim().toLowerCase()
+    if (!host) return
+    generating = true
+    try {
+      const detail = await api.certs.generate(host, { validity: genValidity.trim() || '365d' })
+      toast.info(`Generated self-signed certificate for ${host}`)
+      genHost = ''
+      await load()
+      selected = detail
+    } catch (err) {
+      toast.error(err instanceof APIError ? err.message : 'failed to generate certificate')
+    } finally {
+      generating = false
+    }
+  }
+
   async function onFile(kind: 'cert' | 'key', files: FileList | null) {
     const f = files?.[0]
     if (!f) return
@@ -116,7 +137,7 @@
     if (!host) return
     try {
       await api.certs.remove(host)
-      toast.info(`Removed manual certificate for ${host}`)
+      toast.info(`Removed certificate for ${host}`)
       if (selected?.hostname === host) selected = null
       await load()
     } catch (err) {
@@ -137,12 +158,31 @@
 <div class="page-head">
   <div>
     <h1 class="page-title">Certificates</h1>
-    <p class="page-sub">ACME status, manual PEM upload, and certificate details</p>
+    <p class="page-sub">ACME status, manual PEM upload, self-signed generation, and certificate details</p>
   </div>
   <button type="button" class="btn btn-ghost" onclick={load} disabled={loading}>Refresh</button>
 </div>
 
 {#if canWrite}
+  <div class="section">
+    <div class="section-title">Generate self-signed</div>
+    <form class="field-row" onsubmit={generate}>
+      <div class="field">
+        <label for="gen-host">Hostname</label>
+        <input id="gen-host" type="text" bind:value={genHost} placeholder="dev.local" />
+      </div>
+      <div class="field">
+        <label for="gen-validity">Validity</label>
+        <input id="gen-validity" type="text" bind:value={genValidity} placeholder="365d" />
+      </div>
+      <div class="field-btn">
+        <button type="submit" class="btn btn-primary" disabled={generating || !genHost.trim()}>
+          {generating ? 'Generating…' : 'Generate self-signed'}
+        </button>
+      </div>
+    </form>
+  </div>
+
   <div class="section">
     <div class="section-title">Upload or paste PEM</div>
     <form onsubmit={upload}>
@@ -235,7 +275,7 @@
                     {renewing === cert.hostname ? 'Renewing…' : 'Renew'}
                   </button>
                 {/if}
-                {#if cert.source === 'manual'}
+                {#if cert.source === 'manual' || cert.source === 'selfsigned'}
                   <button type="button" class="btn btn-sm btn-ghost" onclick={() => (confirmDelete = cert.hostname)}>
                     Delete
                   </button>
@@ -280,8 +320,8 @@
 
 <ConfirmDialog
   open={confirmDelete !== null}
-  title="Delete manual certificate"
-  message={`Remove the uploaded certificate for ${confirmDelete ?? ''}?`}
+  title="Delete certificate"
+  message={`Remove the certificate for ${confirmDelete ?? ''}?`}
   confirmLabel="Delete"
   danger={true}
   onconfirm={doDelete}

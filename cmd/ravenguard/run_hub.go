@@ -64,7 +64,7 @@ func runHub(cfg config.Config) {
 		os.Exit(1)
 	}
 	sandbox.DerivePaths(&sbCfg, "", "", "", "", "",
-		cfg.TLS.CertFile, cfg.TLS.KeyFile, "", nil,
+		cfg.TLS.CertFile, cfg.TLS.KeyFile, "", "", nil,
 		cfg.Admin.Listen, cfg.Admin.HTTPS, cfg.Admin.DataDir)
 	if _, err := sandbox.Apply(sbCfg, slog.Default()); err != nil {
 		slog.Error("sandbox", "err", err)

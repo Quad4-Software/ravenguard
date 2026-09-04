@@ -300,6 +300,7 @@ data_dir = "./data/proxy"`
             <th>Revision</th>
             <th>Public IP</th>
             <th>Host</th>
+            <th>Version</th>
             {#if canWrite}<th class="actions">Actions</th>{/if}
           </tr>
         </thead>
@@ -324,6 +325,7 @@ data_dir = "./data/proxy"`
                 {p.public_ipv4 || p.public_ipv6 || '—'}
               </td>
               <td class="muted cell-clip">{p.hostname || '—'}</td>
+              <td class="mono muted">{p.agent_version || '—'}</td>
               {#if canWrite}
                 <td class="actions">
                   <button
@@ -356,7 +358,7 @@ data_dir = "./data/proxy"`
             </tr>
           {:else}
             <tr class="empty-row">
-              <td colspan={canWrite ? 7 : 6}>No proxies enrolled yet</td>
+              <td colspan={canWrite ? 8 : 7}>No proxies enrolled yet</td>
             </tr>
           {/each}
         </tbody>
