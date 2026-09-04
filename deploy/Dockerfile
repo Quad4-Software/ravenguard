@@ -14,7 +14,7 @@ RUN pnpm admin:build \
 	&& cp -a packages/admin/build/. internal/admin/ui/dist/ \
 	&& touch internal/admin/ui/dist/.gitkeep
 
-FROM golang:1.26.6-bookworm AS build
+FROM golang:1.27.1-bookworm AS build
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
