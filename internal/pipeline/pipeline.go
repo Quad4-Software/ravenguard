@@ -152,11 +152,32 @@ func New(
 	h.mux.HandleFunc(cfg.Challenge.PathPrefix+"/v1/challenge", h.handleChallengeV1GET)
 	h.mux.HandleFunc(cfg.Challenge.PathPrefix+"/v1/verify", h.handleVerifyV1POST)
 	h.mux.HandleFunc(cfg.Challenge.PathPrefix+"/access", h.handleAccessPOST)
+	h.mux.HandleFunc(cfg.Challenge.PathPrefix+"/healthz", h.handleHealthz)
+	h.mux.HandleFunc("/healthz", h.handleHealthz)
 	if cfg.UI.TestMode {
 		h.mountTestRoutes()
 	}
 	h.mux.HandleFunc("/", h.guard)
 	return h
+}
+
+func (h *Handler) handleHealthz(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	h.mu.RLock()
+	hc := h.health
+	h.mu.RUnlock()
+	if hc != nil && !hc.Healthy() {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_, _ = w.Write([]byte("upstream unhealthy\n"))
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte("ok\n"))
 }
 
 // ServeHTTP implements http.Handler.

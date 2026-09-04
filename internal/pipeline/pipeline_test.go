@@ -627,6 +627,26 @@ func TestEdgeModeIgnoresForwardedIP(t *testing.T) {
 	}
 }
 
+func TestHealthzBypassesGuard(t *testing.T) {
+	h := testHandler(t, func(cfg *config.Config) {
+		cfg.Challenge.Mode = "always"
+		cfg.Detect.Enabled = true
+		cfg.Challenge.Enabled = true
+	})
+	for _, path := range []string{"/healthz", "/_rg/healthz"} {
+		rr := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		req.RemoteAddr = "192.0.2.50:1"
+		h.ServeHTTP(rr, req)
+		if rr.Code != http.StatusOK {
+			t.Fatalf("%s code=%d body=%q", path, rr.Code, rr.Body.String())
+		}
+		if rr.Body.String() != "ok\n" {
+			t.Fatalf("%s body=%q", path, rr.Body.String())
+		}
+	}
+}
+
 func TestStealthOmitsRayHeaderAndBrandFingerprints(t *testing.T) {
 	h := testHandler(t, func(cfg *config.Config) {
 		cfg.Challenge.Mode = "always"
