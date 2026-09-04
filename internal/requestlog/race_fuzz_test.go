@@ -11,11 +11,11 @@ import (
 func TestLoggerRaceRecordRecent(t *testing.T) {
 	l := New(64)
 	var wg sync.WaitGroup
-	for i := 0; i < 8; i++ {
+	for i := range 8 {
 		wg.Add(1)
 		go func(n int) {
 			defer wg.Done()
-			for j := 0; j < 200; j++ {
+			for j := range 200 {
 				ray := string(rune('a'+(n%26))) + string(rune('0'+j%10))
 				l.Record(Event{Ray: ray, Action: ActionBlock, Reason: "x", BindID: "b1"})
 				_ = l.Recent(20)

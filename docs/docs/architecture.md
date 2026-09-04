@@ -38,17 +38,16 @@ Controls run at the HTTP application layer. Volumetric DDoS mitigation belongs a
 6. **Optional Q-Feeds cache** for malware IP and domain entries
 7. **Optional Coraza** (OWASP CRS) request inspection. When Coraza is enabled in `block` mode, builtin attack signatures are skipped
 8. **Builtin attack signatures** on path/query (when Coraza is off or in detect mode)
-9. **Rate limit** keyed by privacy client identity (hashed IP by default). Write methods cost more
-10. **Detect** HTTP heuristics, short-window behavior, and optional proxy bot-score headers (skipped for WebSocket upgrades and allowlisted clients)
-11. **Challenge** PoW gate when risk thresholds require it
-12. **Access policies** per matched route
-13. **OpenAPI schema gate** when a schema is attached to the route
-14. **Proxy** to upstream
+9. **Semantic analysis** (optional) decode and intent scoring for SQLi XSS CMD path
+10. **ML score** (optional) pure-Go linear model on structured features, default shadow
+11. **Rate limit** keyed by privacy client identity (hashed IP by default). Write methods cost more
+12. **Detect** HTTP heuristics, behavior, and merged semantic/ML points (skipped for WebSocket upgrades and allowlisted clients)
+13. **Challenge** PoW gate when risk thresholds require it
+14. **Access policies** per matched route
+15. **OpenAPI schema gate** when a schema is attached to the route
+16. **Proxy** to upstream
 
-Deny outcomes (block, challenge, rate limit, Coraza, OpenAPI, access) are recorded under the response Ray ID for admin lookup.
-9. **Challenge or block** (skipped when the client matches an IP, User-Agent, or header allowlist)
-10. **Access policy** (password, PIN, IP allowlist, header, User-Agent) when attached to the matched route
-11. **Route** by host + path prefix to an upstream, otherwise the default TOML upstream
+Deny outcomes (block, challenge, rate limit, Coraza, semantic, ML, OpenAPI, access) are recorded under the response Ray ID for admin lookup.
 
 WebSocket upgrades (`Connection: Upgrade` + `Upgrade: websocket`) still pass blocklists, feeds, health, attack signatures, rate limits, and protect. Detect scoring is skipped. When challenge is enabled, upgrades need an existing clearance cookie or they receive `403` (not an HTML challenge page), unless the client is allowlisted. Access policies also apply to WebSocket upgrades.
 
@@ -69,6 +68,8 @@ Upstream forwarding sets `X-Real-IP` and rebuilds `X-Forwarded-For` from the res
 | Rate limiting | `internal/ratelimit` |
 | Attack / DoS protect | `internal/protect` |
 | Scanner and behavior detect | `internal/detect` |
+| Semantic payload analysis | `internal/semantic` |
+| ML request scoring | `internal/ml` |
 | Challenge / PoW protocol v1 | `internal/challenge` |
 | Challenge widget (`@quad4/ravenguard-widget`) | `packages/widget` |
 | Upstream proxy | `internal/proxy` |

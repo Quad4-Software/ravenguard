@@ -1,0 +1,10 @@
+{
+  "model_hash": "fa6d0f1983a2a941",
+  "fpr": 0,
+  "tpr": 1,
+  "p99_micros": 9,
+  "allocs_per_op": 0,
+  "passed": true,
+  "created_at": "2026-09-04T06:16:28.703668967Z",
+  "marker": "RG_ML_EVAL_PASS"
+}

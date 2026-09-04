@@ -33,6 +33,7 @@ import (
 	"github.com/Quad4-Software/ravenguard/internal/iputil"
 	"github.com/Quad4-Software/ravenguard/internal/listener"
 	"github.com/Quad4-Software/ravenguard/internal/logging"
+	"github.com/Quad4-Software/ravenguard/internal/ml"
 	"github.com/Quad4-Software/ravenguard/internal/pipeline"
 	"github.com/Quad4-Software/ravenguard/internal/privacy"
 	"github.com/Quad4-Software/ravenguard/internal/protect"
@@ -43,6 +44,7 @@ import (
 	"github.com/Quad4-Software/ravenguard/internal/router"
 	"github.com/Quad4-Software/ravenguard/internal/sandbox"
 	"github.com/Quad4-Software/ravenguard/internal/schemagate"
+	"github.com/Quad4-Software/ravenguard/internal/semantic"
 	rgsentry "github.com/Quad4-Software/ravenguard/internal/sentry"
 	"github.com/Quad4-Software/ravenguard/internal/tlsacme"
 	"github.com/Quad4-Software/ravenguard/internal/tlscerts"
@@ -308,6 +310,33 @@ func runEdge(cfg config.Config, proxyOnly bool, configPath string, sentryRep *rg
 		pipe.SetCoraza(corazaEng)
 	}
 
+	semEng := semantic.New(cfg.Semantic)
+	pipe.SetSemantic(semEng)
+
+	var mlModel *ml.Model
+	if m, merr := ml.LoadModel(cfg.ML.ModelPath); merr == nil {
+		mlModel = m
+	} else {
+		mlModel = ml.DefaultModel()
+		if cfg.ML.Enabled {
+			slog.Warn("ml model load failed, using default", "path", cfg.ML.ModelPath, "err", merr)
+		}
+	}
+	mlScorer := ml.New(cfg.ML, mlModel)
+	if cfg.ML.AdaptPath != "" {
+		if am, aerr := ml.LoadModel(cfg.ML.AdaptPath); aerr == nil {
+			mlScorer.SetAdapt(am)
+		}
+	}
+	attestPath := cfg.ML.AttestPath
+	if attestPath == "" {
+		attestPath = cfg.ML.ModelPath + ".attest.json"
+	}
+	if ml.AttestOKForModel(attestPath, mlModel.Hash, cfg.ML.FPRGate) {
+		mlScorer.SetAttestOK(true)
+	}
+	pipe.SetML(mlScorer)
+
 	bindRequestLog := func(rt *ops.Runtime) {
 		if rt == nil {
 			return
@@ -569,6 +598,8 @@ func runEdge(cfg config.Config, proxyOnly bool, configPath string, sentryRep *rg
 		rt.RootCtx = ctx
 		rt.SetPipeline(pipe)
 		rt.Coraza = corazaEng
+		rt.Semantic = semEng
+		rt.ML = mlScorer
 		rt.StartSampler(ctx)
 		bindRequestLog(rt)
 		startRequestLogPurge(ctx)
@@ -668,6 +699,9 @@ func runEdge(cfg config.Config, proxyOnly bool, configPath string, sentryRep *rg
 			os.Exit(1)
 		}
 		reqLog.SetPersister(adminSrv.Store())
+		if mlScorer != nil && mlScorer.Shadow() != nil {
+			mlScorer.Shadow().SetSink(adminSrv.Store())
+		}
 		rt.CertExport = func(host string) (string, string, error) {
 			if manualStore == nil {
 				return "", "", ops.ErrManualCertUnavailable
@@ -703,6 +737,8 @@ func runEdge(cfg config.Config, proxyOnly bool, configPath string, sentryRep *rg
 			rt.RootCtx = ctx
 			rt.SetPipeline(pipe)
 			rt.Coraza = corazaEng
+			rt.Semantic = semEng
+			rt.ML = mlScorer
 			rt.StartSampler(ctx)
 			bindRequestLog(rt)
 			startRequestLogPurge(ctx)

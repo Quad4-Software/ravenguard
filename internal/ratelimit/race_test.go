@@ -15,13 +15,13 @@ func TestUpdateAllowRace(t *testing.T) {
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		for i := 0; i < 500; i++ {
+		for i := range 500 {
 			l.Update(100+i%10, 200, time.Second, i%2 == 0)
 		}
 	}()
 	go func() {
 		defer wg.Done()
-		for i := 0; i < 2000; i++ {
+		for range 2000 {
 			_ = l.AllowN("1.2.3.4", "/x", 1)
 		}
 	}()

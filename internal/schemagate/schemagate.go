@@ -35,8 +35,8 @@ type Result struct {
 }
 
 type compiled struct {
-	schema    Schema
-	router    routers.Router
+	schema     Schema
+	router     routers.Router
 	detectOnly bool
 }
 

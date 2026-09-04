@@ -1,6 +1,16 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import { api, APIError, type ProxyNode, type WAFEvent } from '$lib/api'
+  import { toast } from '$lib/toast.svelte'
+
+  type MLSample = {
+    id: number
+    ray: string
+    label: string
+    prob: number
+    path: string
+    method: string
+  }
 
   let ray = $state('')
   let proxyId = $state('')
@@ -9,6 +19,9 @@
   let recent = $state<WAFEvent[]>([])
   let loading = $state(false)
   let error = $state('')
+  let mlSamples = $state<MLSample[]>([])
+  let mlLoading = $state(false)
+  let mlBusy = $state(false)
 
   async function loadProxies() {
     try {
@@ -25,6 +38,43 @@
       recent = res.events ?? []
     } catch {
       recent = []
+    }
+  }
+
+  async function loadMLSamples() {
+    mlLoading = true
+    try {
+      const res = await api.ml.samples(50, true)
+      mlSamples = res.samples ?? []
+    } catch (err) {
+      toast.error(err instanceof APIError ? err.message : 'failed to load ML samples')
+    } finally {
+      mlLoading = false
+    }
+  }
+
+  async function labelSample(id: number, label: 'fp' | 'tp' | 'ignore') {
+    mlBusy = true
+    try {
+      await api.ml.label(id, label)
+      mlSamples = mlSamples.filter((s) => s.id !== id)
+      toast.info(`Labeled sample ${id} as ${label}`)
+    } catch (err) {
+      toast.error(err instanceof APIError ? err.message : 'failed to label sample')
+    } finally {
+      mlBusy = false
+    }
+  }
+
+  async function adaptModel() {
+    mlBusy = true
+    try {
+      const res = await api.ml.adapt()
+      toast.info(`Adapted model (${res.samples} samples, hash ${res.hash.slice(0, 12)}…)`)
+    } catch (err) {
+      toast.error(err instanceof APIError ? err.message : 'adapt failed')
+    } finally {
+      mlBusy = false
     }
   }
 
@@ -185,6 +235,67 @@
   {/if}
 </div>
 
+<div class="card stack">
+  <div class="ml-head">
+    <h2 class="section-title">ML samples</h2>
+    <div class="actions-row">
+      <button type="button" class="btn btn-ghost" onclick={() => loadMLSamples()} disabled={mlLoading || mlBusy}>
+        {mlLoading ? 'Loading…' : 'Load unlabeled'}
+      </button>
+      <button type="button" class="btn" onclick={() => adaptModel()} disabled={mlBusy || mlLoading}>
+        Train adapt
+      </button>
+    </div>
+  </div>
+  {#if mlSamples.length === 0}
+    <p class="muted">No unlabeled samples loaded</p>
+  {:else}
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Method</th>
+            <th>Path</th>
+            <th>Prob</th>
+            <th>Ray</th>
+            <th>Label</th>
+          </tr>
+        </thead>
+        <tbody>
+          {#each mlSamples as s (s.id)}
+            <tr>
+              <td>{s.id}</td>
+              <td>{s.method}</td>
+              <td class="mono">{s.path}</td>
+              <td>{s.prob.toFixed(3)}</td>
+              <td class="mono">{s.ray ? s.ray.slice(0, 16) + '…' : '—'}</td>
+              <td>
+                <div class="label-actions">
+                  <button type="button" class="btn btn-ghost" disabled={mlBusy} onclick={() => labelSample(s.id, 'fp')}>
+                    FP
+                  </button>
+                  <button type="button" class="btn btn-ghost" disabled={mlBusy} onclick={() => labelSample(s.id, 'tp')}>
+                    TP
+                  </button>
+                  <button
+                    type="button"
+                    class="btn btn-ghost"
+                    disabled={mlBusy}
+                    onclick={() => labelSample(s.id, 'ignore')}
+                  >
+                    Ignore
+                  </button>
+                </div>
+              </td>
+            </tr>
+          {/each}
+        </tbody>
+      </table>
+    </div>
+  {/if}
+</div>
+
 <style>
   .grow {
     flex: 1;
@@ -245,5 +356,22 @@
     flex-direction: column;
     gap: 0.75rem;
     margin-bottom: 1rem;
+  }
+  .ml-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+  }
+  .actions-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  .label-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
   }
 </style>

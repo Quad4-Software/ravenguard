@@ -1,0 +1,10 @@
+GET /products/shoes?color=red
+GET /api/v1/items/42
+POST /api/v1/items {"name":"union jacket","note":"please select size"}
+GET /blog/how-to-select-a-database
+GET /search?q=red+shoes
+GET /robots.txt
+GET /favicon.ico
+POST /api/contact {"email":"a@b.com","message":"hello from script writer"}
+GET /docs/getting-started
+GET /healthz

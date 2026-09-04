@@ -17,9 +17,7 @@ func TestAcquireSweepRace(t *testing.T) {
 	})
 	var wg sync.WaitGroup
 	stop := make(chan struct{})
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		for {
 			select {
 			case <-stop:
@@ -28,13 +26,13 @@ func TestAcquireSweepRace(t *testing.T) {
 				g.Sweep(time.Millisecond)
 			}
 		}
-	}()
-	for i := 0; i < 16; i++ {
+	})
+	for i := range 16 {
 		wg.Add(1)
 		go func(n int) {
 			defer wg.Done()
 			key := "client-" + string(rune('a'+n%26))
-			for j := 0; j < 500; j++ {
+			for range 500 {
 				if g.Acquire(key) {
 					g.Release(key)
 				}
@@ -56,7 +54,7 @@ func TestUpdateConfigRace(t *testing.T) {
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		for i := 0; i < 200; i++ {
+		for i := range 200 {
 			g.UpdateConfig(Config{
 				Enabled:             true,
 				MaxConcurrentGlobal: 1000,
@@ -68,7 +66,7 @@ func TestUpdateConfigRace(t *testing.T) {
 	}()
 	go func() {
 		defer wg.Done()
-		for i := 0; i < 200; i++ {
+		for range 200 {
 			if g.Acquire("k") {
 				g.Release("k")
 			}

@@ -194,8 +194,8 @@ func ParseValidity(s string) (time.Duration, error) {
 		}
 		return d, nil
 	}
-	if strings.HasSuffix(s, "d") {
-		daysStr := strings.TrimSuffix(s, "d")
+	if before, ok := strings.CutSuffix(s, "d"); ok {
+		daysStr := before
 		var days float64
 		if _, err := fmt.Sscanf(daysStr, "%f", &days); err == nil && days > 0 {
 			return time.Duration(days * float64(24*time.Hour)), nil

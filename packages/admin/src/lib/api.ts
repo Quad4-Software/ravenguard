@@ -273,6 +273,8 @@ export interface SafeConfig {
   protect: ProtectSafe
   detect: DetectSafe
   coraza: CorazaSafe
+  semantic: SemanticSafe
+  ml: MLSafe
   challenge: ChallengeSafe
   ui: UISafe
   trust: TrustSafe
@@ -289,6 +291,20 @@ export interface CorazaSafe {
   paranoia: number
 }
 
+export interface SemanticSafe {
+  enabled: boolean
+  mode: string
+}
+
+export interface MLSafe {
+  enabled: boolean
+  mode: string
+  challenge_prob: number
+  block_prob: number
+  confidence_min: number
+  attest_ok?: boolean
+}
+
 export interface ConfigView {
   live: SafeConfig
   restart_required: Record<string, unknown>
@@ -301,6 +317,8 @@ export function normalizeSafeConfig(raw: Partial<SafeConfig> | null | undefined)
   const pr = r.protect ?? ({} as Partial<ProtectSafe>)
   const dt = r.detect ?? ({} as Partial<DetectSafe>)
   const cz = r.coraza ?? ({} as Partial<CorazaSafe>)
+  const sem = r.semantic ?? ({} as Partial<SemanticSafe>)
+  const mlc = r.ml ?? ({} as Partial<MLSafe>)
   const ps = dt.proxy_signals ?? ({} as Partial<ProxySignalsSafe>)
   const ch = r.challenge ?? ({} as Partial<ChallengeSafe>)
   const ui = r.ui ?? ({} as Partial<UISafe>)
@@ -367,6 +385,18 @@ export function normalizeSafeConfig(raw: Partial<SafeConfig> | null | undefined)
       loaded: !!cz.loaded,
       mode: String(cz.mode ?? 'block'),
       paranoia: Number(cz.paranoia ?? 1),
+    },
+    semantic: {
+      enabled: !!sem.enabled,
+      mode: String(sem.mode ?? 'shadow'),
+    },
+    ml: {
+      enabled: !!mlc.enabled,
+      mode: String(mlc.mode ?? 'shadow'),
+      challenge_prob: Number(mlc.challenge_prob ?? 0.75),
+      block_prob: Number(mlc.block_prob ?? 0.95),
+      confidence_min: Number(mlc.confidence_min ?? 0.85),
+      attest_ok: !!mlc.attest_ok,
     },
     challenge: {
       enabled: ch.enabled !== false,
@@ -876,6 +906,24 @@ export const api = {
         'GET',
         `/requests/${encodeURIComponent(ray)}${qs ? `?${qs}` : ''}`,
       )
+    },
+  },
+
+  ml: {
+    samples(limit?: number, unlabeled?: boolean) {
+      const q = new URLSearchParams()
+      if (limit) q.set('limit', String(limit))
+      if (unlabeled) q.set('unlabeled', '1')
+      const qs = q.toString()
+      return request<{
+        samples: Array<{ id: number; ray: string; label: string; prob: number; path: string; method: string }>
+      }>('GET', '/ml/samples' + (qs ? '?' + qs : ''))
+    },
+    label(id: number, label: 'fp' | 'tp' | 'ignore') {
+      return request<{ ok: boolean }>('POST', `/ml/samples/${id}`, { label })
+    },
+    adapt() {
+      return request<{ ok: boolean; hash: string; samples: number }>('POST', '/ml/adapt')
     },
   },
 

@@ -111,6 +111,28 @@ paranoia = 1
 max_body_inspect = 1048576
 skip_path_prefixes = ["/_rg"]
 
+[semantic]
+enabled = false
+mode = "shadow"
+max_body_inspect = 65536
+max_decode_depth = 3
+max_decode_bytes = 262144
+max_cpu_ns = 2000000
+strict_budget = false
+families = ["sqli", "xss", "cmd", "path"]
+skip_path_prefixes = ["/_rg"]
+
+[ml]
+enabled = false
+mode = "shadow"
+model_path = "assets/ml/base.bin"
+challenge_prob = 0.75
+block_prob = 0.95
+confidence_min = 0.85
+fpr_gate = 0.001
+shadow_sample_rate = 0.02
+max_points = 60
+
 [detect]
 enabled = true
 challenge_score = 40

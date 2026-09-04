@@ -422,4 +422,3 @@ func TestDefaultSelfSigned(t *testing.T) {
 		t.Fatal("expected default validity")
 	}
 }
-

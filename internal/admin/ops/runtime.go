@@ -16,6 +16,7 @@ import (
 	"github.com/Quad4-Software/ravenguard/internal/challenge"
 	"github.com/Quad4-Software/ravenguard/internal/config"
 	"github.com/Quad4-Software/ravenguard/internal/health"
+	"github.com/Quad4-Software/ravenguard/internal/ml"
 	"github.com/Quad4-Software/ravenguard/internal/protect"
 	"github.com/Quad4-Software/ravenguard/internal/qfeeds"
 	"github.com/Quad4-Software/ravenguard/internal/ratelimit"
@@ -44,6 +45,18 @@ type Runtime struct {
 		Enabled() bool
 		Loaded() bool
 		Mode() string
+	}
+	Semantic interface {
+		UpdateLive(enabled bool, mode string)
+		Enabled() bool
+		Mode() string
+	}
+	ML interface {
+		UpdateLive(enabled bool, mode string)
+		Enabled() bool
+		Mode() string
+		AttestOK() bool
+		SetAdapt(m *ml.Model)
 	}
 
 	ReloadRoutes     func() error
@@ -343,6 +356,8 @@ type SafeConfig struct {
 	Logging   LoggingSafe   `json:"logging"`
 	QFeeds    *QFeedsSafe   `json:"qfeeds,omitempty"`
 	Coraza    CorazaSafe    `json:"coraza"`
+	Semantic  SemanticSafe  `json:"semantic"`
+	ML        MLSafe        `json:"ml"`
 }
 
 type CorazaSafe struct {
@@ -350,6 +365,20 @@ type CorazaSafe struct {
 	Loaded   bool   `json:"loaded"`
 	Mode     string `json:"mode"`
 	Paranoia int    `json:"paranoia"`
+}
+
+type SemanticSafe struct {
+	Enabled bool   `json:"enabled"`
+	Mode    string `json:"mode"`
+}
+
+type MLSafe struct {
+	Enabled       bool    `json:"enabled"`
+	Mode          string  `json:"mode"`
+	ChallengeProb float64 `json:"challenge_prob"`
+	BlockProb     float64 `json:"block_prob"`
+	ConfidenceMin float64 `json:"confidence_min"`
+	AttestOK      bool    `json:"attest_ok"`
 }
 
 type RateLimitSafe struct {
@@ -545,6 +574,31 @@ func (r *Runtime) ConfigView() ConfigView {
 				}
 				return cz
 			}(),
+			Semantic: func() SemanticSafe {
+				s := SemanticSafe{Enabled: cfg.Semantic.Enabled, Mode: cfg.Semantic.Mode}
+				if r.Semantic != nil {
+					s.Enabled = r.Semantic.Enabled()
+					if m := r.Semantic.Mode(); m != "" {
+						s.Mode = m
+					}
+				}
+				return s
+			}(),
+			ML: func() MLSafe {
+				m := MLSafe{
+					Enabled: cfg.ML.Enabled, Mode: cfg.ML.Mode,
+					ChallengeProb: cfg.ML.ChallengeProb, BlockProb: cfg.ML.BlockProb,
+					ConfidenceMin: cfg.ML.ConfidenceMin,
+				}
+				if r.ML != nil {
+					m.Enabled = r.ML.Enabled()
+					if md := r.ML.Mode(); md != "" {
+						m.Mode = md
+					}
+					m.AttestOK = r.ML.AttestOK()
+				}
+				return m
+			}(),
 			Challenge: ChallengeSafe{
 				Enabled: cfg.Challenge.Enabled, Mode: cfg.Challenge.Mode,
 				Difficulty: cfg.Challenge.Difficulty, Algorithm: cfg.Challenge.Algorithm,
@@ -605,6 +659,7 @@ func (r *Runtime) ConfigView() ConfigView {
 				"proxy_protocol":  cfg.Trust.ProxyProtocol,
 			},
 			"challenge": map[string]any{"path_prefix": cfg.Challenge.PathPrefix},
+			"ml":        map[string]any{"model_path": cfg.ML.ModelPath, "adapt_path": cfg.ML.AdaptPath},
 			"admin":     map[string]any{"listen": cfg.Admin.Listen, "https": cfg.Admin.HTTPS, "base_path": cfg.Admin.BasePath, "data_dir": cfg.Admin.DataDir},
 			"sandbox":   map[string]string{"mode": cfg.Sandbox.Mode},
 			"secrets":   map[string]string{"challenge_secret": "[redacted]", "qfeeds_api_token": redactSecret(cfg.QFeeds.APIToken), "sentry_dsn": redactSecret(cfg.Sentry.DSN)},
@@ -686,6 +741,23 @@ func (r *Runtime) ApplySafeConfig(safe SafeConfig) error {
 	if safe.Coraza.Paranoia > 0 {
 		cfg.Coraza.Paranoia = safe.Coraza.Paranoia
 	}
+	cfg.Semantic.Enabled = safe.Semantic.Enabled
+	if safe.Semantic.Mode != "" {
+		cfg.Semantic.Mode = safe.Semantic.Mode
+	}
+	cfg.ML.Enabled = safe.ML.Enabled
+	if safe.ML.Mode != "" {
+		cfg.ML.Mode = safe.ML.Mode
+	}
+	if safe.ML.ChallengeProb > 0 {
+		cfg.ML.ChallengeProb = safe.ML.ChallengeProb
+	}
+	if safe.ML.BlockProb > 0 {
+		cfg.ML.BlockProb = safe.ML.BlockProb
+	}
+	if safe.ML.ConfidenceMin > 0 {
+		cfg.ML.ConfidenceMin = safe.ML.ConfidenceMin
+	}
 	applyChallengeSafe(&cfg, safe.Challenge)
 	applyUISafe(&cfg, safe.UI)
 	applyTrustSafe(&cfg, safe.Trust)
@@ -739,6 +811,27 @@ func (r *Runtime) ApplySafeConfig(safe SafeConfig) error {
 		}
 		r.cfg = cfg
 	}
+	if r.Semantic != nil {
+		r.Semantic.UpdateLive(cfg.Semantic.Enabled, cfg.Semantic.Mode)
+		cfg.Semantic.Enabled = r.Semantic.Enabled()
+		if m := r.Semantic.Mode(); m != "" {
+			cfg.Semantic.Mode = m
+		}
+		r.cfg = cfg
+	}
+	if r.ML != nil {
+		mode := cfg.ML.Mode
+		if (mode == "block" || mode == "challenge") && !r.ML.AttestOK() {
+			mode = "shadow"
+			cfg.ML.Mode = "shadow"
+		}
+		r.ML.UpdateLive(cfg.ML.Enabled, mode)
+		cfg.ML.Enabled = r.ML.Enabled()
+		if m := r.ML.Mode(); m != "" {
+			cfg.ML.Mode = m
+		}
+		r.cfg = cfg
+	}
 	if r.Pipeline != nil {
 		r.Pipeline.ApplyConfig(cfg)
 	}
@@ -774,6 +867,20 @@ func validateSafeConfig(safe SafeConfig) error {
 		case "block", "detect":
 		default:
 			return fmt.Errorf("coraza.mode must be block or detect")
+		}
+	}
+	if safe.Semantic.Mode != "" {
+		switch strings.ToLower(strings.TrimSpace(safe.Semantic.Mode)) {
+		case "shadow", "challenge", "block":
+		default:
+			return fmt.Errorf("semantic.mode must be shadow, challenge, or block")
+		}
+	}
+	if safe.ML.Mode != "" {
+		switch strings.ToLower(strings.TrimSpace(safe.ML.Mode)) {
+		case "off", "shadow", "challenge", "block":
+		default:
+			return fmt.Errorf("ml.mode must be off, shadow, challenge, or block")
 		}
 	}
 	if safe.Coraza.Paranoia != 0 && (safe.Coraza.Paranoia < 1 || safe.Coraza.Paranoia > 4) {
@@ -1001,6 +1108,23 @@ func OverlaySafe(cfg config.Config, safe SafeConfig) config.Config {
 	}
 	if safe.Coraza.Paranoia > 0 {
 		cfg.Coraza.Paranoia = safe.Coraza.Paranoia
+	}
+	cfg.Semantic.Enabled = safe.Semantic.Enabled
+	if safe.Semantic.Mode != "" {
+		cfg.Semantic.Mode = safe.Semantic.Mode
+	}
+	cfg.ML.Enabled = safe.ML.Enabled
+	if safe.ML.Mode != "" {
+		cfg.ML.Mode = safe.ML.Mode
+	}
+	if safe.ML.ChallengeProb > 0 {
+		cfg.ML.ChallengeProb = safe.ML.ChallengeProb
+	}
+	if safe.ML.BlockProb > 0 {
+		cfg.ML.BlockProb = safe.ML.BlockProb
+	}
+	if safe.ML.ConfidenceMin > 0 {
+		cfg.ML.ConfidenceMin = safe.ML.ConfidenceMin
 	}
 	applyChallengeSafe(&cfg, safe.Challenge)
 	applyUISafe(&cfg, safe.UI)

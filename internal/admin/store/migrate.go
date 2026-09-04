@@ -162,6 +162,22 @@ var migrations = []string{
 		updated_at TEXT NOT NULL
 	)`,
 	`ALTER TABLE routes ADD COLUMN openapi_schema_id TEXT REFERENCES api_schemas(id) ON DELETE SET NULL`,
+	`CREATE TABLE IF NOT EXISTS ml_samples (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		ray_id TEXT NOT NULL DEFAULT '',
+		created_at TEXT NOT NULL,
+		prob REAL NOT NULL DEFAULT 0,
+		points INTEGER NOT NULL DEFAULT 0,
+		would_block INTEGER NOT NULL DEFAULT 0,
+		would_challenge INTEGER NOT NULL DEFAULT 0,
+		features_json TEXT NOT NULL DEFAULT '[]',
+		label TEXT NOT NULL DEFAULT '',
+		method TEXT NOT NULL DEFAULT '',
+		path TEXT NOT NULL DEFAULT '',
+		host TEXT NOT NULL DEFAULT ''
+	)`,
+	`CREATE INDEX IF NOT EXISTS idx_ml_samples_created ON ml_samples(created_at)`,
+	`CREATE INDEX IF NOT EXISTS idx_ml_samples_label ON ml_samples(label)`,
 }
 
 func migrate(db *sql.DB) error {

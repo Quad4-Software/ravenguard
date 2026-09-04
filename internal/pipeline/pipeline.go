@@ -19,12 +19,14 @@ import (
 	"github.com/Quad4-Software/ravenguard/internal/access"
 	"github.com/Quad4-Software/ravenguard/internal/allowlist"
 	"github.com/Quad4-Software/ravenguard/internal/blocklist"
+	"github.com/Quad4-Software/ravenguard/internal/bodybuf"
 	"github.com/Quad4-Software/ravenguard/internal/challenge"
 	"github.com/Quad4-Software/ravenguard/internal/config"
 	"github.com/Quad4-Software/ravenguard/internal/corazaeng"
 	"github.com/Quad4-Software/ravenguard/internal/detect"
 	"github.com/Quad4-Software/ravenguard/internal/health"
 	"github.com/Quad4-Software/ravenguard/internal/iputil"
+	"github.com/Quad4-Software/ravenguard/internal/ml"
 	"github.com/Quad4-Software/ravenguard/internal/privacy"
 	"github.com/Quad4-Software/ravenguard/internal/protect"
 	"github.com/Quad4-Software/ravenguard/internal/qfeeds"
@@ -33,6 +35,7 @@ import (
 	"github.com/Quad4-Software/ravenguard/internal/requestlog"
 	"github.com/Quad4-Software/ravenguard/internal/router"
 	"github.com/Quad4-Software/ravenguard/internal/schemagate"
+	"github.com/Quad4-Software/ravenguard/internal/semantic"
 	"github.com/Quad4-Software/ravenguard/internal/ui"
 )
 
@@ -64,6 +67,8 @@ type Handler struct {
 	reqLog          *requestlog.Logger
 	coraza          *corazaeng.Engine
 	schemas         *schemagate.Manager
+	semantic        *semantic.Engine
+	ml              *ml.Scorer
 }
 
 const (
@@ -256,6 +261,20 @@ func (h *Handler) SetRequestLog(l *requestlog.Logger) {
 func (h *Handler) SetCoraza(e *corazaeng.Engine) {
 	h.mu.Lock()
 	h.coraza = e
+	h.mu.Unlock()
+}
+
+// SetSemantic attaches the semantic analysis engine.
+func (h *Handler) SetSemantic(e *semantic.Engine) {
+	h.mu.Lock()
+	h.semantic = e
+	h.mu.Unlock()
+}
+
+// SetML attaches the ML scorer.
+func (h *Handler) SetML(s *ml.Scorer) {
+	h.mu.Lock()
+	h.ml = s
 	h.mu.Unlock()
 }
 
@@ -574,6 +593,17 @@ func (h *Handler) guard(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	mlExtra := 0
+	semNeedChal := false
+	if !allowed {
+		if extra, needChal, stop := h.runSemanticML(w, r, ray, bindID, ipStr, host, ua); stop {
+			return
+		} else {
+			mlExtra = extra
+			semNeedChal = needChal
+		}
+	}
+
 	if h.limiter != nil && cfg.RateLimit.Enabled {
 		cost := 1
 		if h.prot != nil && h.prot.Enabled() {
@@ -632,6 +662,13 @@ func (h *Handler) guard(w http.ResponseWriter, r *http.Request) {
 			res.Score += br.Score
 			res.Reasons = append(res.Reasons, br.Reasons...)
 		}
+		if mlExtra > 0 {
+			res.Score += mlExtra
+			res.Reasons = append(res.Reasons, "ml")
+		}
+		if semNeedChal {
+			needChallenge = true
+		}
 		detectScore = res.Score
 		if res.Score > 0 {
 			slog.Debug("detect score", "ray", ray, "ip", h.logIP(ipStr), "score", res.Score)
@@ -646,6 +683,9 @@ func (h *Handler) guard(w http.ResponseWriter, r *http.Request) {
 				if h.beh != nil {
 					br := h.beh.Score(bindID)
 					dbg.Reasons = append(dbg.Reasons, br.Reasons...)
+				}
+				if mlExtra > 0 {
+					dbg.Reasons = append(dbg.Reasons, "ml")
 				}
 				if len(dbg.Reasons) > 0 {
 					details["reasons"] = strings.Join(dbg.Reasons, ",")
@@ -670,6 +710,13 @@ func (h *Handler) guard(w http.ResponseWriter, r *http.Request) {
 				needChallenge = true
 			}
 		}
+	}
+
+	if semNeedChal {
+		needChallenge = true
+	}
+	if mlExtra > 0 && detectScore == 0 {
+		detectScore = mlExtra
 	}
 
 	if !allowed && cfg.Challenge.Enabled && h.chal != nil {
@@ -701,6 +748,146 @@ func (h *Handler) guard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.proxy(w, r, ray, clientIP, ipStr, bindID)
+}
+
+// runSemanticML evaluates semantic + ML engines. Returns extra detect points,
+// whether challenge is recommended, and whether the request was already handled.
+func (h *Handler) runSemanticML(w http.ResponseWriter, r *http.Request, ray, bindID, ipStr, host, ua string) (extra int, needChal bool, stop bool) {
+	sem := h.semantic
+	mscorer := h.ml
+	if (sem == nil || !sem.Enabled()) && (mscorer == nil || !mscorer.Enabled()) {
+		return 0, false, false
+	}
+
+	var body []byte
+	cfg := h.config()
+	maxBody := cfg.Semantic.MaxBodyInspect
+	if maxBody <= 0 {
+		maxBody = 64 << 10
+	}
+	if cfg.ML.Enabled && cfg.Coraza.MaxBodyInspect > 0 && cfg.Coraza.MaxBodyInspect < maxBody {
+		// keep semantic budget
+	}
+	if r.Body != nil && r.Body != http.NoBody && r.Method != http.MethodGet && r.Method != http.MethodHead {
+		var err error
+		body, err = bodybuf.Capture(r, maxBody)
+		if err != nil {
+			slog.Debug("semantic body capture", "err", err)
+		}
+	}
+
+	var semRes semantic.Result
+	if sem != nil && sem.Enabled() {
+		semRes = sem.Evaluate(r, body)
+		if semRes.Matched || semRes.Aborted {
+			details := map[string]string{
+				"family":     semRes.Family,
+				"confidence": strconv.FormatFloat(semRes.Confidence, 'f', 3, 64),
+				"evidence":   semRes.Evidence,
+			}
+			if semRes.Aborted {
+				details["aborted"] = semRes.Error
+			}
+			mode := sem.Mode()
+			if semRes.ShouldBlock {
+				if h.prot != nil && h.prot.Enabled() {
+					h.prot.BanNow(bindID)
+				}
+				h.recordEvent(r, ray, bindID, ipStr, host, ua, requestlog.ActionSemantic, "Semantic payload match", semRes.Score, details)
+				h.pages.RenderBlock(w, ray, "Request blocked by semantic analysis")
+				return 0, false, true
+			}
+			if semRes.Matched {
+				h.recordEvent(r, ray, bindID, ipStr, host, ua, requestlog.ActionSemantic, "Semantic detect match", semRes.Score, details)
+				if mode == "challenge" && semRes.NeedChal {
+					needChal = true
+				}
+				if mode == "shadow" {
+					// log only
+				}
+				if semRes.Score >= 50 {
+					needChal = needChal || mode == "challenge" || mode == "block"
+					extra += semRes.Score / 2
+					if extra > 40 {
+						extra = 40
+					}
+				}
+			}
+		}
+	}
+
+	if mscorer == nil || !mscorer.Enabled() {
+		return extra, needChal, false
+	}
+
+	in := ml.Input{Body: body}
+	if sem != nil {
+		ml.EnrichFromSemantic(&in, sem, r, body)
+	} else if semRes.Matched {
+		switch semRes.Family {
+		case "sqli":
+			in.SemanticSQLi = semRes.Score
+		case "xss":
+			in.SemanticXSS = semRes.Score
+		case "cmd":
+			in.SemanticCMD = semRes.Score
+		case "path":
+			in.SemanticPath = semRes.Score
+		}
+	}
+	ja4Hdr := cfg.Detect.ProxySignals.JA4Header
+	if ja4Hdr == "" {
+		ja4Hdr = "X-JA4"
+	}
+	in.JA4Present = r.Header.Get(ja4Hdr) != ""
+	botHdr := cfg.Detect.ProxySignals.BotScoreHeader
+	if botHdr == "" {
+		botHdr = "CF-Bot-Score"
+	}
+	if v := r.Header.Get(botHdr); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 && n < 30 {
+			in.BotScoreLow = true
+		}
+	}
+
+	mr := mscorer.Evaluate(r, in)
+	details := map[string]string{
+		"prob":       strconv.FormatFloat(mr.Prob, 'f', 4, 64),
+		"confidence": strconv.FormatFloat(mr.Confidence, 'f', 3, 64),
+		"model":      mr.ModelHash,
+	}
+	if mr.ShouldBlock {
+		h.recordEvent(r, ray, bindID, ipStr, host, ua, requestlog.ActionML, "ML block", mr.Points, details)
+		if h.prot != nil && h.prot.Enabled() {
+			h.prot.BanNow(bindID)
+		}
+		h.pages.RenderBlock(w, ray, "Request blocked by ML score")
+		return 0, false, true
+	}
+	if mr.Points > 0 || mr.NeedChal {
+		if mr.ShadowOnly || mscorer.Mode() == "shadow" {
+			h.recordEvent(r, ray, bindID, ipStr, host, ua, requestlog.ActionML, "ML shadow", mr.Points, details)
+		} else if mr.NeedChal {
+			h.recordEvent(r, ray, bindID, ipStr, host, ua, requestlog.ActionML, "ML challenge signal", mr.Points, details)
+			needChal = true
+		}
+		extra += mr.Points
+	}
+	if sh := mscorer.Shadow(); sh != nil {
+		sample := ml.Sample{
+			Ray: ray, Prob: mr.Prob, Points: mr.Points,
+			WouldBlock: mr.Prob >= cfg.ML.BlockProb,
+			WouldChal:  mr.NeedChal || mr.Prob >= cfg.ML.ChallengeProb,
+			Features:   mr.Features,
+			Method:     r.Method, Path: r.URL.Path, Host: host,
+		}
+		if mr.Prob >= cfg.ML.BlockProb || mr.NeedChal || sample.WouldBlock || sample.WouldChal {
+			sh.Offer(sample)
+		} else {
+			sh.MaybeSampleAllow(cfg.ML.ShadowSampleRate, sample)
+		}
+	}
+	return extra, needChal, false
 }
 
 func (h *Handler) checkOpenAPI(w http.ResponseWriter, r *http.Request, ray, bindID, ipStr, host, ua string) bool {

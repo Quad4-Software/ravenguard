@@ -14,14 +14,14 @@ import (
 
 // RouteRow is a persisted host+path route.
 type RouteRow struct {
-	ID             string    `json:"id"`
-	Name           string    `json:"name"`
-	Enabled        bool      `json:"enabled"`
-	Hosts          []string  `json:"hosts"`
-	PathPrefix     string    `json:"path_prefix"`
-	UpstreamID     string    `json:"upstream_id"`
-	StripPrefix    bool      `json:"strip_prefix"`
-	Priority       int       `json:"priority"`
+	ID              string    `json:"id"`
+	Name            string    `json:"name"`
+	Enabled         bool      `json:"enabled"`
+	Hosts           []string  `json:"hosts"`
+	PathPrefix      string    `json:"path_prefix"`
+	UpstreamID      string    `json:"upstream_id"`
+	StripPrefix     bool      `json:"strip_prefix"`
+	Priority        int       `json:"priority"`
 	AccessPolicyID  *string   `json:"access_policy_id,omitempty"`
 	OpenAPISchemaID *string   `json:"openapi_schema_id,omitempty"`
 	ProxyID         string    `json:"proxy_id,omitempty"`

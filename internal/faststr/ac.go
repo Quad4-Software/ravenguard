@@ -41,7 +41,7 @@ func NewMatcher(patterns []string) *Matcher {
 
 func (m *Matcher) buildFail() {
 	q := make([]*acNode, 0, 64)
-	for c := 0; c < 128; c++ {
+	for c := range 128 {
 		if n := m.root.next[c]; n != nil {
 			n.fail = m.root
 			q = append(q, n)
@@ -52,7 +52,7 @@ func (m *Matcher) buildFail() {
 	for len(q) > 0 {
 		r := q[0]
 		q = q[1:]
-		for c := 0; c < 128; c++ {
+		for c := range 128 {
 			u := r.next[c]
 			if u == nil {
 				r.next[c] = r.fail.next[c]
@@ -73,7 +73,7 @@ func (m *Matcher) Contains(haystack []byte) bool {
 		return false
 	}
 	n := m.root
-	for i := 0; i < len(haystack); i++ {
+	for i := range haystack {
 		c := haystack[i]
 		if c >= 128 {
 			n = m.root

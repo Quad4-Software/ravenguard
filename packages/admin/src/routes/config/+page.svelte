@@ -321,6 +321,80 @@
     </fieldset>
 
     <fieldset>
+      <legend>Semantic</legend>
+      <div class="field checkbox-field">
+        <input id="sem-enabled" type="checkbox" bind:checked={form.semantic.enabled} disabled={!canWrite} />
+        <label for="sem-enabled">Enabled</label>
+      </div>
+      <div class="field">
+        <label for="sem-mode">Mode</label>
+        <select id="sem-mode" bind:value={form.semantic.mode} disabled={!canWrite}>
+          <option value="shadow">shadow</option>
+          <option value="challenge">challenge</option>
+          <option value="block">block</option>
+        </select>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>ML</legend>
+      <div class="field checkbox-field">
+        <input id="ml-enabled" type="checkbox" bind:checked={form.ml.enabled} disabled={!canWrite} />
+        <label for="ml-enabled">Enabled</label>
+      </div>
+      <div class="field">
+        <label for="ml-mode">Mode</label>
+        <select id="ml-mode" bind:value={form.ml.mode} disabled={!canWrite}>
+          <option value="off">off</option>
+          <option value="shadow">shadow</option>
+          <option value="challenge">challenge</option>
+          <option value="block">block</option>
+        </select>
+      </div>
+      {#if (form.ml.mode === 'challenge' || form.ml.mode === 'block') && !form.ml.attest_ok}
+        <p class="hint">Model attestation failed. Challenge and block modes will not enforce until attestation succeeds.</p>
+      {/if}
+      <div class="field-row">
+        <div class="field">
+          <label for="ml-challenge-prob">Challenge probability</label>
+          <input
+            id="ml-challenge-prob"
+            type="number"
+            min="0"
+            max="1"
+            step="0.01"
+            bind:value={form.ml.challenge_prob}
+            disabled={!canWrite}
+          />
+        </div>
+        <div class="field">
+          <label for="ml-block-prob">Block probability</label>
+          <input
+            id="ml-block-prob"
+            type="number"
+            min="0"
+            max="1"
+            step="0.01"
+            bind:value={form.ml.block_prob}
+            disabled={!canWrite}
+          />
+        </div>
+        <div class="field">
+          <label for="ml-confidence-min">Confidence min</label>
+          <input
+            id="ml-confidence-min"
+            type="number"
+            min="0"
+            max="1"
+            step="0.01"
+            bind:value={form.ml.confidence_min}
+            disabled={!canWrite}
+          />
+        </div>
+      </div>
+    </fieldset>
+
+    <fieldset>
       <legend>Detect</legend>
       <div class="field checkbox-field">
         <input id="dt-enabled" type="checkbox" bind:checked={form.detect.enabled} disabled={!canWrite} />

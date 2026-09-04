@@ -16,6 +16,8 @@ const (
 	ActionCoraza    = "coraza"
 	ActionOpenAPI   = "openapi"
 	ActionAccess    = "access"
+	ActionSemantic  = "semantic"
+	ActionML        = "ml"
 )
 
 // Event is one WAF deny (or challenge) outcome keyed by Ray ID.

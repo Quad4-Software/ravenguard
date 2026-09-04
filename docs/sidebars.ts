@@ -21,7 +21,7 @@ const sidebars: SidebarsConfig = {
       type: 'category',
       label: 'Protect',
       collapsed: false,
-      items: ['detection', 'coraza', 'openapi', 'privacy'],
+      items: ['detection', 'coraza', 'semantic', 'ml', 'openapi', 'privacy'],
     },
     'testing',
   ],

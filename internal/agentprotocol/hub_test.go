@@ -38,7 +38,7 @@ func TestRegistryOnlineLifecycle(t *testing.T) {
 
 func TestHubAllowConnectRateLimit(t *testing.T) {
 	h := &Hub{}
-	for i := 0; i < connectRateLimit; i++ {
+	for i := range connectRateLimit {
 		if !h.allowConnect("1.2.3.4") {
 			t.Fatalf("unexpected deny at %d", i)
 		}

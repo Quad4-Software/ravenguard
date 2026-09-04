@@ -71,10 +71,7 @@ func New(cfg config.CorazaConfig) (*Engine, error) {
 }
 
 func buildWAF(cfg config.CorazaConfig) (coraza.WAF, error) {
-	paranoia := cfg.Paranoia
-	if paranoia < 1 {
-		paranoia = 1
-	}
+	paranoia := max(cfg.Paranoia, 1)
 	if paranoia > 4 {
 		paranoia = 4
 	}

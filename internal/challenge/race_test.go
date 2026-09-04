@@ -21,13 +21,13 @@ func TestApplyLiveRace(t *testing.T) {
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		for i := 0; i < 200; i++ {
+		for i := range 200 {
 			m.ApplyLive("rg_clear", 8+i%4, time.Hour, "sha256")
 		}
 	}()
 	go func() {
 		defer wg.Done()
-		for i := 0; i < 200; i++ {
+		for range 200 {
 			_, _, _ = m.Issue("bind")
 			_ = m.settings()
 		}

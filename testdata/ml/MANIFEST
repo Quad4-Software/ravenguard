@@ -1,0 +1,6 @@
+# ML eval corpora manifest
+fpr_gate: 0.001
+tpr_floor: 0.90
+p99_micros_ceiling: 2000
+allocs_per_op_ceiling: 64
+challenge_prob: 0.75

@@ -27,6 +27,8 @@ type Config struct {
 	Protect    ProtectConfig    `toml:"protect"`
 	Detect     DetectConfig     `toml:"detect"`
 	Coraza     CorazaConfig     `toml:"coraza"`
+	Semantic   SemanticConfig   `toml:"semantic"`
+	ML         MLConfig         `toml:"ml"`
 	Challenge  ChallengeConfig  `toml:"challenge"`
 	Stealth    StealthConfig    `toml:"stealth"`
 	Privacy    PrivacyConfig    `toml:"privacy"`
@@ -234,6 +236,34 @@ type CorazaConfig struct {
 	SkipPathPrefixes []string `toml:"skip_path_prefixes"`
 }
 
+// SemanticConfig configures SafeLine-style payload semantic analysis.
+type SemanticConfig struct {
+	Enabled          bool     `toml:"enabled"`
+	Mode             string   `toml:"mode"`
+	MaxBodyInspect   int64    `toml:"max_body_inspect"`
+	MaxDecodeDepth   int      `toml:"max_decode_depth"`
+	MaxDecodeBytes   int      `toml:"max_decode_bytes"`
+	MaxCPUNanos      int64    `toml:"max_cpu_ns"`
+	StrictBudget     bool     `toml:"strict_budget"`
+	Families         []string `toml:"families"`
+	SkipPathPrefixes []string `toml:"skip_path_prefixes"`
+}
+
+// MLConfig configures the lightweight request scorer.
+type MLConfig struct {
+	Enabled          bool    `toml:"enabled"`
+	Mode             string  `toml:"mode"`
+	ModelPath        string  `toml:"model_path"`
+	AdaptPath        string  `toml:"adapt_path"`
+	AttestPath       string  `toml:"attest_path"`
+	ChallengeProb    float64 `toml:"challenge_prob"`
+	BlockProb        float64 `toml:"block_prob"`
+	ConfidenceMin    float64 `toml:"confidence_min"`
+	FPRGate          float64 `toml:"fpr_gate"`
+	ShadowSampleRate float64 `toml:"shadow_sample_rate"`
+	MaxPoints        int     `toml:"max_points"`
+}
+
 type DetectConfig struct {
 	Enabled                  bool               `toml:"enabled"`
 	ChallengeScore           int                `toml:"challenge_score"`
@@ -374,8 +404,8 @@ func (d *Duration) UnmarshalText(text []byte) error {
 	s := string(text)
 	parsed, err := time.ParseDuration(s)
 	if err != nil {
-		if strings.HasSuffix(s, "d") {
-			daysStr := strings.TrimSuffix(s, "d")
+		if before, ok := strings.CutSuffix(s, "d"); ok {
+			daysStr := before
 			days, perr := strconv.ParseFloat(daysStr, 64)
 			if perr == nil && days > 0 {
 				d.Duration = time.Duration(days * float64(24*time.Hour))
@@ -467,6 +497,27 @@ func Default() Config {
 			Paranoia:         1,
 			MaxBodyInspect:   1 << 20,
 			SkipPathPrefixes: []string{"/_rg"},
+		},
+		Semantic: SemanticConfig{
+			Enabled:          false,
+			Mode:             "shadow",
+			MaxBodyInspect:   64 << 10,
+			MaxDecodeDepth:   3,
+			MaxDecodeBytes:   256 << 10,
+			MaxCPUNanos:      2_000_000,
+			Families:         []string{"sqli", "xss", "cmd", "path"},
+			SkipPathPrefixes: []string{"/_rg"},
+		},
+		ML: MLConfig{
+			Enabled:          false,
+			Mode:             "shadow",
+			ModelPath:        "assets/ml/base.bin",
+			ChallengeProb:    0.75,
+			BlockProb:        0.95,
+			ConfidenceMin:    0.85,
+			FPRGate:          0.001,
+			ShadowSampleRate: 0.02,
+			MaxPoints:        60,
 		},
 		Detect: DetectConfig{
 			Enabled: true, ChallengeScore: 40, BlockScore: 90,
@@ -906,6 +957,51 @@ func normalize(c *Config) {
 	if c.Coraza.SkipPathPrefixes == nil {
 		c.Coraza.SkipPathPrefixes = []string{"/_rg"}
 	}
+	if c.Semantic.Mode == "" {
+		c.Semantic.Mode = "shadow"
+	}
+	if c.Semantic.MaxBodyInspect <= 0 {
+		c.Semantic.MaxBodyInspect = 64 << 10
+	}
+	if c.Semantic.MaxDecodeDepth <= 0 {
+		c.Semantic.MaxDecodeDepth = 3
+	}
+	if c.Semantic.MaxDecodeBytes <= 0 {
+		c.Semantic.MaxDecodeBytes = 256 << 10
+	}
+	if c.Semantic.MaxCPUNanos <= 0 {
+		c.Semantic.MaxCPUNanos = 2_000_000
+	}
+	if c.Semantic.Families == nil {
+		c.Semantic.Families = []string{"sqli", "xss", "cmd", "path"}
+	}
+	if c.Semantic.SkipPathPrefixes == nil {
+		c.Semantic.SkipPathPrefixes = []string{"/_rg"}
+	}
+	if c.ML.Mode == "" {
+		c.ML.Mode = "shadow"
+	}
+	if c.ML.ModelPath == "" {
+		c.ML.ModelPath = "assets/ml/base.bin"
+	}
+	if c.ML.ChallengeProb <= 0 {
+		c.ML.ChallengeProb = 0.75
+	}
+	if c.ML.BlockProb <= 0 {
+		c.ML.BlockProb = 0.95
+	}
+	if c.ML.ConfidenceMin <= 0 {
+		c.ML.ConfidenceMin = 0.85
+	}
+	if c.ML.FPRGate <= 0 {
+		c.ML.FPRGate = 0.001
+	}
+	if c.ML.ShadowSampleRate <= 0 {
+		c.ML.ShadowSampleRate = 0.02
+	}
+	if c.ML.MaxPoints <= 0 {
+		c.ML.MaxPoints = 60
+	}
 	if c.Site.Robots == "" {
 		c.Site.Robots = "noindex, nofollow"
 	}
@@ -1167,6 +1263,23 @@ func (c Config) Validate() error {
 		}
 		if !c.Coraza.CRS && strings.TrimSpace(c.Coraza.RulesDir) == "" && strings.TrimSpace(c.Coraza.RulesFile) == "" && strings.TrimSpace(c.Coraza.Directives) == "" {
 			return fmt.Errorf("coraza requires crs, rules_dir, rules_file, or directives when enabled")
+		}
+	}
+	if !hubOnly && c.Semantic.Enabled {
+		switch strings.ToLower(strings.TrimSpace(c.Semantic.Mode)) {
+		case "shadow", "challenge", "block":
+		default:
+			return fmt.Errorf("semantic.mode must be shadow, challenge, or block")
+		}
+	}
+	if !hubOnly && c.ML.Enabled {
+		switch strings.ToLower(strings.TrimSpace(c.ML.Mode)) {
+		case "off", "shadow", "challenge", "block":
+		default:
+			return fmt.Errorf("ml.mode must be off, shadow, challenge, or block")
+		}
+		if c.ML.BlockProb < c.ML.ChallengeProb {
+			return fmt.Errorf("ml.block_prob must be >= ml.challenge_prob")
 		}
 	}
 	if !hubOnly && c.RateLimit.Enabled {
