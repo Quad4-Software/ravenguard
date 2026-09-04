@@ -11,8 +11,8 @@ const config: Config = {
     v4: true,
   },
 
-  url: 'https://quad4-software.github.io',
-  baseUrl: '/ravenguard/',
+  url: 'https://ravenguard.quad4.io',
+  baseUrl: '/',
   trailingSlash: false,
 
   organizationName: 'Quad4-Software',
