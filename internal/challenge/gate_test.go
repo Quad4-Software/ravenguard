@@ -32,6 +32,21 @@ func TestSelectGate(t *testing.T) {
 	}
 }
 
+func TestResolveGate(t *testing.T) {
+	if g := challenge.ResolveGate("attack", challenge.RiskLow, "", false); g != challenge.GateInteractive {
+		t.Fatalf("attack cold=%q", g)
+	}
+	if g := challenge.ResolveGate("always", challenge.RiskLow, "", false); g != challenge.GateInvisible {
+		t.Fatalf("always cold=%q", g)
+	}
+	if g := challenge.ResolveGate("always", challenge.RiskLow, "", true); g != challenge.GateInteractive {
+		t.Fatalf("captcha forces interactive got=%q", g)
+	}
+	if g := challenge.ResolveGate("detect", challenge.RiskLow, challenge.GateInteractive, false); g != challenge.GateInteractive {
+		t.Fatalf("prior interactive=%q", g)
+	}
+}
+
 func TestFloorRiskForMode(t *testing.T) {
 	if challenge.FloorRiskForMode("attack", challenge.RiskLow) != challenge.RiskElevated {
 		t.Fatal("attack should floor to elevated")
@@ -85,5 +100,13 @@ func TestRememberChallenge(t *testing.T) {
 	risk, gate := m.TakeChallenge("x")
 	if risk != challenge.RiskHigh || gate != challenge.GateInteractive {
 		t.Fatalf("risk=%v gate=%q", risk, gate)
+	}
+}
+
+func TestTakeChallengeMissGateEmpty(t *testing.T) {
+	m := &challenge.Manager{Secret: []byte("fixture-secret-16!")}
+	risk, gate := m.TakeChallenge("never-seen")
+	if risk != challenge.RiskLow || gate != "" {
+		t.Fatalf("miss risk=%v gate=%q want low and empty gate", risk, gate)
 	}
 }

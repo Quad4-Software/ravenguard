@@ -65,6 +65,20 @@ func SelectGate(mode string, risk RiskLevel) string {
 	}
 }
 
+// ResolveGate picks the issue gate from mode, risk, prior escalation, and captcha.
+// Cache misses pass prevGate as empty so SelectGate decides. Captcha and a prior
+// interactive escalation both force interactive.
+func ResolveGate(mode string, risk RiskLevel, prevGate string, captchaEnabled bool) string {
+	gate := SelectGate(mode, risk)
+	if prevGate == GateInteractive {
+		gate = GateInteractive
+	}
+	if captchaEnabled {
+		gate = GateInteractive
+	}
+	return gate
+}
+
 // FloorRiskForMode raises adaptive effort for attack mode.
 func FloorRiskForMode(mode string, risk RiskLevel) RiskLevel {
 	if strings.EqualFold(strings.TrimSpace(mode), "attack") && risk < RiskElevated {

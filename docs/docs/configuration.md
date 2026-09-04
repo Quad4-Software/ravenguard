@@ -248,7 +248,7 @@ lang = "en"
 # widget_input_name = "rg"
 ```
 
-`mode = "attack"` forces the visible interactive gate for every challenged request. In `detect` / `always`, low and elevated risk use the invisible auto-PoW gate. High risk and failed invisible attempts escalate to interactive. Captcha UI appears only on the interactive gate when captcha is enabled.
+`mode = "attack"` forces the visible interactive gate for every challenged request. In `detect` / `always`, low and elevated risk use the invisible auto-PoW gate. High risk and failed invisible attempts escalate to interactive. When captcha is enabled the interactive gate is always issued so captcha cannot be skipped via API-only PoW.
 
 | Stealth key | Default | Meaning |
 |-------------|---------|---------|

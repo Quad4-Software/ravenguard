@@ -773,10 +773,7 @@ func (h *Handler) serveChallenge(w http.ResponseWriter, _ *http.Request, ray, bi
 	if prevRisk > risk {
 		risk = prevRisk
 	}
-	gate := challenge.SelectGate(mode, risk)
-	if prevGate == challenge.GateInteractive {
-		gate = challenge.GateInteractive
-	}
+	gate := challenge.ResolveGate(mode, risk, prevGate, h.cfg.Challenge.Captcha.Enabled)
 	h.chal.RememberChallenge(bindID, risk, gate)
 	captchaOn := h.cfg.Challenge.Captcha.Enabled && gate == challenge.GateInteractive
 	h.pages.ServeChallenge(w, ui.Data{
@@ -815,11 +812,15 @@ func (h *Handler) handleChallengeV1GET(w http.ResponseWriter, r *http.Request) {
 		ipStr = clientIP.String()
 	}
 	bindID := h.clientBind(ipStr)
-	risk, gate := h.chal.TakeChallenge(bindID)
-	risk = challenge.FloorRiskForMode(h.cfg.Challenge.Mode, risk)
-	if gate == "" {
-		gate = challenge.SelectGate(h.cfg.Challenge.Mode, risk)
+	if h.limiter != nil && h.cfg.RateLimit.Enabled {
+		if !h.limiter.AllowN(bindID, r.URL.Path, 1) {
+			http.Error(w, "too many requests", http.StatusTooManyRequests)
+			return
+		}
 	}
+	risk, prevGate := h.chal.TakeChallenge(bindID)
+	risk = challenge.FloorRiskForMode(h.cfg.Challenge.Mode, risk)
+	gate := challenge.ResolveGate(h.cfg.Challenge.Mode, risk, prevGate, h.cfg.Challenge.Captcha.Enabled)
 	ch, err := h.chal.IssueChallenge(bindID, risk, gate)
 	if err != nil {
 		http.Error(w, "issue failed", http.StatusInternalServerError)
@@ -851,6 +852,12 @@ func (h *Handler) handleChallengePOST(w http.ResponseWriter, r *http.Request) {
 		ipStr = clientIP.String()
 	}
 	bindID := h.clientBind(ipStr)
+	if h.limiter != nil && h.cfg.RateLimit.Enabled {
+		if !h.limiter.AllowN(bindID, r.URL.Path, 1) {
+			http.Error(w, "too many requests", http.StatusTooManyRequests)
+			return
+		}
+	}
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 	var body challengeBody
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
@@ -919,8 +926,7 @@ func (h *Handler) handleChallengePOST(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	gateNorm := challenge.NormalizeGate(gate)
-	if h.cfg.Challenge.Captcha.Enabled && gateNorm == challenge.GateInteractive {
+	if h.cfg.Challenge.Captcha.Enabled {
 		provider := strings.ToLower(strings.TrimSpace(h.cfg.Challenge.Captcha.Provider))
 		if body.Payload == "" || provider != "ravenguard" {
 			if h.chal.Captcha == nil {

@@ -90,7 +90,7 @@ func (c *riskCache) get(id string) (RiskLevel, string) {
 	defer c.mu.Unlock()
 	e, ok := c.byID[id]
 	if !ok || e.exp < time.Now().Unix() {
-		return RiskLow, GateInvisible
+		return RiskLow, ""
 	}
 	return e.level, NormalizeGate(e.gate)
 }
@@ -125,9 +125,10 @@ func (m *Manager) TakeRisk(bindID string) RiskLevel {
 }
 
 // TakeChallenge returns remembered risk and gate.
+// On a cache miss gate is empty so callers re-run SelectGate / ResolveGate.
 func (m *Manager) TakeChallenge(bindID string) (RiskLevel, string) {
 	if m == nil {
-		return RiskLow, GateInvisible
+		return RiskLow, ""
 	}
 	return m.risks.get(bindID)
 }

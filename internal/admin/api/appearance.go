@@ -168,8 +168,8 @@ func (s *Server) handleAppearancePreview(w http.ResponseWriter, r *http.Request)
 			ChallengeURL:   "#",
 			Token:          "preview",
 			Difficulty:     cfg.Challenge.Difficulty,
-			Gate:           challenge.SelectGate(cfg.Challenge.Mode, challenge.RiskLow),
-			CaptchaEnabled: cfg.Challenge.Captcha.Enabled && challenge.SelectGate(cfg.Challenge.Mode, challenge.RiskLow) == challenge.GateInteractive,
+			Gate:           challenge.ResolveGate(cfg.Challenge.Mode, challenge.RiskLow, "", cfg.Challenge.Captcha.Enabled),
+			CaptchaEnabled: cfg.Challenge.Captcha.Enabled,
 			StatusText:     cfg.UI.StatusText,
 		})
 	case "block":
