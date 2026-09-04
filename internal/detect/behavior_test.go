@@ -101,6 +101,70 @@ func TestBehaviorStrikes(t *testing.T) {
 	}
 }
 
+func TestBehaviorForgeBurst(t *testing.T) {
+	beh := detect.NewBehaviorTracker(detect.BehaviorConfig{
+		Window:          time.Minute,
+		BurstLimit:      1000,
+		PathFanout:      1000,
+		ForgeBurstLimit: 24,
+		ForgeBurstScore: 35,
+	})
+	key := "forge-browser"
+	for i := range 23 {
+		beh.Record(key, "/o/r/src/branch/main/f"+strconv.Itoa(i), "GET")
+	}
+	res := beh.Score(key)
+	if containsReason(res.Reasons, "behavior_forge_burst") {
+		t.Fatalf("23 browse hits must not forge-burst reasons=%v", res.Reasons)
+	}
+	beh.Record(key, "/o/r/src/branch/main/f23", "GET")
+	res = beh.Score(key)
+	if !containsReason(res.Reasons, "behavior_forge_burst") {
+		t.Fatalf("24 browse hits should forge-burst reasons=%v score=%d", res.Reasons, res.Score)
+	}
+	if res.Score < 35 {
+		t.Fatalf("score=%d", res.Score)
+	}
+}
+
+func TestBehaviorForgeBurstMixHotBrowse(t *testing.T) {
+	beh := detect.NewBehaviorTracker(detect.BehaviorConfig{
+		Window:          time.Minute,
+		BurstLimit:      1000,
+		PathFanout:      1000,
+		ForgeBurstLimit: 5,
+		ForgeBurstScore: 35,
+	})
+	key := "mix"
+	beh.Record(key, "/o/r/compare/a...b", "GET")
+	beh.Record(key, "/o/r/src/branch/main", "GET")
+	beh.Record(key, "/o/r/blame/branch/f", "GET")
+	beh.Record(key, "/o/r/commits/branch/main", "GET")
+	beh.Record(key, "/o/r/archive/main.zip", "GET")
+	res := beh.Score(key)
+	if !containsReason(res.Reasons, "behavior_forge_burst") {
+		t.Fatalf("mixed hot+browse should burst reasons=%v", res.Reasons)
+	}
+}
+
+func TestBehaviorForgeIgnoresNonForge(t *testing.T) {
+	beh := detect.NewBehaviorTracker(detect.BehaviorConfig{
+		Window:          time.Minute,
+		BurstLimit:      1000,
+		PathFanout:      1000,
+		ForgeBurstLimit: 3,
+		ForgeBurstScore: 35,
+	})
+	key := "issues"
+	for range 10 {
+		beh.Record(key, "/o/r/issues", "GET")
+	}
+	res := beh.Score(key)
+	if containsReason(res.Reasons, "behavior_forge_burst") {
+		t.Fatalf("issues must not forge-burst reasons=%v", res.Reasons)
+	}
+}
+
 func containsReason(reasons []string, want string) bool {
 	return slices.Contains(reasons, want)
 }

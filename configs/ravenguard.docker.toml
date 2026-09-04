@@ -89,6 +89,10 @@ behavior_path_fanout = 40
 behavior_path_fanout_score = 30
 behavior_strike_limit = 3
 behavior_strike_score = 25
+forge_expensive_score = 40
+behavior_forge_burst_limit = 24
+behavior_forge_burst_score = 35
+forge_rate_cost = 4
 
 [detect.proxy_signals]
 bot_score_header = "CF-Bot-Score"

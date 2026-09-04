@@ -35,8 +35,37 @@ block_score = 90
 | `*/*` Accept as browser | `star_accept_browser_score` | Overly generic Accept |
 | Empty form context | `empty_form_context_score` | Browser-like POST/PUT/PATCH missing Origin and Referer |
 | Forum write path | `forum_write_path_score` | Suspicious POSTs to comment/register/reply style paths |
+| Forge expensive (hot) | `forge_expensive_score` | Gitea/Forgejo compare, blame, archive (and API git trees/blobs) |
 
 Raise `challenge_score` to challenge less often. Lower it to challenge earlier.
+
+## Forge expensive routes
+
+Gitea, Forgejo, Codeberg, and Gogs-style paths are tiered so normal browsing is not challenged by default.
+
+```toml
+[detect]
+forge_expensive_score = 40
+behavior_forge_burst_limit = 24
+behavior_forge_burst_score = 35
+forge_rate_cost = 4
+```
+
+| Tier | Paths | Default effect |
+|------|-------|----------------|
+| Hot | `/{owner}/{repo}/compare`, `blame`, `archive`, API `git/trees`, `git/blobs` | Per-request score (default 40) plus elevated rate-limit cost |
+| Browse | `src`, `raw`, `media`, `commit`, `commits` | Counts toward forge burst only |
+| Never | repo home, issues, pulls, explore, smart-HTTP | No forge signal |
+
+- One hot hit reaches `challenge_score` under defaults (intended against rotating scrapers on compare/blame/archive)
+- Browse paths such as `/src` do not score alone. Burst fires after `behavior_forge_burst_limit` hot or browse hits in the window
+- Git smart-HTTP (`info/refs`, `git-upload-pack`, `git-receive-pack`) is excluded so `git clone` and fetch stay unaffected
+- Clients with a valid challenge clearance cookie pass hot paths without re-challenge
+- CI jobs that download archives should use `[allowlists]` (detect is skipped for allowlisted clients)
+
+Forge signals alone stay below `block_score` at defaults (hot 40 + burst 35 = 75). Hard block still needs other signals or challenge strikes.
+
+To treat `/src` like Cloudflare path challenges, lower `behavior_forge_burst_limit` or raise browse paths into the hot tier in a future config. v1 keeps `/src` browse-only.
 
 ## Behavior windows
 
@@ -53,14 +82,19 @@ behavior_write_burst_limit = 20
 behavior_write_burst_score = 35
 behavior_write_repeat_limit = 8
 behavior_write_repeat_score = 40
+behavior_forge_burst_limit = 24
+behavior_forge_burst_score = 35
 empty_form_context_score = 30
 forum_write_path_score = 25
+forge_expensive_score = 40
+forge_rate_cost = 4
 ```
 
 - **Burst** adds score when a client exceeds `behavior_burst_limit` in the window
 - **Path fan-out** scores clients that hit many distinct paths quickly
 - **Write burst** scores rapid POST/PUT/PATCH volume (default 20/min) without treating normal API traffic as a hard block by itself
 - **Write repeat** only escalates repeated posts to spam-prone path segments such as `comment` / `register` / `reply`
+- **Forge burst** scores clients that hit many forge hot or browse paths in the window
 - **Strikes** escalate clients that keep failing challenges
 
 Empty form context applies to browser-like clients posting `application/x-www-form-urlencoded` or `multipart/form-data` (or spam-prone path segments) without Origin and Referer. Ordinary JSON API writes are not scored by that signal.

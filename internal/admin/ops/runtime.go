@@ -434,6 +434,10 @@ type DetectSafe struct {
 	BehaviorWriteRepeatScore int              `json:"behavior_write_repeat_score"`
 	EmptyFormContextScore    int              `json:"empty_form_context_score"`
 	ForumWritePathScore      int              `json:"forum_write_path_score"`
+	ForgeExpensiveScore      int              `json:"forge_expensive_score"`
+	BehaviorForgeBurstLimit  int              `json:"behavior_forge_burst_limit"`
+	BehaviorForgeBurstScore  int              `json:"behavior_forge_burst_score"`
+	ForgeRateCost            int              `json:"forge_rate_cost"`
 	ProxySignals             ProxySignalsSafe `json:"proxy_signals"`
 }
 
@@ -554,6 +558,9 @@ func (r *Runtime) ConfigView() ConfigView {
 				BehaviorWriteBurstLimit: cfg.Detect.BehaviorWriteBurstLimit, BehaviorWriteBurstScore: cfg.Detect.BehaviorWriteBurstScore,
 				BehaviorWriteRepeatLimit: cfg.Detect.BehaviorWriteRepeatLimit, BehaviorWriteRepeatScore: cfg.Detect.BehaviorWriteRepeatScore,
 				EmptyFormContextScore: cfg.Detect.EmptyFormContextScore, ForumWritePathScore: cfg.Detect.ForumWritePathScore,
+				ForgeExpensiveScore:     cfg.Detect.ForgeExpensiveScore,
+				BehaviorForgeBurstLimit: cfg.Detect.BehaviorForgeBurstLimit, BehaviorForgeBurstScore: cfg.Detect.BehaviorForgeBurstScore,
+				ForgeRateCost: cfg.Detect.ForgeRateCost,
 				ProxySignals: ProxySignalsSafe{
 					BotScoreHeader: cfg.Detect.ProxySignals.BotScoreHeader, BotScoreHeader2: cfg.Detect.ProxySignals.BotScoreHeader2,
 					JA4Header: cfg.Detect.ProxySignals.JA4Header, LowScorePoints: cfg.Detect.ProxySignals.LowScorePoints,
@@ -990,6 +997,18 @@ func applyDetectSafe(cfg *config.Config, safe DetectSafe) {
 	}
 	if safe.ForumWritePathScore > 0 {
 		cfg.Detect.ForumWritePathScore = safe.ForumWritePathScore
+	}
+	if safe.ForgeExpensiveScore > 0 {
+		cfg.Detect.ForgeExpensiveScore = safe.ForgeExpensiveScore
+	}
+	if safe.BehaviorForgeBurstLimit > 0 {
+		cfg.Detect.BehaviorForgeBurstLimit = safe.BehaviorForgeBurstLimit
+	}
+	if safe.BehaviorForgeBurstScore > 0 {
+		cfg.Detect.BehaviorForgeBurstScore = safe.BehaviorForgeBurstScore
+	}
+	if safe.ForgeRateCost > 0 {
+		cfg.Detect.ForgeRateCost = safe.ForgeRateCost
 	}
 	setNonEmpty(&cfg.Detect.ProxySignals.BotScoreHeader, safe.ProxySignals.BotScoreHeader)
 	setNonEmpty(&cfg.Detect.ProxySignals.BotScoreHeader2, safe.ProxySignals.BotScoreHeader2)

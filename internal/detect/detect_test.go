@@ -333,6 +333,41 @@ func TestScoreAIUA(t *testing.T) {
 	}
 }
 
+func TestForgeExpensiveHotScore(t *testing.T) {
+	cfg := testCfg()
+	cfg.ForgeExpensiveScore = 40
+	r := httptest.NewRequest(http.MethodGet, "/owner/repo/compare/a...b", nil)
+	r.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36")
+	r.Header.Set("Accept", "text/html")
+	r.Header.Set("Accept-Language", "en-US")
+	r.Header.Set("Sec-Fetch-Site", "none")
+	r.Header.Set("Sec-Fetch-Mode", "navigate")
+	r.Header.Set("Sec-Fetch-Dest", "document")
+	res := detect.ScoreDebug(r, cfg)
+	if !strings.Contains(strings.Join(res.Reasons, ","), "forge_expensive") {
+		t.Fatalf("reasons=%v", res.Reasons)
+	}
+	if res.Score < 40 {
+		t.Fatalf("score=%d", res.Score)
+	}
+}
+
+func TestForgeBrowseNoSingleHitScore(t *testing.T) {
+	cfg := testCfg()
+	cfg.ForgeExpensiveScore = 40
+	r := httptest.NewRequest(http.MethodGet, "/owner/repo/src/branch/main", nil)
+	r.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36")
+	r.Header.Set("Accept", "text/html")
+	r.Header.Set("Accept-Language", "en-US")
+	r.Header.Set("Sec-Fetch-Site", "none")
+	r.Header.Set("Sec-Fetch-Mode", "navigate")
+	r.Header.Set("Sec-Fetch-Dest", "document")
+	res := detect.ScoreDebug(r, cfg)
+	if strings.Contains(strings.Join(res.Reasons, ","), "forge_expensive") {
+		t.Fatalf("browse must not forge_expensive reasons=%v", res.Reasons)
+	}
+}
+
 func FuzzIsScannerUA(f *testing.F) {
 	f.Add("sqlmap")
 	f.Add("Mozilla/5.0")

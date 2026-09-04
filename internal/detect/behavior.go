@@ -24,6 +24,8 @@ type BehaviorConfig struct {
 	WriteBurstScore  int
 	WriteRepeatLimit int
 	WriteRepeatScore int
+	ForgeBurstLimit  int
+	ForgeBurstScore  int
 }
 
 type BehaviorTracker struct {
@@ -46,6 +48,7 @@ type behEntry struct {
 	seqHits       int
 	lastWritePath string
 	samePathWrite int
+	forgeHits     int
 }
 
 func NewBehaviorTracker(cfg BehaviorConfig) *BehaviorTracker {
@@ -66,6 +69,9 @@ func NewBehaviorTracker(cfg BehaviorConfig) *BehaviorTracker {
 	}
 	if cfg.WriteRepeatLimit <= 0 {
 		cfg.WriteRepeatLimit = 8
+	}
+	if cfg.ForgeBurstLimit <= 0 {
+		cfg.ForgeBurstLimit = 24
 	}
 	t := &BehaviorTracker{cfg: cfg}
 	for i := range t.shards {
@@ -110,6 +116,9 @@ func (t *BehaviorTracker) Record(key, path, method string) {
 			e.lastWritePath = ""
 			e.samePathWrite = 0
 		}
+	}
+	if ForgePathClass(path) != ForgeNone {
+		e.forgeHits++
 	}
 }
 
@@ -180,6 +189,10 @@ func (t *BehaviorTracker) Score(key string) Result {
 	if e.samePathWrite >= t.cfg.WriteRepeatLimit && t.cfg.WriteRepeatScore > 0 {
 		res.Score += t.cfg.WriteRepeatScore
 		res.Reasons = append(res.Reasons, "behavior_write_repeat")
+	}
+	if e.forgeHits >= t.cfg.ForgeBurstLimit && t.cfg.ForgeBurstScore > 0 {
+		res.Score += t.cfg.ForgeBurstScore
+		res.Reasons = append(res.Reasons, "behavior_forge_burst")
 	}
 	if e.strikes > 0 && t.cfg.StrikeScore > 0 {
 		res.Score += e.strikes * t.cfg.StrikeScore

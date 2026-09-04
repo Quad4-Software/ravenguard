@@ -205,7 +205,7 @@ Blocks common path and query exploit probes. Caps body, URL, and header size. Li
 
 ## Detect
 
-HTTP scoring adds points for scanner and AI User-Agents, forum spam tools, empty form context on writes, missing browser headers, probe paths, behavior bursts, write repeats, path fan-out, and optional proxy bot-score headers. Scores at `challenge_score` trigger the JS challenge. `block_score` or repeated challenge strikes hard-block.
+HTTP scoring adds points for scanner and AI User-Agents, forum spam tools, empty form context on writes, missing browser headers, probe paths, Gitea/Forgejo expensive routes, behavior bursts, write repeats, path fan-out, and optional proxy bot-score headers. Scores at `challenge_score` trigger the JS challenge. `block_score` or repeated challenge strikes hard-block.
 
 ```toml
 [detect]
@@ -215,6 +215,10 @@ block_score = 90
 ai_ua_score = 55
 empty_form_context_score = 30
 forum_write_path_score = 25
+forge_expensive_score = 40
+behavior_forge_burst_limit = 24
+behavior_forge_burst_score = 35
+forge_rate_cost = 4
 missing_accept_lang_score = 15
 missing_sec_fetch_score = 20
 behavior_burst_limit = 60
@@ -228,6 +232,8 @@ bot_score_header_2 = "X-Bot-Score"
 ja4_header = "X-JA4"
 low_score_points = 40
 ```
+
+`forge_expensive_score` applies to hot forge paths only (`compare`, `blame`, `archive`). Browse paths (`src`, `raw`, `commit`) count toward `behavior_forge_burst_*` only. See [Detection](./detection.md#forge-expensive-routes).
 
 Full knobs: [Detection](./detection.md).
 

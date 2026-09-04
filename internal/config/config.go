@@ -294,6 +294,10 @@ type DetectConfig struct {
 	BehaviorWriteRepeatScore int                `toml:"behavior_write_repeat_score"`
 	EmptyFormContextScore    int                `toml:"empty_form_context_score"`
 	ForumWritePathScore      int                `toml:"forum_write_path_score"`
+	ForgeExpensiveScore      int                `toml:"forge_expensive_score"`
+	BehaviorForgeBurstLimit  int                `toml:"behavior_forge_burst_limit"`
+	BehaviorForgeBurstScore  int                `toml:"behavior_forge_burst_score"`
+	ForgeRateCost            int                `toml:"forge_rate_cost"`
 	ProxySignals             DetectProxySignals `toml:"proxy_signals"`
 }
 
@@ -533,6 +537,8 @@ func Default() Config {
 			BehaviorWriteBurstLimit: 20, BehaviorWriteBurstScore: 35,
 			BehaviorWriteRepeatLimit: 8, BehaviorWriteRepeatScore: 40,
 			EmptyFormContextScore: 30, ForumWritePathScore: 25,
+			ForgeExpensiveScore: 40, BehaviorForgeBurstLimit: 24, BehaviorForgeBurstScore: 35,
+			ForgeRateCost: 4,
 			ProxySignals: DetectProxySignals{
 				BotScoreHeader:  "CF-Bot-Score",
 				BotScoreHeader2: "X-Bot-Score",

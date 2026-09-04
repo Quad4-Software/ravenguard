@@ -186,6 +186,10 @@ export interface DetectSafe {
   behavior_path_fanout_score: number
   behavior_strike_limit: number
   behavior_strike_score: number
+  forge_expensive_score: number
+  behavior_forge_burst_limit: number
+  behavior_forge_burst_score: number
+  forge_rate_cost: number
   proxy_signals: ProxySignalsSafe
 }
 
@@ -373,6 +377,10 @@ export function normalizeSafeConfig(raw: Partial<SafeConfig> | null | undefined)
       behavior_path_fanout_score: Number(dt.behavior_path_fanout_score ?? 30),
       behavior_strike_limit: Number(dt.behavior_strike_limit ?? 3),
       behavior_strike_score: Number(dt.behavior_strike_score ?? 25),
+      forge_expensive_score: Number(dt.forge_expensive_score ?? 40),
+      behavior_forge_burst_limit: Number(dt.behavior_forge_burst_limit ?? 24),
+      behavior_forge_burst_score: Number(dt.behavior_forge_burst_score ?? 35),
+      forge_rate_cost: Number(dt.forge_rate_cost ?? 4),
       proxy_signals: {
         bot_score_header: String(ps.bot_score_header ?? 'CF-Bot-Score'),
         bot_score_header_2: String(ps.bot_score_header_2 ?? 'X-Bot-Score'),

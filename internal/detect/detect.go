@@ -25,6 +25,7 @@ type Config struct {
 	StarAcceptBrowserScore int
 	EmptyFormContextScore  int
 	ForumWritePathScore    int
+	ForgeExpensiveScore    int
 	ProxyBotLowScore       int
 	ProxyBotHeader         string
 	ProxyBotScoreHeader    string
@@ -204,6 +205,12 @@ func score(r *http.Request, cfg Config, wantReasons bool) Result {
 				res.Reasons = append(res.Reasons, "probe_path")
 			}
 			break
+		}
+	}
+	if cfg.ForgeExpensiveScore > 0 && ForgePathClass(path) == ForgeHot {
+		res.Score += cfg.ForgeExpensiveScore
+		if wantReasons {
+			res.Reasons = append(res.Reasons, "forge_expensive")
 		}
 	}
 

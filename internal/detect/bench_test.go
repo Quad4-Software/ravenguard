@@ -17,6 +17,7 @@ func BenchmarkScoreClean(b *testing.B) {
 		ProbePathScore: 40, OddMethodScore: 30, MissingAcceptScore: 10,
 		MissingAcceptLangScore: 15, MissingSecFetchScore: 20,
 		SecCHUAMismatchScore: 25, StarAcceptBrowserScore: 15,
+		ForgeExpensiveScore: 40,
 	}
 	r := httptest.NewRequest(http.MethodGet, "/products/shoes", nil)
 	r.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36")
@@ -32,6 +33,23 @@ func BenchmarkScoreClean(b *testing.B) {
 	b.ResetTimer()
 	for b.Loop() {
 		_ = detect.Score(r, cfg)
+	}
+}
+
+func BenchmarkForgePathClass(b *testing.B) {
+	paths := []string{
+		"/owner/repo/compare/a...b",
+		"/owner/repo/src/branch/main",
+		"/owner/repo",
+		"/owner/repo.git/info/refs",
+		"/api/v1/repos/o/r/git/trees/abc",
+		"/products/shoes",
+	}
+	b.ReportAllocs()
+	for b.Loop() {
+		for _, p := range paths {
+			_ = detect.ForgePathClass(p)
+		}
 	}
 }
 

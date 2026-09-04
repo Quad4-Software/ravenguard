@@ -63,6 +63,7 @@ type Handler struct {
 	challengeAlways bool
 	high404Action   uint8
 	writeCost       int
+	forgeRateCost   int
 	redirectHTTP    bool
 	reqLog          *requestlog.Logger
 	coraza          *corazaeng.Engine
@@ -133,6 +134,7 @@ func New(
 			StarAcceptBrowserScore: cfg.Detect.StarAcceptBrowserScore,
 			EmptyFormContextScore:  cfg.Detect.EmptyFormContextScore,
 			ForumWritePathScore:    cfg.Detect.ForumWritePathScore,
+			ForgeExpensiveScore:    cfg.Detect.ForgeExpensiveScore,
 			ProxyBotLowScore:       cfg.Detect.ProxySignals.LowScorePoints,
 			ProxyBotHeader:         cfg.Detect.ProxySignals.BotScoreHeader,
 			ProxyBotScoreHeader:    cfg.Detect.ProxySignals.BotScoreHeader2,
@@ -140,6 +142,7 @@ func New(
 		},
 		challengeAlways: strings.EqualFold(cfg.Challenge.Mode, "always") || strings.EqualFold(cfg.Challenge.Mode, "attack"),
 		writeCost:       3,
+		forgeRateCost:   cfg.Detect.ForgeRateCost,
 	}
 	if prot != nil {
 		h.writeCost = prot.WriteCost()
@@ -351,11 +354,13 @@ func (h *Handler) ApplyConfig(cfg config.Config) {
 		StarAcceptBrowserScore: cfg.Detect.StarAcceptBrowserScore,
 		EmptyFormContextScore:  cfg.Detect.EmptyFormContextScore,
 		ForumWritePathScore:    cfg.Detect.ForumWritePathScore,
+		ForgeExpensiveScore:    cfg.Detect.ForgeExpensiveScore,
 		ProxyBotLowScore:       cfg.Detect.ProxySignals.LowScorePoints,
 		ProxyBotHeader:         cfg.Detect.ProxySignals.BotScoreHeader,
 		ProxyBotScoreHeader:    cfg.Detect.ProxySignals.BotScoreHeader2,
 		ProxyJA4Header:         cfg.Detect.ProxySignals.JA4Header,
 	}
+	h.forgeRateCost = cfg.Detect.ForgeRateCost
 	if nets, err := iputil.ParseCIDRs(cfg.Trust.TrustedProxies); err == nil {
 		h.trusted = nets
 	}
@@ -608,6 +613,9 @@ func (h *Handler) guard(w http.ResponseWriter, r *http.Request) {
 		cost := 1
 		if h.prot != nil && h.prot.Enabled() {
 			cost = protect.MethodCost(r.Method, h.writeCost)
+		}
+		if detect.ForgePathClass(r.URL.Path) == detect.ForgeHot && h.forgeRateCost > cost {
+			cost = h.forgeRateCost
 		}
 		if !h.limiter.AllowN(bindID, r.URL.Path, cost) {
 			if h.prot != nil && h.prot.Enabled() {
