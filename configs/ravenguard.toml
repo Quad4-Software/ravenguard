@@ -255,3 +255,15 @@ data_dir = "./data/admin"
 # bootstrap_password = ""  # or RG_ADMIN_BOOTSTRAP_PASSWORD
 session_ttl = "12h"
 cookie_secure = "auto"
+
+# Hub public URL shown in proxy enrollment (use overlay IP/hostname when private).
+[hub]
+# public_url = "http://100.64.0.10:9090"
+
+# Outbound agent (used by `ravenguard proxy`). Leave empty in combined mode.
+[agent]
+# hub_url = "http://100.64.0.10:9090"
+# token = ""
+# hub_pubkey = ""
+# name = ""
+data_dir = "./data/proxy"

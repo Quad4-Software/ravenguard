@@ -6,6 +6,7 @@ package main
 import (
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -21,6 +22,7 @@ import (
 	"github.com/Quad4-Software/ravenguard/internal/admin"
 	"github.com/Quad4-Software/ravenguard/internal/admin/ops"
 	"github.com/Quad4-Software/ravenguard/internal/admin/store"
+	"github.com/Quad4-Software/ravenguard/internal/agentprotocol"
 	"github.com/Quad4-Software/ravenguard/internal/allowlist"
 	"github.com/Quad4-Software/ravenguard/internal/blocklist"
 	"github.com/Quad4-Software/ravenguard/internal/challenge"
@@ -45,12 +47,22 @@ import (
 )
 
 func main() {
-	flags, err := config.ParseFlags(os.Args[1:])
+	args := os.Args[1:]
+	mode := "all"
+	if len(args) > 0 {
+		switch args[0] {
+		case "hub", "proxy", "all":
+			mode = args[0]
+			args = args[1:]
+		}
+	}
+
+	flags, err := config.ParseFlags(args)
 	if err != nil {
 		os.Exit(2)
 	}
 
-	cfg, err := config.LoadWithFlags(flags)
+	cfg, err := config.LoadWithFlagsMode(flags, mode)
 	if err != nil {
 		slog.Error("config", "err", err)
 		os.Exit(1)
@@ -67,6 +79,15 @@ func main() {
 		slog.SetDefault(slog.New(rgsentry.WrapHandler(baseLog.Handler(), sentryRep)))
 	}
 
+	if mode == "hub" {
+		runHub(cfg)
+		return
+	}
+
+	runEdge(cfg, mode == "proxy", flags.ConfigPath, sentryRep)
+}
+
+func runEdge(cfg config.Config, proxyOnly bool, configPath string, sentryRep *rgsentry.Reporter) {
 	target, err := proxy.ParseUpstreamURL(cfg.Upstream.URL)
 	if err != nil {
 		slog.Error("upstream url", "err", err)
@@ -375,7 +396,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	sandbox.DerivePaths(&sbCfg, flags.ConfigPath, cfg.Listen.HTTP, cfg.Listen.HTTPS, cfg.Listen.QUIC, cfg.Upstream.URL, cfg.TLS.CertFile, cfg.TLS.KeyFile, acmeStorage, blocklistPaths, adminListen, adminHTTPS, adminDataDir)
+	sandbox.DerivePaths(&sbCfg, configPath, cfg.Listen.HTTP, cfg.Listen.HTTPS, cfg.Listen.QUIC, cfg.Upstream.URL, cfg.TLS.CertFile, cfg.TLS.KeyFile, acmeStorage, blocklistPaths, adminListen, adminHTTPS, adminDataDir)
 	if acmeStorage == "" && adminDataDir == "" && manualDir != "" {
 		sbCfg.Landlock.RWDirs = append(sbCfg.Landlock.RWDirs, manualDir)
 	}
@@ -458,7 +479,7 @@ func main() {
 
 	var adminSrv *admin.Server
 	var rt *ops.Runtime
-	if cfg.Admin.Enabled {
+	if cfg.Admin.Enabled && !proxyOnly {
 		rt = ops.NewRuntime(cfg, prot, lists, limiter, hc, feeds, chal)
 		rt.RootCtx = ctx
 		rt.SetPipeline(pipe)
@@ -470,6 +491,21 @@ func main() {
 			}
 			return reloadRouting(adminSrv.Store())
 		}
+		hubURL := cfg.Hub.PublicURL
+		if hubURL == "" {
+			if cfg.Admin.HTTPS != "" {
+				hubURL = "https://" + stripHostPortListen(cfg.Admin.HTTPS)
+			} else if cfg.Admin.Listen != "" {
+				hubURL = "http://" + stripHostPortListen(cfg.Admin.Listen)
+			}
+		}
+		var hubKeys *agentprotocol.KeyPair
+		var reg *agentprotocol.Registry
+		if keys, kerr := agentprotocol.LoadOrCreateKeyPair(cfg.Admin.DataDir); kerr == nil {
+			k := keys
+			hubKeys = &k
+			reg = agentprotocol.NewRegistry()
+		}
 		adminSrv, err = admin.New(admin.Options{
 			Config:               cfg.Admin,
 			TLSCertFile:          cfg.TLS.CertFile,
@@ -478,6 +514,11 @@ func main() {
 			SecureCookie:         secureCookie,
 			BootstrapUpstreamURL: cfg.Upstream.URL,
 			ReloadRoutes:         reloadFn,
+			AgentRegistry:        reg,
+			HubKeys:              hubKeys,
+			HubPublicURL:         hubURL,
+			MountAgentConnect:    reg != nil && hubKeys != nil,
+			LocalTarget:          &ops.LocalTarget{Runtime: rt},
 			LogSnapshot: func(limit int, level string) any {
 				ring := logging.DefaultRing()
 				if ring == nil {
@@ -528,6 +569,12 @@ func main() {
 			slog.Error("admin", "err", err)
 			os.Exit(1)
 		}
+		rt.CertExport = func(host string) (string, string, error) {
+			if manualStore == nil {
+				return "", "", ops.ErrManualCertUnavailable
+			}
+			return manualStore.Export(host)
+		}
 		if err := reloadRouting(adminSrv.Store()); err != nil {
 			slog.Error("load routes", "err", err)
 			os.Exit(1)
@@ -549,6 +596,130 @@ func main() {
 		if err := acmeMgr.Manage(ctx, cfg.TLS.ACME.Hosts); err != nil {
 			slog.Warn("acme manage", "err", err)
 		}
+	}
+
+	if proxyOnly || (cfg.Agent.HubURL != "" && cfg.Agent.Token != "") {
+		if rt == nil {
+			rt = ops.NewRuntime(cfg, prot, lists, limiter, hc, feeds, chal)
+			rt.RootCtx = ctx
+			rt.SetPipeline(pipe)
+			rt.StartSampler(ctx)
+			rt.LogSnapshot = func(limit int, level string) any {
+				ring := logging.DefaultRing()
+				if ring == nil {
+					return []logging.Entry{}
+				}
+				return ring.Snapshot(limit, level)
+			}
+			rt.CertStatus = func() any { return mergeCertDetails(manualStore, acmeMgr) }
+			rt.CertDetail = func(host string) (any, error) {
+				if manualStore != nil {
+					if d, derr := manualStore.Detail(host); derr == nil {
+						return d, nil
+					}
+				}
+				if acmeMgr != nil {
+					return acmeMgr.Detail(host)
+				}
+				return nil, ops.ErrManualCertUnavailable
+			}
+			rt.CertRenew = func(c context.Context, host string) error {
+				if acmeMgr == nil {
+					return ops.ErrCertRenewUnavailable
+				}
+				return acmeMgr.Renew(c, host)
+			}
+			rt.ManualCertPut = func(host, certPEM, keyPEM string) error {
+				if manualStore == nil {
+					return ops.ErrManualCertUnavailable
+				}
+				return manualStore.Put(host, certPEM, keyPEM)
+			}
+			rt.ManualCertDelete = func(host string) error {
+				if manualStore == nil {
+					return ops.ErrManualCertUnavailable
+				}
+				return manualStore.Delete(host)
+			}
+			rt.CertExport = func(host string) (string, string, error) {
+				if manualStore == nil {
+					return "", "", ops.ErrManualCertUnavailable
+				}
+				return manualStore.Export(host)
+			}
+			rt.ACMEManage = func(c context.Context, hosts []string) error {
+				if acmeMgr == nil {
+					return ops.ErrACMEManageUnavailable
+				}
+				return acmeMgr.Manage(c, hosts)
+			}
+		} else if rt.CertExport == nil {
+			rt.CertExport = func(host string) (string, string, error) {
+				if manualStore == nil {
+					return "", "", ops.ErrManualCertUnavailable
+				}
+				return manualStore.Export(host)
+			}
+		}
+		applyDesired := func(c context.Context, state agentprotocol.DesiredState) error {
+			_ = c
+			if err := agentprotocol.SaveDesiredState(cfg.Agent.DataDir, state); err != nil {
+				slog.Warn("persist desired state", "err", err)
+			}
+			if len(state.SafeConfig) > 0 {
+				safe, err := ops.DecodeSafeConfig(string(state.SafeConfig))
+				if err != nil {
+					var s ops.SafeConfig
+					if uerr := json.Unmarshal(state.SafeConfig, &s); uerr == nil {
+						safe = s
+					} else {
+						return err
+					}
+				}
+				if err := rt.ApplySafeConfig(safe); err != nil {
+					return err
+				}
+			}
+			if err := applyRoutingSnapshot(routeTable, accessMgr, state.Routing); err != nil {
+				return err
+			}
+			if acmeMgr != nil && len(state.ACMEHosts) > 0 {
+				_ = acmeMgr.Manage(ctx, state.ACMEHosts)
+			}
+			return nil
+		}
+		if state, ok, err := agentprotocol.LoadDesiredStateOptional(cfg.Agent.DataDir); err == nil && ok {
+			if err := applyDesired(ctx, state); err != nil {
+				slog.Warn("apply saved desired state", "err", err)
+			}
+		}
+		agent := &agentprotocol.Agent{
+			Cfg: agentprotocol.AgentConfig{
+				HubURL:      cfg.Agent.HubURL,
+				Token:       cfg.Agent.Token,
+				HubPubKey:   cfg.Agent.HubPubKey,
+				Name:        cfg.Agent.Name,
+				ListenHTTP:  cfg.Listen.HTTP,
+				ListenHTTPS: cfg.Listen.HTTPS,
+				ListenQUIC:  cfg.Listen.QUIC,
+				DataDir:     cfg.Agent.DataDir,
+				Version:     "ravenguard",
+			},
+			Dispatcher: &ops.RuntimeDispatcher{
+				Runtime: rt,
+				ApplyRouting: func(c context.Context, raw json.RawMessage) error {
+					return applyRoutingSnapshot(routeTable, accessMgr, raw)
+				},
+				ApplyDesired: applyDesired,
+			},
+			OnDesired: applyDesired,
+		}
+		go func() {
+			if aerr := agent.Run(ctx); aerr != nil && ctx.Err() == nil {
+				slog.Error("agent", "err", aerr)
+				cancel()
+			}
+		}()
 	}
 
 	var tlsCfg *tls.Config

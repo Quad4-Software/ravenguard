@@ -35,6 +35,25 @@ type Config struct {
 	Sentry     SentryConfig     `toml:"sentry"`
 	Sandbox    SandboxConfig    `toml:"sandbox"`
 	Admin      AdminConfig      `toml:"admin"`
+	Hub        HubConfig        `toml:"hub"`
+	Agent      AgentConfig      `toml:"agent"`
+
+	runMode string `toml:"-"`
+}
+
+// HubConfig is reserved for hub-specific options (keypair lives under admin.data_dir).
+type HubConfig struct {
+	// PublicURL is the URL agents should dial (shown in enrollment UI).
+	PublicURL string `toml:"public_url"`
+}
+
+// AgentConfig configures outbound connection from a proxy process to the hub.
+type AgentConfig struct {
+	HubURL    string `toml:"hub_url"`
+	Token     string `toml:"token"`
+	HubPubKey string `toml:"hub_pubkey"`
+	Name      string `toml:"name"`
+	DataDir   string `toml:"data_dir"`
 }
 
 // AdminConfig configures the management plane (separate listen, users, SPA).
@@ -478,6 +497,9 @@ func Default() Config {
 			SessionTTL:    Duration{12 * time.Hour},
 			CookieSecure:  "auto",
 		},
+		Agent: AgentConfig{
+			DataDir: "./data/proxy",
+		},
 	}
 }
 
@@ -547,15 +569,26 @@ func Load(path string) (Config, error) {
 }
 
 func LoadWithFlags(f Flags) (Config, error) {
+	return LoadWithFlagsMode(f, "all")
+}
+
+func LoadWithFlagsMode(f Flags, mode string) (Config, error) {
 	path := f.ConfigPath
 	if path == "" {
 		path = envOr("RG_CONFIG", "configs/ravenguard.toml")
 	}
-	cfg, err := Load(path)
-	if err != nil {
-		return Config{}, err
+	cfg := Default()
+	if path != "" {
+		if _, err := toml.DecodeFile(path, &cfg); err != nil {
+			return Config{}, fmt.Errorf("load config: %w", err)
+		}
 	}
+	applyEnv(&cfg)
 	applyFlags(&cfg, f)
+	cfg.SetRunMode(mode)
+	if mode == "hub" {
+		cfg.Admin.Enabled = true
+	}
 	normalize(&cfg)
 	if err := cfg.Validate(); err != nil {
 		return Config{}, err
@@ -680,6 +713,12 @@ func applyEnv(c *Config) {
 	setStr(&c.Admin.BootstrapUser, "RG_ADMIN_BOOTSTRAP_USER")
 	setStr(&c.Admin.BootstrapPassword, "RG_ADMIN_BOOTSTRAP_PASSWORD")
 	setStr(&c.Admin.CookieSecure, "RG_ADMIN_COOKIE_SECURE")
+	setStr(&c.Hub.PublicURL, "RG_HUB_PUBLIC_URL")
+	setStr(&c.Agent.HubURL, "RG_AGENT_HUB_URL")
+	setStr(&c.Agent.Token, "RG_AGENT_TOKEN")
+	setStr(&c.Agent.HubPubKey, "RG_AGENT_HUB_PUBKEY")
+	setStr(&c.Agent.Name, "RG_AGENT_NAME")
+	setStr(&c.Agent.DataDir, "RG_AGENT_DATA_DIR")
 	if v := os.Getenv("RG_ADMIN_SESSION_TTL"); v != "" {
 		if d, err := time.ParseDuration(v); err == nil {
 			c.Admin.SessionTTL = Duration{d}
@@ -877,15 +916,29 @@ func validateUpstreamURL(raw string) error {
 	}
 }
 
+func (c *Config) SetRunMode(mode string) {
+	if c == nil {
+		return
+	}
+	c.runMode = strings.ToLower(strings.TrimSpace(mode))
+}
+
 func (c Config) Validate() error {
-	if c.Upstream.URL == "" {
-		return fmt.Errorf("upstream.url is required")
-	}
-	if err := validateUpstreamURL(c.Upstream.URL); err != nil {
-		return err
-	}
-	if c.Listen.HTTP == "" && c.Listen.HTTPS == "" && c.Listen.QUIC == "" {
-		return fmt.Errorf("at least one of listen.http, listen.https, listen.quic is required")
+	hubOnly := c.runMode == "hub"
+	if !hubOnly {
+		if c.Upstream.URL == "" {
+			return fmt.Errorf("upstream.url is required")
+		}
+		if err := validateUpstreamURL(c.Upstream.URL); err != nil {
+			return err
+		}
+		if c.Listen.HTTP == "" && c.Listen.HTTPS == "" && c.Listen.QUIC == "" {
+			return fmt.Errorf("at least one of listen.http, listen.https, listen.quic is required")
+		}
+	} else if c.Upstream.URL != "" {
+		if err := validateUpstreamURL(c.Upstream.URL); err != nil {
+			return err
+		}
 	}
 	tlsMode := strings.ToLower(strings.TrimSpace(c.TLS.Mode))
 	if tlsMode == "" {
@@ -896,25 +949,27 @@ func (c Config) Validate() error {
 	default:
 		return fmt.Errorf("tls.mode must be off, files, or acme")
 	}
-	needsTLS := c.Listen.HTTPS != "" || c.Listen.QUIC != ""
+	needsTLS := !hubOnly && (c.Listen.HTTPS != "" || c.Listen.QUIC != "")
 	switch tlsMode {
 	case "files":
 		if needsTLS && (c.TLS.CertFile == "" || c.TLS.KeyFile == "") {
 			return fmt.Errorf("tls.cert_file and tls.key_file required when tls.mode is files and https or quic is enabled")
 		}
 	case "acme":
-		if !c.TLS.ACME.AgreeTOS {
-			return fmt.Errorf("tls.acme.agree_tos is required when tls.mode is acme")
-		}
-		if strings.TrimSpace(c.TLS.ACME.Email) == "" {
-			return fmt.Errorf("tls.acme.email is required when tls.mode is acme")
-		}
-		if strings.TrimSpace(c.TLS.ACME.StorageDir) == "" {
-			return fmt.Errorf("tls.acme.storage_dir is required when tls.mode is acme")
-		}
-		http01 := c.TLS.ACME.HTTP01 == nil || *c.TLS.ACME.HTTP01
-		if http01 && c.Listen.HTTP == "" {
-			return fmt.Errorf("listen.http is required when tls.acme.http01 is enabled")
+		if !hubOnly {
+			if !c.TLS.ACME.AgreeTOS {
+				return fmt.Errorf("tls.acme.agree_tos is required when tls.mode is acme")
+			}
+			if strings.TrimSpace(c.TLS.ACME.Email) == "" {
+				return fmt.Errorf("tls.acme.email is required when tls.mode is acme")
+			}
+			if strings.TrimSpace(c.TLS.ACME.StorageDir) == "" {
+				return fmt.Errorf("tls.acme.storage_dir is required when tls.mode is acme")
+			}
+			http01 := c.TLS.ACME.HTTP01 == nil || *c.TLS.ACME.HTTP01
+			if http01 && c.Listen.HTTP == "" {
+				return fmt.Errorf("listen.http is required when tls.acme.http01 is enabled")
+			}
 		}
 	case "off":
 		if needsTLS {
@@ -943,7 +998,7 @@ func (c Config) Validate() error {
 	default:
 		return fmt.Errorf("privacy.log_ip must be off, hash, or full")
 	}
-	if c.Challenge.Enabled {
+	if !hubOnly && c.Challenge.Enabled {
 		if weakChallengeSecret(c.Challenge.Secret) {
 			return fmt.Errorf("challenge.secret must be at least 16 characters and must not use a change-me placeholder")
 		}
@@ -974,7 +1029,7 @@ func (c Config) Validate() error {
 			return fmt.Errorf("challenge.algorithm must be adaptive, sha256, pbkdf2, or argon2id")
 		}
 	}
-	if c.Challenge.Captcha.Enabled {
+	if !hubOnly && c.Challenge.Captcha.Enabled {
 		provider := strings.ToLower(strings.TrimSpace(c.Challenge.Captcha.Provider))
 		if provider == "" {
 			return fmt.Errorf("challenge.captcha.provider is required when captcha is enabled")
@@ -983,7 +1038,7 @@ func (c Config) Validate() error {
 			return fmt.Errorf("challenge.captcha.provider %q is not supported (use stub or ravenguard)", c.Challenge.Captcha.Provider)
 		}
 	}
-	if c.QFeeds.Enabled {
+	if !hubOnly && c.QFeeds.Enabled {
 		if c.QFeeds.APIToken == "" {
 			return fmt.Errorf("qfeeds.api_token is required when qfeeds is enabled")
 		}
@@ -993,7 +1048,7 @@ func (c Config) Validate() error {
 			return fmt.Errorf("qfeeds.on_error must be fail_open or fail_closed")
 		}
 	}
-	if c.RateLimit.Enabled {
+	if !hubOnly && c.RateLimit.Enabled {
 		if c.RateLimit.Requests <= 0 {
 			return fmt.Errorf("ratelimit.requests must be > 0")
 		}
@@ -1046,7 +1101,15 @@ func (c Config) Validate() error {
 	default:
 		return fmt.Errorf("sandbox.seccomp.deny_action must be errno, kill_thread, kill_process, trap, or log")
 	}
-	if c.Admin.Enabled {
+	if c.Admin.Enabled || hubOnly {
+		if hubOnly {
+			if c.Admin.Listen == "" && c.Admin.HTTPS == "" {
+				return fmt.Errorf("admin.listen or admin.https is required in hub mode")
+			}
+			if strings.TrimSpace(c.Admin.DataDir) == "" {
+				return fmt.Errorf("admin.data_dir is required in hub mode")
+			}
+		}
 		if c.Admin.Listen == "" && c.Admin.HTTPS == "" {
 			return fmt.Errorf("admin.listen or admin.https is required when admin is enabled")
 		}
@@ -1070,6 +1133,20 @@ func (c Config) Validate() error {
 		case "auto", "true", "false", "1", "0", "yes", "no":
 		default:
 			return fmt.Errorf("admin.cookie_secure must be auto, true, or false")
+		}
+	}
+	if c.runMode == "proxy" {
+		if strings.TrimSpace(c.Agent.HubURL) == "" {
+			return fmt.Errorf("agent.hub_url is required in proxy mode")
+		}
+		if strings.TrimSpace(c.Agent.Token) == "" {
+			return fmt.Errorf("agent.token is required in proxy mode")
+		}
+		if strings.TrimSpace(c.Agent.HubPubKey) == "" {
+			return fmt.Errorf("agent.hub_pubkey is required in proxy mode")
+		}
+		if strings.TrimSpace(c.Agent.DataDir) == "" {
+			return fmt.Errorf("agent.data_dir is required in proxy mode")
 		}
 	}
 	return nil

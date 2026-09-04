@@ -5,6 +5,7 @@ go 1.26.6
 require (
 	github.com/BurntSushi/toml v1.5.0
 	github.com/caddyserver/certmagic v0.25.4
+	github.com/coder/websocket v1.8.15
 	github.com/elastic/go-seccomp-bpf v1.6.0
 	github.com/getsentry/sentry-go v0.49.0
 	github.com/landlock-lsm/go-landlock v0.10.0
