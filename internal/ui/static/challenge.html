@@ -3,12 +3,12 @@
 <head>
   {{template "head" .}}
 </head>
-<body>
+<body class="gate-{{.Gate}}">
   <main class="wrap">
     <p class="code">{{.ChallengeTitle}}</p>
     <p class="status" id="status">{{.StatusText}}</p>
     <p class="sub" id="sub">{{.ChallengeSubtitle}}</p>
-    <div class="widget">
+    <div class="widget{{if eq .Gate "invisible"}} widget-invisible{{end}}">
       {{.WidgetHTML}}
     </div>
     {{if .CaptchaEnabled}}
@@ -26,9 +26,10 @@
     <span>{{.FooterText}}</span>
   </footer>
   <script>
-    window[{{printf "%q" .BootstrapGlobal}}] = {
-      prefix: {{printf "%q" .Prefix}},
-      ray: {{printf "%q" .RayID}},
+    window[{{.BootstrapGlobal}}] = {
+      prefix: {{.Prefix}},
+      ray: {{.RayID}},
+      gate: {{.Gate}},
       captcha: {{if .CaptchaEnabled}}true{{else}}false{{end}}
     };
   </script>

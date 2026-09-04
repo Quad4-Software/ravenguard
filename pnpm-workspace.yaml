@@ -1,6 +1,7 @@
 packages:
   - 'packages/*'
   - 'docs'
+  - 'e2e'
 
 # Supply chain defaults for pnpm 11+
 # https://pnpm.io/supply-chain-security
@@ -16,10 +17,16 @@ dangerouslyAllowAllBuilds: false
 overrides:
   uuid: ^14.0.0
   serialize-javascript: ^7.0.5
+  qs: ^6.16.0
+  cookie: ^0.7.2
+  esbuild: ^0.28.2
+  image-size: npm:image-size-next@2.1.1
 
 minimumReleaseAgeExclude:
   - uuid
   - serialize-javascript
+  - qs
+  - image-size-next
 
 allowBuilds:
   '@swc/core': true

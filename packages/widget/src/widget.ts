@@ -291,6 +291,7 @@ export class RavenGuardWidget extends HTMLElement {
         maxnumber: ch.maxnumber,
         expires: ch.expires,
         bind: ch.bind,
+        gate: ch.gate,
         params: ch.params,
         signature: ch.signature,
         solution: String(sol),

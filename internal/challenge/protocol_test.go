@@ -20,7 +20,7 @@ func TestIssueChallengeRoundTrip(t *testing.T) {
 		Algorithm:  "sha256",
 		CookieName: "rg_clear",
 	}
-	ch, err := m.IssueChallenge("client-a", challenge.RiskLow)
+	ch, err := m.IssueChallenge("client-a", challenge.RiskLow, challenge.GateInteractive)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -40,6 +40,7 @@ func TestIssueChallengeRoundTrip(t *testing.T) {
 		MaxNumber:  ch.MaxNumber,
 		Expires:    ch.Expires,
 		Bind:       ch.Bind,
+		Gate:       ch.Gate,
 		Params:     ch.Params,
 		Signature:  ch.Signature,
 		Solution:   formatUint(sol),
@@ -71,7 +72,7 @@ func TestPBKDF2RoundTrip(t *testing.T) {
 		Algorithm:  "pbkdf2",
 		CookieName: "rg_clear",
 	}
-	ch, err := m.IssueChallenge("client-b", challenge.RiskElevated)
+	ch, err := m.IssueChallenge("client-b", challenge.RiskElevated, challenge.GateInteractive)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,7 +86,7 @@ func TestPBKDF2RoundTrip(t *testing.T) {
 	payload := challenge.Payload{
 		V: ch.V, Algorithm: ch.Algorithm, Challenge: ch.Challenge, Salt: ch.Salt,
 		Difficulty: ch.Difficulty, MaxNumber: ch.MaxNumber, Expires: ch.Expires,
-		Bind: ch.Bind, Params: ch.Params, Signature: ch.Signature,
+		Bind: ch.Bind, Gate: ch.Gate, Params: ch.Params, Signature: ch.Signature,
 		Solution: formatUint(sol),
 		Env:      challenge.EnvAttestation{Interacted: true, SolveMs: 200},
 	}
@@ -100,9 +101,9 @@ func TestPBKDF2RoundTrip(t *testing.T) {
 
 func TestAdaptiveRisk(t *testing.T) {
 	m := &challenge.Manager{Secret: []byte("fixture-secret-16!"), Difficulty: 8, Algorithm: "adaptive"}
-	low, _ := m.IssueChallenge("c", challenge.RiskLow)
-	elev, _ := m.IssueChallenge("c", challenge.RiskElevated)
-	high, _ := m.IssueChallenge("c", challenge.RiskHigh)
+	low, _ := m.IssueChallenge("c", challenge.RiskLow, challenge.GateInvisible)
+	elev, _ := m.IssueChallenge("c", challenge.RiskElevated, challenge.GateInvisible)
+	high, _ := m.IssueChallenge("c", challenge.RiskHigh, challenge.GateInteractive)
 	if low.Algorithm != challenge.AlgoSHA256 {
 		t.Fatalf("low=%s", low.Algorithm)
 	}

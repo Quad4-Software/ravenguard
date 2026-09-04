@@ -571,7 +571,9 @@
           <select id="ch-mode" bind:value={form.challenge.mode} disabled={!canWrite}>
             <option value="detect">detect</option>
             <option value="always">always</option>
+            <option value="attack">attack</option>
           </select>
+          <p class="field-help">attack forces the visible checkbox gate for every request</p>
         </div>
         <div class="field">
           <label for="ch-algo">Algorithm</label>

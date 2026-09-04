@@ -26,6 +26,7 @@ func TestWriteGoldenFixtures(t *testing.T) {
 		MaxNumber:  maxNumberFor(8),
 		Expires:    4102444800, // 2100-01-01
 		Bind:       "fixture-client",
+		Gate:       GateInteractive,
 	}
 	sig, err := m.signChallenge(ch)
 	if err != nil {
@@ -39,7 +40,7 @@ func TestWriteGoldenFixtures(t *testing.T) {
 	p := Payload{
 		V: ch.V, Algorithm: ch.Algorithm, Challenge: ch.Challenge, Salt: ch.Salt,
 		Difficulty: ch.Difficulty, MaxNumber: ch.MaxNumber, Expires: ch.Expires,
-		Bind: ch.Bind, Params: ch.Params, Signature: ch.Signature,
+		Bind: ch.Bind, Gate: ch.Gate, Params: ch.Params, Signature: ch.Signature,
 		Solution: strconv.FormatUint(sol, 10),
 		Env:      EnvAttestation{Interacted: true, SolveMs: 120},
 	}
@@ -76,6 +77,7 @@ func TestWriteGoldenFixtures(t *testing.T) {
 		MaxNumber:  maxNumberFor(4),
 		Expires:    4102444800,
 		Bind:       "fixture-client",
+		Gate:       GateInteractive,
 		Params:     map[string]int{"iterations": 1000},
 	}
 	sig2, err := m2.signChallenge(ch2)
@@ -90,7 +92,7 @@ func TestWriteGoldenFixtures(t *testing.T) {
 	p2 := Payload{
 		V: ch2.V, Algorithm: ch2.Algorithm, Challenge: ch2.Challenge, Salt: ch2.Salt,
 		Difficulty: ch2.Difficulty, MaxNumber: ch2.MaxNumber, Expires: ch2.Expires,
-		Bind: ch2.Bind, Params: ch2.Params, Signature: ch2.Signature,
+		Bind: ch2.Bind, Gate: ch2.Gate, Params: ch2.Params, Signature: ch2.Signature,
 		Solution: strconv.FormatUint(sol2, 10),
 		Env:      EnvAttestation{Interacted: true, SolveMs: 250},
 	}

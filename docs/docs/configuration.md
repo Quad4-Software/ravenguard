@@ -194,9 +194,10 @@ Full knobs: [Detection](./detection.md).
 ```toml
 [challenge]
 enabled = true
-mode = "detect"          # or "always"
+mode = "detect"          # detect | always | attack
 algorithm = "adaptive"   # adaptive | sha256 | pbkdf2 | argon2id
 difficulty = 16
+env_probe = "on"         # on | off (off is for e2e harnesses only)
 cookie_name = "rg_clear"
 cookie_ttl = "24h"
 secret = "rg-dev-secret-replace-me!!"
@@ -246,6 +247,8 @@ lang = "en"
 # serve_root_icons = true
 # widget_input_name = "rg"
 ```
+
+`mode = "attack"` forces the visible interactive gate for every challenged request. In `detect` / `always`, low and elevated risk use the invisible auto-PoW gate. High risk and failed invisible attempts escalate to interactive. Captcha UI appears only on the interactive gate when captcha is enabled.
 
 | Stealth key | Default | Meaning |
 |-------------|---------|---------|

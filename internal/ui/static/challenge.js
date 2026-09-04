@@ -37,7 +37,7 @@
 
   async function submitPayload(payload, captcha) {
     var body = { payload: payload, ray: cfg.ray || "" };
-    if (captcha) body.captcha = captcha;
+    if (cfg.captcha) body.captcha = captcha || "";
     var res = await fetch((cfg.prefix || "/_rg") + "/challenge", {
       method: "POST",
       credentials: "same-origin",
@@ -74,8 +74,8 @@
           window.location.replace(nextURL());
         })
         .catch(function (err) {
+          if (widget.reset) widget.reset("unverified");
           setStatus(String(err.message || err), false);
-          if (widget.reset) widget.reset("error");
         });
     });
   }

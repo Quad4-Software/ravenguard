@@ -15,6 +15,7 @@ import (
 
 	"github.com/Quad4-Software/ravenguard/internal/admin/ops"
 	"github.com/Quad4-Software/ravenguard/internal/admin/rbac"
+	"github.com/Quad4-Software/ravenguard/internal/challenge"
 	"github.com/Quad4-Software/ravenguard/internal/ui"
 )
 
@@ -167,7 +168,8 @@ func (s *Server) handleAppearancePreview(w http.ResponseWriter, r *http.Request)
 			ChallengeURL:   "#",
 			Token:          "preview",
 			Difficulty:     cfg.Challenge.Difficulty,
-			CaptchaEnabled: cfg.Challenge.Captcha.Enabled,
+			Gate:           challenge.SelectGate(cfg.Challenge.Mode, challenge.RiskLow),
+			CaptchaEnabled: cfg.Challenge.Captcha.Enabled && challenge.SelectGate(cfg.Challenge.Mode, challenge.RiskLow) == challenge.GateInteractive,
 			StatusText:     cfg.UI.StatusText,
 		})
 	case "block":

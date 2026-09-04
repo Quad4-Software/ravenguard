@@ -8,6 +8,8 @@ export interface ChallengeParams {
   parallelism?: number
 }
 
+export type Gate = 'invisible' | 'interactive'
+
 export interface Challenge {
   v: number
   algorithm: Algorithm | string
@@ -17,6 +19,7 @@ export interface Challenge {
   maxnumber: number
   expires: number
   bind?: string
+  gate?: Gate | string
   params?: Record<string, number>
   signature: string
 }
@@ -40,6 +43,7 @@ export interface Payload {
   maxnumber: number
   expires: number
   bind?: string
+  gate?: Gate | string
   params?: Record<string, number>
   signature: string
   solution: string

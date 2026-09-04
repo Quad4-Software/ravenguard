@@ -196,7 +196,7 @@ func TestSiteFromConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 	rr := httptest.NewRecorder()
-	pages.ServeChallenge(rr, ui.Data{RayID: "abc", ChallengeURL: "/x/v1/challenge"})
+	pages.ServeChallenge(rr, ui.Data{RayID: "abc", ChallengeURL: "/x/v1/challenge", Gate: "interactive"})
 	body := rr.Body.String()
 	if !strings.Contains(body, "VERIFY") {
 		t.Fatal("missing verify title")
@@ -204,10 +204,26 @@ func TestSiteFromConfig(t *testing.T) {
 	if !strings.Contains(body, "acme-check") {
 		t.Fatal("missing element name")
 	}
+	if !strings.Contains(body, `auto="off"`) {
+		t.Fatal("expected interactive auto=off")
+	}
 	if !strings.Contains(body, "https://cdn.example/logo.svg") {
 		t.Fatal("missing logo url")
 	}
 	if !strings.Contains(body, "w.js") || !strings.Contains(body, "c.js") {
 		t.Fatal("missing neutral asset names")
+	}
+
+	rr2 := httptest.NewRecorder()
+	pages.ServeChallenge(rr2, ui.Data{RayID: "inv", ChallengeURL: "/x/v1/challenge", Gate: "invisible"})
+	body2 := rr2.Body.String()
+	if !strings.Contains(body2, `auto="onload"`) || !strings.Contains(body2, `display="invisible"`) {
+		t.Fatal("expected invisible widget attrs")
+	}
+	if !strings.Contains(body2, `window["__g__"]`) {
+		t.Fatalf("bootstrap global missing or double-escaped: %s", body2[strings.Index(body2, "window"):])
+	}
+	if strings.Contains(body2, `window["\"__g__\""]`) {
+		t.Fatal("bootstrap global is double-escaped")
 	}
 }

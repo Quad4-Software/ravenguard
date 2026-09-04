@@ -15,6 +15,7 @@
     "admin:test": "pnpm --filter @quad4/ravenguard-admin test",
     "admin:typecheck": "pnpm --filter @quad4/ravenguard-admin typecheck",
     "docs:start": "pnpm --filter ravenguard-docs start",
-    "docs:build": "pnpm --filter ravenguard-docs build"
+    "docs:build": "pnpm --filter ravenguard-docs build",
+    "e2e": "pnpm --filter @quad4/ravenguard-e2e test"
   }
 }

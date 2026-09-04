@@ -27,7 +27,7 @@ type EnvVerdict struct {
 	Reasons []string
 }
 
-func (m *Manager) EvaluateEnv(rep EnvReport, difficulty int) EnvVerdict {
+func (m *Manager) EvaluateEnv(rep EnvReport, difficulty int, gate string) EnvVerdict {
 	var v EnvVerdict
 	if rep.Webdriver {
 		v.Refuse = true
@@ -48,7 +48,7 @@ func (m *Manager) EvaluateEnv(rep EnvReport, difficulty int) EnvVerdict {
 	if rep.NoPlugins && (rep.Webdriver || rep.Headless || rep.Playwright || rep.Selenium) {
 		v.Reasons = append(v.Reasons, "no_plugins")
 	}
-	if !rep.Interacted {
+	if NormalizeGate(gate) == GateInteractive && !rep.Interacted {
 		v.Refuse = true
 		v.Reasons = append(v.Reasons, "no_interaction")
 	}

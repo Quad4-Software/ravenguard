@@ -46,6 +46,33 @@ const (
 	RiskHigh
 )
 
+// Gate is the challenge presentation tier.
+const (
+	GateInvisible   = "invisible"
+	GateInteractive = "interactive"
+)
+
+// SelectGate chooses presentation from challenge mode and risk.
+func SelectGate(mode string, risk RiskLevel) string {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case "attack":
+		return GateInteractive
+	default:
+		if risk >= RiskHigh {
+			return GateInteractive
+		}
+		return GateInvisible
+	}
+}
+
+// FloorRiskForMode raises adaptive effort for attack mode.
+func FloorRiskForMode(mode string, risk RiskLevel) RiskLevel {
+	if strings.EqualFold(strings.TrimSpace(mode), "attack") && risk < RiskElevated {
+		return RiskElevated
+	}
+	return risk
+}
+
 // Challenge is a protocol v1 challenge issued to the widget.
 type Challenge struct {
 	V          int            `json:"v"`
@@ -56,6 +83,7 @@ type Challenge struct {
 	MaxNumber  uint64         `json:"maxnumber"`
 	Expires    int64          `json:"expires"`
 	Bind       string         `json:"bind,omitempty"`
+	Gate       string         `json:"gate,omitempty"`
 	Params     map[string]int `json:"params,omitempty"`
 	Signature  string         `json:"signature"`
 }
@@ -81,6 +109,7 @@ type Payload struct {
 	MaxNumber  uint64         `json:"maxnumber"`
 	Expires    int64          `json:"expires"`
 	Bind       string         `json:"bind,omitempty"`
+	Gate       string         `json:"gate,omitempty"`
 	Params     map[string]int `json:"params,omitempty"`
 	Signature  string         `json:"signature"`
 	Solution   string         `json:"solution"`
@@ -95,8 +124,9 @@ func (c Challenge) ToToken() Token {
 	}
 }
 
-func (m *Manager) IssueChallenge(bindID string, risk RiskLevel) (Challenge, error) {
+func (m *Manager) IssueChallenge(bindID string, risk RiskLevel, gate string) (Challenge, error) {
 	algo, diff, params := m.selectEffort(risk)
+	gate = NormalizeGate(gate)
 	var nb [16]byte
 	if _, err := randRead(nb[:]); err != nil {
 		return Challenge{}, err
@@ -121,6 +151,7 @@ func (m *Manager) IssueChallenge(bindID string, risk RiskLevel) (Challenge, erro
 		MaxNumber:  maxn,
 		Expires:    expires,
 		Bind:       bindID,
+		Gate:       gate,
 		Params:     params,
 	}
 	sig, err := m.signChallenge(ch)
@@ -129,6 +160,16 @@ func (m *Manager) IssueChallenge(bindID string, risk RiskLevel) (Challenge, erro
 	}
 	ch.Signature = sig
 	return ch, nil
+}
+
+// NormalizeGate returns a valid gate string.
+func NormalizeGate(gate string) string {
+	switch strings.ToLower(strings.TrimSpace(gate)) {
+	case GateInteractive:
+		return GateInteractive
+	default:
+		return GateInvisible
+	}
 }
 
 func (m *Manager) selectEffort(risk RiskLevel) (algo string, diff int, params map[string]int) {
@@ -193,6 +234,8 @@ func canonicalChallenge(ch Challenge) string {
 	b.WriteString(strconv.FormatInt(ch.Expires, 10))
 	b.WriteByte('|')
 	b.WriteString(ch.Bind)
+	b.WriteByte('|')
+	b.WriteString(NormalizeGate(ch.Gate))
 	b.WriteByte('|')
 	b.WriteString(canonicalParams(ch.Params))
 	return b.String()
@@ -279,6 +322,7 @@ func (p Payload) asChallenge() Challenge {
 		MaxNumber:  p.MaxNumber,
 		Expires:    p.Expires,
 		Bind:       p.Bind,
+		Gate:       p.Gate,
 		Params:     p.Params,
 		Signature:  p.Signature,
 	}

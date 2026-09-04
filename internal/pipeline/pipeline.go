@@ -124,7 +124,7 @@ func New(
 			ProxyBotScoreHeader:    cfg.Detect.ProxySignals.BotScoreHeader2,
 			ProxyJA4Header:         cfg.Detect.ProxySignals.JA4Header,
 		},
-		challengeAlways: strings.EqualFold(cfg.Challenge.Mode, "always"),
+		challengeAlways: strings.EqualFold(cfg.Challenge.Mode, "always") || strings.EqualFold(cfg.Challenge.Mode, "attack"),
 		writeCost:       3,
 	}
 	if prot != nil {
@@ -237,7 +237,7 @@ func (h *Handler) ApplyConfig(cfg config.Config) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.cfg = cfg
-	h.challengeAlways = strings.EqualFold(cfg.Challenge.Mode, "always")
+	h.challengeAlways = strings.EqualFold(cfg.Challenge.Mode, "always") || strings.EqualFold(cfg.Challenge.Mode, "attack")
 	switch strings.ToLower(cfg.Detect.High404Action) {
 	case "block":
 		h.high404Action = high404Block
@@ -563,6 +563,7 @@ func (h *Handler) guard(w http.ResponseWriter, r *http.Request) {
 			if h.challengeAlways && detectScore == 0 {
 				risk = challenge.RiskLow
 			}
+			risk = challenge.FloorRiskForMode(cfg.Challenge.Mode, risk)
 			h.serveChallenge(w, r, ray, bindID, risk)
 			return
 		}
@@ -766,12 +767,24 @@ func (h *Handler) serveChallenge(w http.ResponseWriter, _ *http.Request, ray, bi
 		h.pages.RenderError(w, ray, "Challenge unavailable", "Browser challenge is not configured on this edge.", http.StatusInternalServerError)
 		return
 	}
-	h.chal.RememberRisk(bindID, risk)
+	mode := h.cfg.Challenge.Mode
+	prevRisk, prevGate := h.chal.TakeChallenge(bindID)
+	risk = challenge.FloorRiskForMode(mode, risk)
+	if prevRisk > risk {
+		risk = prevRisk
+	}
+	gate := challenge.SelectGate(mode, risk)
+	if prevGate == challenge.GateInteractive {
+		gate = challenge.GateInteractive
+	}
+	h.chal.RememberChallenge(bindID, risk, gate)
+	captchaOn := h.cfg.Challenge.Captcha.Enabled && gate == challenge.GateInteractive
 	h.pages.ServeChallenge(w, ui.Data{
 		StatusText:       h.cfg.UI.StatusText,
 		RayID:            ray,
 		ChallengeURL:     h.cfg.Challenge.PathPrefix + "/v1/challenge",
-		CaptchaEnabled:   h.cfg.Challenge.Captcha.Enabled,
+		Gate:             gate,
+		CaptchaEnabled:   captchaOn,
 		PrivacyNoticeURL: h.cfg.Privacy.PrivacyNoticeURL,
 	})
 }
@@ -802,8 +815,12 @@ func (h *Handler) handleChallengeV1GET(w http.ResponseWriter, r *http.Request) {
 		ipStr = clientIP.String()
 	}
 	bindID := h.clientBind(ipStr)
-	risk := h.chal.TakeRisk(bindID)
-	ch, err := h.chal.IssueChallenge(bindID, risk)
+	risk, gate := h.chal.TakeChallenge(bindID)
+	risk = challenge.FloorRiskForMode(h.cfg.Challenge.Mode, risk)
+	if gate == "" {
+		gate = challenge.SelectGate(h.cfg.Challenge.Mode, risk)
+	}
+	ch, err := h.chal.IssueChallenge(bindID, risk, gate)
 	if err != nil {
 		http.Error(w, "issue failed", http.StatusInternalServerError)
 		return
@@ -843,6 +860,7 @@ func (h *Handler) handleChallengePOST(w http.ResponseWriter, r *http.Request) {
 
 	var (
 		diff int
+		gate string
 		env  challenge.EnvReport
 	)
 	if body.Payload != "" {
@@ -851,10 +869,12 @@ func (h *Handler) handleChallengePOST(w http.ResponseWriter, r *http.Request) {
 			if h.beh != nil {
 				h.beh.Strike(bindID)
 			}
+			h.chal.RememberChallenge(bindID, challenge.RiskHigh, challenge.GateInteractive)
 			http.Error(w, "invalid solution", http.StatusForbidden)
 			return
 		}
 		diff = p.Difficulty
+		gate = p.Gate
 		env = p.Env.ToReport()
 	} else {
 		tok, err := h.chal.ParseToken(body.Token, bindID)
@@ -866,6 +886,7 @@ func (h *Handler) handleChallengePOST(w http.ResponseWriter, r *http.Request) {
 			if h.beh != nil {
 				h.beh.Strike(bindID)
 			}
+			h.chal.RememberChallenge(bindID, challenge.RiskHigh, challenge.GateInteractive)
 			http.Error(w, "invalid solution", http.StatusForbidden)
 			return
 		}
@@ -874,26 +895,32 @@ func (h *Handler) handleChallengePOST(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		diff = tok.Difficulty
+		gate = challenge.GateInteractive
 		env = body.Env
 	}
 
-	verdict := h.chal.EvaluateEnv(env, diff)
-	if verdict.Refuse {
-		if h.beh != nil {
-			h.beh.Strike(bindID)
-		}
-		if h.prot != nil && h.prot.Enabled() {
-			h.prot.Strike(bindID)
-		}
-		slog.Debug("challenge env refuse", "ray", ray, "ip", h.logIP(ipStr), "reasons", verdict.Reasons)
-		if (h.beh != nil && h.beh.StrikesExceeded(bindID)) || (h.prot != nil && h.prot.Banned(bindID)) {
-			h.pages.RenderBlock(w, ray, "Too many failed challenges")
+	probeOff := strings.EqualFold(strings.TrimSpace(h.cfg.Challenge.EnvProbe), "off")
+	if !probeOff {
+		verdict := h.chal.EvaluateEnv(env, diff, gate)
+		if verdict.Refuse {
+			if h.beh != nil {
+				h.beh.Strike(bindID)
+			}
+			if h.prot != nil && h.prot.Enabled() {
+				h.prot.Strike(bindID)
+			}
+			h.chal.RememberChallenge(bindID, challenge.RiskHigh, challenge.GateInteractive)
+			slog.Debug("challenge env refuse", "ray", ray, "ip", h.logIP(ipStr), "reasons", verdict.Reasons)
+			if (h.beh != nil && h.beh.StrikesExceeded(bindID)) || (h.prot != nil && h.prot.Banned(bindID)) {
+				h.pages.RenderBlock(w, ray, "Too many failed challenges")
+				return
+			}
+			http.Error(w, challenge.FormatEnvReasons(verdict.Reasons), http.StatusForbidden)
 			return
 		}
-		http.Error(w, challenge.FormatEnvReasons(verdict.Reasons), http.StatusForbidden)
-		return
 	}
-	if h.cfg.Challenge.Captcha.Enabled {
+	gateNorm := challenge.NormalizeGate(gate)
+	if h.cfg.Challenge.Captcha.Enabled && gateNorm == challenge.GateInteractive {
 		provider := strings.ToLower(strings.TrimSpace(h.cfg.Challenge.Captcha.Provider))
 		if body.Payload == "" || provider != "ravenguard" {
 			if h.chal.Captcha == nil {
@@ -908,6 +935,7 @@ func (h *Handler) handleChallengePOST(w http.ResponseWriter, r *http.Request) {
 				if h.beh != nil {
 					h.beh.Strike(bindID)
 				}
+				h.chal.RememberChallenge(bindID, challenge.RiskHigh, challenge.GateInteractive)
 				http.Error(w, "captcha failed", http.StatusForbidden)
 				return
 			}

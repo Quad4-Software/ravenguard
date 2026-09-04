@@ -13,6 +13,7 @@ When enabled, RavenGuard serves an interstitial with the `@quad4/ravenguard-widg
 |------|----------|
 | `detect` | Challenge when heuristics, rate-limit policy, or high-404 policy require it |
 | `always` | Challenge every request that lacks a valid clearance cookie |
+| `attack` | Under-attack: challenge every request with the visible interactive gate |
 
 ```toml
 [challenge]
@@ -20,6 +21,7 @@ enabled = true
 mode = "detect"
 algorithm = "adaptive"
 difficulty = 16
+env_probe = "on"
 cookie_name = "rg_clear"
 cookie_ttl = "24h"
 secret = "rg-dev-secret-replace-me!!"
@@ -28,7 +30,16 @@ path_prefix = "/_rg"
 
 `algorithm` may be `adaptive` (default), `sha256`, `pbkdf2`, or `argon2id`. Adaptive raises effort from detect score bands: SHA-256 for low risk, PBKDF2 for elevated or high risk.
 
-Override the secret in production with `RG_CHALLENGE_SECRET` (minimum 16 characters, not `change-me*`). Cookie name overrides: `challenge.cookie_name` or `RG_CHALLENGE_COOKIE_NAME`.
+## Gates
+
+| Gate | When | UX |
+|------|------|-----|
+| `invisible` | `detect` / `always` at low or elevated risk | Auto PoW on load, no checkbox |
+| `interactive` | `attack` mode, high risk, or after a failed invisible attempt | Visible checkbox (and captcha when enabled) |
+
+The signed challenge JSON includes `gate` so clients cannot self-downgrade interaction rules. Invisible solutions may omit checkbox interaction. Automation markers still refuse clearance when `env_probe = "on"` (default). Set `env_probe = "off"` only for automated browser harnesses.
+
+Override the secret in production with `RG_CHALLENGE_SECRET` (minimum 16 characters, not `change-me*`). Cookie name overrides: `challenge.cookie_name` or `RG_CHALLENGE_COOKIE_NAME`. Env probe: `RG_CHALLENGE_ENV_PROBE`.
 
 ## Protocol endpoints
 

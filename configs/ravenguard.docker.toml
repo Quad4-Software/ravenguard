@@ -101,6 +101,7 @@ enabled = true
 mode = "detect"
 algorithm = "adaptive"
 difficulty = 16
+env_probe = "on"
 cookie_name = "rg_clear"
 cookie_ttl = "24h"
 # Set RG_CHALLENGE_SECRET in compose (min 16 chars)

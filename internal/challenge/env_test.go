@@ -15,9 +15,31 @@ func TestEvaluateEnvClean(t *testing.T) {
 	v := m.EvaluateEnv(challenge.EnvReport{
 		Interacted: true,
 		SolveMs:    100,
-	}, 8)
+	}, 8, challenge.GateInteractive)
 	if v.Refuse {
 		t.Fatalf("unexpected refuse %v", v.Reasons)
+	}
+}
+
+func TestEvaluateEnvInvisibleNoInteraction(t *testing.T) {
+	m := &challenge.Manager{Secret: []byte("test-secret-16chars"), Difficulty: 8}
+	v := m.EvaluateEnv(challenge.EnvReport{
+		Interacted: false,
+		SolveMs:    100,
+	}, 8, challenge.GateInvisible)
+	if v.Refuse {
+		t.Fatalf("invisible should allow no interaction %v", v.Reasons)
+	}
+}
+
+func TestEvaluateEnvInteractiveNoInteraction(t *testing.T) {
+	m := &challenge.Manager{Secret: []byte("test-secret-16chars"), Difficulty: 8}
+	v := m.EvaluateEnv(challenge.EnvReport{
+		Interacted: false,
+		SolveMs:    100,
+	}, 8, challenge.GateInteractive)
+	if !v.Refuse {
+		t.Fatal("expected no_interaction refuse")
 	}
 }
 
@@ -27,7 +49,7 @@ func TestEvaluateEnvWebdriver(t *testing.T) {
 		Webdriver:  true,
 		Interacted: true,
 		SolveMs:    500,
-	}, 16)
+	}, 16, challenge.GateInteractive)
 	if !v.Refuse {
 		t.Fatal("expected refuse")
 	}
@@ -39,7 +61,7 @@ func TestEvaluateEnvSelenium(t *testing.T) {
 		Selenium:   true,
 		Interacted: true,
 		SolveMs:    200,
-	}, 8)
+	}, 8, challenge.GateInteractive)
 	if !v.Refuse {
 		t.Fatal("expected selenium refuse")
 	}
@@ -55,7 +77,7 @@ func TestEvaluateEnvPlaywright(t *testing.T) {
 		NoPlugins:  true,
 		Interacted: true,
 		SolveMs:    200,
-	}, 8)
+	}, 8, challenge.GateInteractive)
 	if !v.Refuse {
 		t.Fatal("expected playwright refuse")
 	}
@@ -71,7 +93,7 @@ func TestEvaluateEnvHeadless(t *testing.T) {
 		Headless:   true,
 		Interacted: true,
 		SolveMs:    200,
-	}, 8)
+	}, 8, challenge.GateInvisible)
 	if !v.Refuse {
 		t.Fatal("expected headless refuse")
 	}
@@ -82,7 +104,7 @@ func TestEvaluateEnvTooFast(t *testing.T) {
 	v := m.EvaluateEnv(challenge.EnvReport{
 		Interacted: true,
 		SolveMs:    5,
-	}, 16)
+	}, 16, challenge.GateInteractive)
 	if !v.Refuse {
 		t.Fatal("expected solve_too_fast")
 	}

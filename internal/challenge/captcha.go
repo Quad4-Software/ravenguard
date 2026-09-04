@@ -42,7 +42,7 @@ func (r RavenCaptcha) Verify(req *http.Request, token string) error {
 	if err != nil {
 		return ErrCaptchaFailed
 	}
-	verdict := r.Manager.EvaluateEnv(p.Env.ToReport(), p.Difficulty)
+	verdict := r.Manager.EvaluateEnv(p.Env.ToReport(), p.Difficulty, p.Gate)
 	if verdict.Refuse {
 		return ErrCaptchaFailed
 	}
@@ -67,6 +67,7 @@ func NewRavenCaptcha(m *Manager) CaptchaVerifier {
 
 type riskEntry struct {
 	level RiskLevel
+	gate  string
 	exp   int64
 }
 
@@ -75,23 +76,23 @@ type riskCache struct {
 	byID map[string]riskEntry
 }
 
-func (c *riskCache) put(id string, level RiskLevel) {
+func (c *riskCache) put(id string, level RiskLevel, gate string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.byID == nil {
 		c.byID = make(map[string]riskEntry)
 	}
-	c.byID[id] = riskEntry{level: level, exp: time.Now().Unix() + tokenTTL}
+	c.byID[id] = riskEntry{level: level, gate: NormalizeGate(gate), exp: time.Now().Unix() + tokenTTL}
 }
 
-func (c *riskCache) get(id string) RiskLevel {
+func (c *riskCache) get(id string) (RiskLevel, string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	e, ok := c.byID[id]
 	if !ok || e.exp < time.Now().Unix() {
-		return RiskLow
+		return RiskLow, GateInvisible
 	}
-	return e.level
+	return e.level, NormalizeGate(e.gate)
 }
 
 func (c *riskCache) sweep(now int64) {
@@ -104,18 +105,29 @@ func (c *riskCache) sweep(now int64) {
 	}
 }
 
-// RememberRisk stores adaptive risk for the next challenge issue.
+// RememberRisk stores adaptive risk and gate for the next challenge issue.
 func (m *Manager) RememberRisk(bindID string, risk RiskLevel) {
+	m.RememberChallenge(bindID, risk, GateInvisible)
+}
+
+// RememberChallenge stores risk and presentation gate for the next issue.
+func (m *Manager) RememberChallenge(bindID string, risk RiskLevel, gate string) {
 	if m == nil {
 		return
 	}
-	m.risks.put(bindID, risk)
+	m.risks.put(bindID, risk, gate)
 }
 
 // TakeRisk returns remembered risk or RiskLow.
 func (m *Manager) TakeRisk(bindID string) RiskLevel {
+	risk, _ := m.TakeChallenge(bindID)
+	return risk
+}
+
+// TakeChallenge returns remembered risk and gate.
+func (m *Manager) TakeChallenge(bindID string) (RiskLevel, string) {
 	if m == nil {
-		return RiskLow
+		return RiskLow, GateInvisible
 	}
 	return m.risks.get(bindID)
 }

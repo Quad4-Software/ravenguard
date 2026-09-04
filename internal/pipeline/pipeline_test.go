@@ -125,10 +125,13 @@ func TestBlockUA(t *testing.T) {
 	}
 }
 
-func solvedPayload(t *testing.T, m *challenge.Manager, bindID string, env challenge.EnvAttestation) string {
+func solvedPayload(t *testing.T, m *challenge.Manager, bindID string, gate string, env challenge.EnvAttestation) string {
 	t.Helper()
 	m.Algorithm = "sha256"
-	ch, err := m.IssueChallenge(bindID, challenge.RiskLow)
+	if gate == "" {
+		gate = challenge.GateInteractive
+	}
+	ch, err := m.IssueChallenge(bindID, challenge.RiskLow, gate)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -139,7 +142,7 @@ func solvedPayload(t *testing.T, m *challenge.Manager, bindID string, env challe
 	raw, err := challenge.EncodePayload(challenge.Payload{
 		V: ch.V, Algorithm: ch.Algorithm, Challenge: ch.Challenge, Salt: ch.Salt,
 		Difficulty: ch.Difficulty, MaxNumber: ch.MaxNumber, Expires: ch.Expires,
-		Bind: ch.Bind, Params: ch.Params, Signature: ch.Signature,
+		Bind: ch.Bind, Gate: ch.Gate, Params: ch.Params, Signature: ch.Signature,
 		Solution: strconv.FormatUint(sol, 10),
 		Env:      env,
 	})
@@ -166,6 +169,10 @@ func TestChallengeAndClearance(t *testing.T) {
 	if !strings.Contains(body, "rg-check") {
 		t.Fatalf("missing challenge page: %s", body[:min(200, len(body))])
 	}
+	// Probe + scanner UA lands in high risk so the gate is interactive.
+	if !strings.Contains(body, `auto="off"`) {
+		t.Fatalf("expected interactive gate for high risk: %s", body[:min(400, len(body))])
+	}
 
 	priv := privacy.New(privacy.Config{
 		HashClientIP: true,
@@ -174,7 +181,7 @@ func TestChallengeAndClearance(t *testing.T) {
 	})
 	bindID := priv.ClientKey("192.0.2.30")
 	m := &challenge.Manager{Secret: []byte(testSecret), Difficulty: 8, CookieName: "rg_clear", CookieTTL: time.Hour, Algorithm: "sha256"}
-	raw := solvedPayload(t, m, bindID, challenge.EnvAttestation{Interacted: true, SolveMs: 200})
+	raw := solvedPayload(t, m, bindID, challenge.GateInteractive, challenge.EnvAttestation{Interacted: true, SolveMs: 200})
 	payloadJSON, _ := json.Marshal(map[string]any{"payload": raw, "ray": "test"})
 	creq := httptest.NewRequest(http.MethodPost, "/_rg/challenge", bytes.NewReader(payloadJSON))
 	creq.Header.Set("Content-Type", "application/json")
@@ -217,7 +224,7 @@ func TestWebdriverEnvRefused(t *testing.T) {
 	})
 	bindID := "192.0.2.88"
 	m := &challenge.Manager{Secret: []byte(testSecret), Difficulty: 8, CookieName: "rg_clear", CookieTTL: time.Hour, Algorithm: "sha256"}
-	raw := solvedPayload(t, m, bindID, challenge.EnvAttestation{Webdriver: true, Interacted: true, SolveMs: 200, NoPlugins: true})
+	raw := solvedPayload(t, m, bindID, challenge.GateInvisible, challenge.EnvAttestation{Webdriver: true, Interacted: true, SolveMs: 200, NoPlugins: true})
 	payloadJSON, _ := json.Marshal(map[string]any{"payload": raw})
 	creq := httptest.NewRequest(http.MethodPost, "/_rg/challenge", bytes.NewReader(payloadJSON))
 	creq.Header.Set("Content-Type", "application/json")
@@ -229,6 +236,96 @@ func TestWebdriverEnvRefused(t *testing.T) {
 	}
 	if !strings.Contains(crr.Body.String(), "webdriver") {
 		t.Fatalf("body=%q", crr.Body.String())
+	}
+}
+
+func TestInvisibleGateAlwaysMode(t *testing.T) {
+	h := testHandler(t, func(cfg *config.Config) {
+		cfg.Challenge.Mode = "always"
+		cfg.Detect.Enabled = false
+	})
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("User-Agent", "Mozilla/5.0")
+	req.Header.Set("Accept", "text/html")
+	req.RemoteAddr = "192.0.2.31:1"
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("code=%d", rr.Code)
+	}
+	body := rr.Body.String()
+	if !strings.Contains(body, `auto="onload"`) || !strings.Contains(body, `display="invisible"`) {
+		t.Fatalf("expected invisible gate: %s", body[:min(400, len(body))])
+	}
+}
+
+func TestAttackModeInteractiveGate(t *testing.T) {
+	h := testHandler(t, func(cfg *config.Config) {
+		cfg.Challenge.Mode = "attack"
+		cfg.Detect.Enabled = false
+	})
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("User-Agent", "Mozilla/5.0")
+	req.Header.Set("Accept", "text/html")
+	req.RemoteAddr = "192.0.2.40:1"
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("code=%d", rr.Code)
+	}
+	body := rr.Body.String()
+	if !strings.Contains(body, `auto="off"`) {
+		t.Fatalf("expected interactive auto=off: %s", body[:min(400, len(body))])
+	}
+	if strings.Contains(body, `display="invisible"`) {
+		t.Fatal("attack mode must not use invisible display")
+	}
+}
+
+func TestEnvProbeOffSkipsAutomation(t *testing.T) {
+	h := testHandler(t, func(cfg *config.Config) {
+		cfg.Challenge.Mode = "always"
+		cfg.Challenge.EnvProbe = "off"
+		cfg.Detect.Enabled = false
+		cfg.Privacy.HashClientIP = false
+	})
+	bindID := "192.0.2.91"
+	m := &challenge.Manager{Secret: []byte(testSecret), Difficulty: 8, CookieName: "rg_clear", CookieTTL: time.Hour, Algorithm: "sha256"}
+	raw := solvedPayload(t, m, bindID, challenge.GateInvisible, challenge.EnvAttestation{Webdriver: true, Interacted: false, SolveMs: 200})
+	payloadJSON, _ := json.Marshal(map[string]any{"payload": raw})
+	creq := httptest.NewRequest(http.MethodPost, "/_rg/challenge", bytes.NewReader(payloadJSON))
+	creq.Header.Set("Content-Type", "application/json")
+	creq.RemoteAddr = "192.0.2.91:1"
+	crr := httptest.NewRecorder()
+	h.ServeHTTP(crr, creq)
+	if crr.Code != http.StatusOK {
+		t.Fatalf("env_probe=off should allow automation post=%d %s", crr.Code, crr.Body.String())
+	}
+}
+
+func TestEscalateAfterFailedVerify(t *testing.T) {
+	h := testHandler(t, func(cfg *config.Config) {
+		cfg.Challenge.Mode = "always"
+		cfg.Detect.Enabled = false
+		cfg.Privacy.HashClientIP = false
+	})
+	creq := httptest.NewRequest(http.MethodPost, "/_rg/challenge", bytes.NewReader([]byte(`{"payload":"bad"}`)))
+	creq.Header.Set("Content-Type", "application/json")
+	creq.RemoteAddr = "192.0.2.32:1"
+	crr := httptest.NewRecorder()
+	h.ServeHTTP(crr, creq)
+	if crr.Code == http.StatusOK {
+		t.Fatal("expected failed verify")
+	}
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("User-Agent", "Mozilla/5.0")
+	req.Header.Set("Accept", "text/html")
+	req.RemoteAddr = "192.0.2.32:1"
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	body := rr.Body.String()
+	if !strings.Contains(body, `auto="off"`) {
+		t.Fatalf("expected interactive after fail: %s", body[:min(400, len(body))])
 	}
 }
 
@@ -244,7 +341,7 @@ func TestChallengeSecureFromProto(t *testing.T) {
 	priv := privacy.New(privacy.Config{HashClientIP: false, Secret: []byte(testSecret), LogIP: "off"})
 	bindID := priv.ClientKey("192.0.2.77")
 	m := &challenge.Manager{Secret: []byte(testSecret), Difficulty: 8, CookieName: "rg_clear", CookieTTL: time.Hour, Algorithm: "sha256"}
-	raw := solvedPayload(t, m, bindID, challenge.EnvAttestation{Interacted: true, SolveMs: 200})
+	raw := solvedPayload(t, m, bindID, challenge.GateInvisible, challenge.EnvAttestation{Interacted: true, SolveMs: 200})
 	payloadJSON, _ := json.Marshal(map[string]any{"payload": raw})
 	creq := httptest.NewRequest(http.MethodPost, "/_rg/challenge", bytes.NewReader(payloadJSON))
 	creq.Header.Set("Content-Type", "application/json")
@@ -679,5 +776,61 @@ func TestStealthOmitsRayHeaderAndBrandFingerprints(t *testing.T) {
 	}
 	if !strings.Contains(body, "rg-check") && !strings.Contains(body, "__g__") {
 		t.Fatalf("expected stealth widget bootstrap in body=%s", body[:min(200, len(body))])
+	}
+}
+
+func TestCaptchaStubGate(t *testing.T) {
+	cfg := config.Default()
+	cfg.Challenge.Secret = testSecret
+	cfg.Challenge.Difficulty = 8
+	cfg.Challenge.Mode = "attack"
+	cfg.Challenge.EnvProbe = "off"
+	cfg.Challenge.Captcha.Enabled = true
+	cfg.Challenge.Captcha.Provider = "stub"
+	cfg.Challenge.Captcha.Token = "ok"
+	cfg.Detect.Enabled = false
+	cfg.RateLimit.Enabled = false
+	cfg.Trust.Mode = "edge"
+	cfg.Privacy.HashClientIP = false
+	pages, err := ui.New(ui.SiteFromConfig(cfg))
+	if err != nil {
+		t.Fatal(err)
+	}
+	chal := &challenge.Manager{
+		Secret:     []byte(cfg.Challenge.Secret),
+		Difficulty: cfg.Challenge.Difficulty,
+		Algorithm:  "sha256",
+		CookieName: cfg.Challenge.CookieName,
+		CookieTTL:  time.Hour,
+		Captcha:    challenge.StubCaptcha{Token: "ok"},
+	}
+	lists := blocklist.New()
+	upstream := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ok"))
+	})
+	h := pipeline.New(cfg, lists, nil, nil, chal, pages, upstream, nil, nil, nil, testPriv(cfg), nil, nil)
+
+	bindID := "192.0.2.55"
+	raw := solvedPayload(t, chal, bindID, challenge.GateInteractive, challenge.EnvAttestation{Interacted: true, SolveMs: 200})
+	bad, _ := json.Marshal(map[string]any{"payload": raw, "captcha": "nope"})
+	creq := httptest.NewRequest(http.MethodPost, "/_rg/challenge", bytes.NewReader(bad))
+	creq.Header.Set("Content-Type", "application/json")
+	creq.RemoteAddr = "192.0.2.55:1"
+	crr := httptest.NewRecorder()
+	h.ServeHTTP(crr, creq)
+	if crr.Code == http.StatusOK {
+		t.Fatal("expected captcha refuse")
+	}
+
+	raw2 := solvedPayload(t, chal, bindID, challenge.GateInteractive, challenge.EnvAttestation{Interacted: true, SolveMs: 200})
+	good, _ := json.Marshal(map[string]any{"payload": raw2, "captcha": "ok"})
+	creq2 := httptest.NewRequest(http.MethodPost, "/_rg/challenge", bytes.NewReader(good))
+	creq2.Header.Set("Content-Type", "application/json")
+	creq2.RemoteAddr = "192.0.2.55:1"
+	crr2 := httptest.NewRecorder()
+	h.ServeHTTP(crr2, creq2)
+	if crr2.Code != http.StatusOK {
+		t.Fatalf("expected captcha ok post=%d %s", crr2.Code, crr2.Body.String())
 	}
 }

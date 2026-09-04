@@ -8,12 +8,13 @@
     "maxnumber": 128,
     "expires": 4102444800,
     "bind": "fixture-client",
+    "gate": "interactive",
     "params": {
       "iterations": 1000
     },
-    "signature": "693d37391e2fe0f627a20c6ec5ef96712a4dfaad47b6b1577cb13f7715abf3b4"
+    "signature": "239cc689009845f4a709f6b30cbd18dd7a3cbdc1ab019a74ff82155192ca9c17"
   },
-  "payload": "eyJ2IjoxLCJhbGdvcml0aG0iOiJQQktERjItU0hBMjU2IiwiY2hhbGxlbmdlIjoiZmVkY2JhOTg3NjU0MzIxMGZlZGNiYTk4NzY1NDMyMTAiLCJzYWx0IjoiYWFiYmNjZGRlZWZmMDAxMTIyMzM0NDU1NjY3Nzg4OTkiLCJkaWZmaWN1bHR5Ijo0LCJtYXhudW1iZXIiOjEyOCwiZXhwaXJlcyI6NDEwMjQ0NDgwMCwiYmluZCI6ImZpeHR1cmUtY2xpZW50IiwicGFyYW1zIjp7Iml0ZXJhdGlvbnMiOjEwMDB9LCJzaWduYXR1cmUiOiI2OTNkMzczOTFlMmZlMGY2MjdhMjBjNmVjNWVmOTY3MTJhNGRmYWFkNDdiNmIxNTc3Y2IxM2Y3NzE1YWJmM2I0Iiwic29sdXRpb24iOiIwIiwiZW52Ijp7IndlYmRyaXZlciI6ZmFsc2UsInBsYXl3cmlnaHQiOmZhbHNlLCJoZWFkbGVzcyI6ZmFsc2UsIm5vX3BsdWdpbnMiOmZhbHNlLCJpbnRlcmFjdGVkIjp0cnVlLCJzb2x2ZV9tcyI6MjUwfX0",
+  "payload": "eyJ2IjoxLCJhbGdvcml0aG0iOiJQQktERjItU0hBMjU2IiwiY2hhbGxlbmdlIjoiZmVkY2JhOTg3NjU0MzIxMGZlZGNiYTk4NzY1NDMyMTAiLCJzYWx0IjoiYWFiYmNjZGRlZWZmMDAxMTIyMzM0NDU1NjY3Nzg4OTkiLCJkaWZmaWN1bHR5Ijo0LCJtYXhudW1iZXIiOjEyOCwiZXhwaXJlcyI6NDEwMjQ0NDgwMCwiYmluZCI6ImZpeHR1cmUtY2xpZW50IiwiZ2F0ZSI6ImludGVyYWN0aXZlIiwicGFyYW1zIjp7Iml0ZXJhdGlvbnMiOjEwMDB9LCJzaWduYXR1cmUiOiIyMzljYzY4OTAwOTg0NWY0YTcwOWY2YjMwY2JkMThkZDdhM2NiZGMxYWIwMTlhNzRmZjgyMTU1MTkyY2E5YzE3Iiwic29sdXRpb24iOiIwIiwiZW52Ijp7IndlYmRyaXZlciI6ZmFsc2UsInBsYXl3cmlnaHQiOmZhbHNlLCJzZWxlbml1bSI6ZmFsc2UsImhlYWRsZXNzIjpmYWxzZSwibm9fcGx1Z2lucyI6ZmFsc2UsImludGVyYWN0ZWQiOnRydWUsInNvbHZlX21zIjoyNTB9fQ",
   "secret": "fixture-secret-16!",
   "solution": "0"
 }

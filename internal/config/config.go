@@ -231,7 +231,9 @@ type ChallengeConfig struct {
 	Mode       string `toml:"mode"`
 	Difficulty int    `toml:"difficulty"`
 	// Algorithm is sha256, pbkdf2, argon2id, or adaptive (default).
-	Algorithm  string        `toml:"algorithm"`
+	Algorithm string `toml:"algorithm"`
+	// EnvProbe is on (default) or off. off skips automation refusal for e2e harnesses.
+	EnvProbe   string        `toml:"env_probe"`
 	CookieName string        `toml:"cookie_name"`
 	CookieTTL  Duration      `toml:"cookie_ttl"`
 	Secret     string        `toml:"secret"`
@@ -415,7 +417,7 @@ func Default() Config {
 		},
 		Challenge: ChallengeConfig{
 			Enabled: true, Mode: "detect", Difficulty: 16, Algorithm: "adaptive",
-			CookieName: "rg_clear", CookieTTL: Duration{24 * time.Hour}, PathPrefix: "/_rg",
+			EnvProbe: "on", CookieName: "rg_clear", CookieTTL: Duration{24 * time.Hour}, PathPrefix: "/_rg",
 		},
 		Stealth: StealthConfig{
 			RayHeader:        "X-RavenGuard-Ray",
@@ -602,6 +604,7 @@ func applyEnv(c *Config) {
 	setBool(&c.QFeeds.Enabled, "RG_QFEEDS_ENABLED")
 	setStr(&c.Challenge.Secret, "RG_CHALLENGE_SECRET")
 	setStr(&c.Challenge.Mode, "RG_CHALLENGE_MODE")
+	setStr(&c.Challenge.EnvProbe, "RG_CHALLENGE_ENV_PROBE")
 	setStr(&c.Challenge.PathPrefix, "RG_CHALLENGE_PATH_PREFIX")
 	setStr(&c.Challenge.Algorithm, "RG_CHALLENGE_ALGORITHM")
 	setInt(&c.Challenge.Difficulty, "RG_CHALLENGE_DIFFICULTY")
@@ -741,6 +744,9 @@ func normalize(c *Config) {
 	}
 	if c.Challenge.Mode == "" {
 		c.Challenge.Mode = "detect"
+	}
+	if c.Challenge.EnvProbe == "" {
+		c.Challenge.EnvProbe = "on"
 	}
 	if c.Challenge.CookieName == "" {
 		c.Challenge.CookieName = "rg_clear"
@@ -937,9 +943,14 @@ func (c Config) Validate() error {
 			return fmt.Errorf("challenge.cookie_name is required")
 		}
 		switch strings.ToLower(c.Challenge.Mode) {
-		case "detect", "always":
+		case "detect", "always", "attack":
 		default:
-			return fmt.Errorf("challenge.mode must be detect or always")
+			return fmt.Errorf("challenge.mode must be detect, always, or attack")
+		}
+		switch strings.ToLower(strings.TrimSpace(c.Challenge.EnvProbe)) {
+		case "on", "off", "":
+		default:
+			return fmt.Errorf("challenge.env_probe must be on or off")
 		}
 		algo := strings.ToLower(strings.TrimSpace(c.Challenge.Algorithm))
 		if algo == "" {

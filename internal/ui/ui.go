@@ -110,6 +110,7 @@ type Data struct {
 	ChallengeURL     string
 	Token            string
 	Difficulty       int
+	Gate             string
 	CaptchaEnabled   bool
 	PrivacyNoticeURL string
 }
@@ -410,16 +411,24 @@ func sanitizeElementName(name string) string {
 	return out
 }
 
-func widgetHTML(tag, challengeURL, inputName string) template.HTML {
+func widgetHTML(tag, challengeURL, inputName, gate string) template.HTML {
 	tag = sanitizeElementName(tag)
 	if inputName == "" {
 		inputName = "rg"
 	}
+	auto := "off"
+	display := ""
+	if gate == "invisible" {
+		auto = "onload"
+		display = ` display="invisible"`
+	}
 	return template.HTML(fmt.Sprintf( // #nosec G203 -- tag sanitized by sanitizeElementName
-		`<%s id="rg-widget" challenge="%s" name="%s" auto="off" workers="2"></%s>`,
+		`<%s id="rg-widget" challenge="%s" name="%s" auto="%s" workers="2"%s></%s>`,
 		tag,
 		html.EscapeString(challengeURL),
 		html.EscapeString(inputName),
+		auto,
+		display,
 		tag,
 	))
 }
@@ -439,7 +448,10 @@ func (p *Pages) ServeChallenge(w http.ResponseWriter, data Data) {
 	if data.ChallengeTitle == "" {
 		data.ChallengeTitle = site.ChallengeTitle
 	}
-	data.WidgetHTML = widgetHTML(site.ElementName, data.ChallengeURL, site.WidgetInputName)
+	if data.Gate == "" {
+		data.Gate = "invisible"
+	}
+	data.WidgetHTML = widgetHTML(site.ElementName, data.ChallengeURL, site.WidgetInputName, data.Gate)
 	p.render(w, p.challenge, data, http.StatusForbidden, nil)
 }
 

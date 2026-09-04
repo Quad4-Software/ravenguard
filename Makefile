@@ -14,7 +14,7 @@ GOIMPORTS_VERSION ?= latest
 # Minimum total statement coverage for the cover gate (percent).
 COVER_MIN ?= 50
 
-.PHONY: all build test cover bench fuzz tools fmt fix vet lint sec vuln check tidy clean widget admin
+.PHONY: all build test cover bench fuzz tools fmt fix vet lint sec vuln check tidy clean widget admin e2e
 
 all: check build
 
@@ -43,6 +43,13 @@ test:
 	$(GO) test ./...
 	pnpm widget:test
 	pnpm admin:test
+
+e2e: build
+	pnpm install --filter @quad4/ravenguard-e2e...
+	pnpm --filter @quad4/ravenguard-e2e exec playwright install chromium
+	-pnpm --filter @quad4/ravenguard-e2e exec playwright install firefox webkit
+	pnpm --filter @quad4/ravenguard-e2e test --project=chromium
+	-pnpm --filter @quad4/ravenguard-e2e test --project=firefox --project=webkit
 
 # Cover internal packages only. Skip cmd (mains), embed-only admin/ui, and
 # listener (network-heavy integration surface).
