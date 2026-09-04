@@ -5,7 +5,6 @@ package router
 
 import (
 	"context"
-	"net"
 	"net/http"
 	"strings"
 	"sync"
@@ -372,8 +371,19 @@ func matchPrefix(path, prefix string) bool {
 
 func stripPort(host string) string {
 	host = strings.TrimSpace(strings.ToLower(host))
-	if h, _, err := net.SplitHostPort(host); err == nil {
-		return h
+	if host == "" {
+		return host
+	}
+	if host[0] == '[' {
+		if end := strings.IndexByte(host, ']'); end > 0 {
+			return host[1:end]
+		}
+		return host
+	}
+	if i := strings.LastIndexByte(host, ':'); i >= 0 {
+		if strings.Count(host, ":") == 1 {
+			return host[:i]
+		}
 	}
 	return host
 }

@@ -3,6 +3,8 @@
 
 package faststr
 
+import "bytes"
+
 // ContainsFold reports whether substr is within s using ASCII case folding.
 // substr should already be lowercase. Zero allocations.
 func ContainsFold(s, substr string) bool {
@@ -13,7 +15,17 @@ func ContainsFold(s, substr string) bool {
 	if n > len(s) {
 		return false
 	}
-	for i := 0; i <= len(s)-n; i++ {
+	first := substr[0]
+	firstUpper := first
+	if first >= 'a' && first <= 'z' {
+		firstUpper = first - ('a' - 'A')
+	}
+	limit := len(s) - n
+	for i := 0; i <= limit; i++ {
+		c := s[i]
+		if c != first && c != firstUpper {
+			continue
+		}
 		if equalFoldASCII(s[i:i+n], substr) {
 			return true
 		}
@@ -68,26 +80,10 @@ func AppendLowerASCII(dst []byte, s string) []byte {
 // ContainsBytes reports whether needle is within haystack. Zero allocations
 // when needle is a string constant or already held.
 func ContainsBytes(haystack []byte, needle string) bool {
-	n := len(needle)
-	if n == 0 {
+	if len(needle) == 0 {
 		return true
 	}
-	if n > len(haystack) {
-		return false
-	}
-	for i := 0; i <= len(haystack)-n; i++ {
-		ok := true
-		for j := range n {
-			if haystack[i+j] != needle[j] {
-				ok = false
-				break
-			}
-		}
-		if ok {
-			return true
-		}
-	}
-	return false
+	return bytes.Index(haystack, unsafeStringBytes(needle)) >= 0
 }
 
 // TrimSpace returns a substring of s with leading and trailing ASCII spaces removed.

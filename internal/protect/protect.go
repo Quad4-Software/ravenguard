@@ -29,7 +29,7 @@ type Config struct {
 }
 
 type Guard struct {
-	cfg     Config
+	cfg     atomic.Pointer[Config]
 	global  atomic.Int64
 	clients sync.Map
 	bans    [banShards]banShard
@@ -84,80 +84,99 @@ func New(cfg Config) *Guard {
 	if cfg.AttackScore <= 0 {
 		cfg.AttackScore = 90
 	}
-	g := &Guard{cfg: cfg}
+	g := &Guard{}
+	cp := cfg
+	g.cfg.Store(&cp)
 	for i := range g.bans {
 		g.bans[i].ents = make(map[string]*banEntry)
 	}
 	return g
 }
 
+func (g *Guard) live() Config {
+	if g == nil {
+		return Config{}
+	}
+	if p := g.cfg.Load(); p != nil {
+		return *p
+	}
+	return Config{}
+}
+
 func (g *Guard) Enabled() bool {
-	return g != nil && g.cfg.Enabled
+	return g != nil && g.live().Enabled
 }
 
 func (g *Guard) MaxBodyBytes() int64 {
 	if g == nil {
 		return 1 << 20
 	}
-	return g.cfg.MaxBodyBytes
+	return g.live().MaxBodyBytes
 }
 
 func (g *Guard) MaxHeaderBytes() int {
 	if g == nil {
 		return 1 << 14
 	}
-	return g.cfg.MaxHeaderBytes
+	return g.live().MaxHeaderBytes
 }
 
 func (g *Guard) WriteCost() int {
-	if g == nil || g.cfg.WriteMethodCost <= 0 {
+	if g == nil {
 		return 3
 	}
-	return g.cfg.WriteMethodCost
+	c := g.live().WriteMethodCost
+	if c <= 0 {
+		return 3
+	}
+	return c
 }
 
 func (g *Guard) AttackBlock() bool {
-	return g != nil && g.cfg.AttackBlock
+	return g != nil && g.live().AttackBlock
 }
 
 func (g *Guard) AttackScore() int {
 	if g == nil {
 		return 90
 	}
-	return g.cfg.AttackScore
+	return g.live().AttackScore
 }
 
 func (g *Guard) CheckRequestSize(r *http.Request) string {
-	if g == nil || !g.cfg.Enabled || r == nil || r.URL == nil {
+	cfg := g.live()
+	if g == nil || !cfg.Enabled || r == nil || r.URL == nil {
 		return ""
 	}
 	n := len(r.URL.Path)
 	if q := r.URL.RawQuery; q != "" {
 		n += 1 + len(q)
 	}
-	if n > g.cfg.MaxURLBytes {
+	if n > cfg.MaxURLBytes {
 		return "url too large"
 	}
-	if r.ContentLength > g.cfg.MaxBodyBytes {
+	if r.ContentLength > cfg.MaxBodyBytes {
 		return "body too large"
 	}
 	return ""
 }
 
 func (g *Guard) LimitBody(w http.ResponseWriter, r *http.Request) {
-	if g == nil || !g.cfg.Enabled || r == nil || r.Body == nil {
+	cfg := g.live()
+	if g == nil || !cfg.Enabled || r == nil || r.Body == nil {
 		return
 	}
-	r.Body = http.MaxBytesReader(w, r.Body, g.cfg.MaxBodyBytes)
+	r.Body = http.MaxBytesReader(w, r.Body, cfg.MaxBodyBytes)
 }
 
 func (g *Guard) Acquire(key string) bool {
-	if g == nil || !g.cfg.Enabled {
+	cfg := g.live()
+	if g == nil || !cfg.Enabled {
 		return true
 	}
 	for {
 		cur := g.global.Load()
-		if cur >= g.cfg.MaxConcurrentGlobal {
+		if cur >= cfg.MaxConcurrentGlobal {
 			return false
 		}
 		if g.global.CompareAndSwap(cur, cur+1) {
@@ -167,19 +186,26 @@ func (g *Guard) Acquire(key string) bool {
 	if key == "" {
 		return true
 	}
-	v, _ := g.clients.LoadOrStore(key, &clientConc{})
-	c := v.(*clientConc)
-	n := c.n.Add(1)
-	if int(n) > g.cfg.MaxConcurrentClient {
-		c.n.Add(-1)
-		g.global.Add(-1)
-		return false
+	for {
+		v, _ := g.clients.LoadOrStore(key, &clientConc{})
+		c := v.(*clientConc)
+		n := c.n.Add(1)
+		if int(n) > cfg.MaxConcurrentClient {
+			c.n.Add(-1)
+			g.global.Add(-1)
+			return false
+		}
+		// Sweep may delete idle entries. If our slot vanished after Add,
+		// re-publish the same counter so Release and later Acquires stay consistent.
+		if cur, ok := g.clients.Load(key); !ok || cur != c {
+			g.clients.Store(key, c)
+		}
+		return true
 	}
-	return true
 }
 
 func (g *Guard) Release(key string) {
-	if g == nil || !g.cfg.Enabled {
+	if g == nil || !g.live().Enabled {
 		return
 	}
 	g.global.Add(-1)
@@ -192,7 +218,7 @@ func (g *Guard) Release(key string) {
 }
 
 func (g *Guard) Banned(key string) bool {
-	if g == nil || !g.cfg.Enabled || key == "" {
+	if g == nil || !g.live().Enabled || key == "" {
 		return false
 	}
 	s := &g.bans[strhash.String(key)%banShards]
@@ -219,14 +245,15 @@ func (g *Guard) Banned(key string) bool {
 }
 
 func (g *Guard) Strike(key string) {
-	if g == nil || !g.cfg.Enabled || key == "" {
+	cfg := g.live()
+	if g == nil || !cfg.Enabled || key == "" {
 		return
 	}
 	s := &g.bans[strhash.String(key)%banShards]
 	now := time.Now()
 	s.mu.Lock()
 	e, ok := s.ents[key]
-	if !ok || now.Sub(e.windowStart) > g.cfg.BanTTL {
+	if !ok || now.Sub(e.windowStart) > cfg.BanTTL {
 		if ok {
 			e.bannedUntil = time.Time{}
 			e.strikes = 0
@@ -242,14 +269,15 @@ func (g *Guard) Strike(key string) {
 		return
 	}
 	e.strikes++
-	if e.strikes >= g.cfg.BanAfterStrikes {
-		e.bannedUntil = now.Add(g.cfg.BanTTL)
+	if e.strikes >= cfg.BanAfterStrikes {
+		e.bannedUntil = now.Add(cfg.BanTTL)
 	}
 	s.mu.Unlock()
 }
 
 func (g *Guard) BanNow(key string) {
-	if g == nil || !g.cfg.Enabled || key == "" {
+	cfg := g.live()
+	if g == nil || !cfg.Enabled || key == "" {
 		return
 	}
 	s := &g.bans[strhash.String(key)%banShards]
@@ -262,9 +290,9 @@ func (g *Guard) BanNow(key string) {
 		banEntryPool.Put(old)
 	}
 	e := banEntryPool.Get().(*banEntry)
-	e.strikes = g.cfg.BanAfterStrikes
+	e.strikes = cfg.BanAfterStrikes
 	e.windowStart = now
-	e.bannedUntil = now.Add(g.cfg.BanTTL)
+	e.bannedUntil = now.Add(cfg.BanTTL)
 	s.ents[key] = e
 	s.mu.Unlock()
 }
@@ -290,9 +318,13 @@ func (g *Guard) Sweep(maxAge time.Duration) {
 		s.mu.Unlock()
 	}
 	g.clients.Range(func(key, value any) bool {
-		if value.(*clientConc).n.Load() == 0 {
-			g.clients.Delete(key)
+		c := value.(*clientConc)
+		if c.n.Load() != 0 {
+			return true
 		}
+		// CompareAndDelete avoids removing a slot another goroutine just reused
+		// with a different *clientConc. Acquire re-Stores if a race still lands.
+		g.clients.CompareAndDelete(key, value)
 		return true
 	})
 }
@@ -390,35 +422,37 @@ func (g *Guard) UpdateConfig(cfg Config) {
 	if g == nil {
 		return
 	}
+	cur := g.live()
 	if cfg.BanAfterStrikes > 0 {
-		g.cfg.BanAfterStrikes = cfg.BanAfterStrikes
+		cur.BanAfterStrikes = cfg.BanAfterStrikes
 	}
 	if cfg.BanTTL > 0 {
-		g.cfg.BanTTL = cfg.BanTTL
+		cur.BanTTL = cfg.BanTTL
 	}
 	if cfg.MaxBodyBytes > 0 {
-		g.cfg.MaxBodyBytes = cfg.MaxBodyBytes
+		cur.MaxBodyBytes = cfg.MaxBodyBytes
 	}
 	if cfg.MaxHeaderBytes > 0 {
-		g.cfg.MaxHeaderBytes = cfg.MaxHeaderBytes
+		cur.MaxHeaderBytes = cfg.MaxHeaderBytes
 	}
 	if cfg.MaxURLBytes > 0 {
-		g.cfg.MaxURLBytes = cfg.MaxURLBytes
+		cur.MaxURLBytes = cfg.MaxURLBytes
 	}
 	if cfg.MaxConcurrentGlobal > 0 {
-		g.cfg.MaxConcurrentGlobal = cfg.MaxConcurrentGlobal
+		cur.MaxConcurrentGlobal = cfg.MaxConcurrentGlobal
 	}
 	if cfg.MaxConcurrentClient > 0 {
-		g.cfg.MaxConcurrentClient = cfg.MaxConcurrentClient
+		cur.MaxConcurrentClient = cfg.MaxConcurrentClient
 	}
-	g.cfg.AttackBlock = cfg.AttackBlock
+	cur.AttackBlock = cfg.AttackBlock
 	if cfg.AttackScore > 0 {
-		g.cfg.AttackScore = cfg.AttackScore
+		cur.AttackScore = cfg.AttackScore
 	}
 	if cfg.WriteMethodCost > 0 {
-		g.cfg.WriteMethodCost = cfg.WriteMethodCost
+		cur.WriteMethodCost = cfg.WriteMethodCost
 	}
-	g.cfg.Enabled = cfg.Enabled
+	cur.Enabled = cfg.Enabled
+	g.cfg.Store(&cur)
 }
 
 func MethodCost(method string, writeCost int) int {

@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 	"unicode"
@@ -16,10 +17,18 @@ import (
 	"github.com/Quad4-Software/ravenguard/internal/faststr"
 )
 
+var uaLowerPool = sync.Pool{
+	New: func() any {
+		b := make([]byte, 0, 256)
+		return &b
+	},
+}
+
 type Sets struct {
 	ips        atomic.Pointer[[]net.IPNet]
 	dns        atomic.Pointer[map[string]struct{}]
 	uas        atomic.Pointer[[]string]
+	uaMatcher  atomic.Pointer[faststr.Matcher]
 	stop       chan struct{}
 	lastReload atomic.Int64
 	ipFiles    []string
@@ -36,6 +45,7 @@ func New() *Sets {
 	s.ips.Store(&emptyNets)
 	s.dns.Store(&emptyDNS)
 	s.uas.Store(&emptyUA)
+	s.uaMatcher.Store(faststr.NewMatcher(nil))
 	return s
 }
 
@@ -55,6 +65,7 @@ func (s *Sets) Load(ipFiles, dnsFiles, uaFiles []string) error {
 	s.ips.Store(&ips)
 	s.dns.Store(&dns)
 	s.uas.Store(&uas)
+	s.uaMatcher.Store(faststr.NewMatcher(uas))
 	s.ipFiles = append([]string(nil), ipFiles...)
 	s.dnsFiles = append([]string(nil), dnsFiles...)
 	s.uaFiles = append([]string(nil), uaFiles...)
@@ -166,16 +177,16 @@ func (s *Sets) DNSBlocked(host string) bool {
 }
 
 func (s *Sets) UABlocked(ua string) bool {
-	list := s.uas.Load()
-	if list == nil {
+	m := s.uaMatcher.Load()
+	if m == nil || ua == "" {
 		return false
 	}
-	for _, p := range *list {
-		if p != "" && faststr.ContainsFold(ua, p) {
-			return true
-		}
-	}
-	return false
+	bp := uaLowerPool.Get().(*[]byte)
+	low := faststr.AppendLowerASCII((*bp)[:0], ua)
+	ok := m.Contains(low)
+	*bp = low[:0]
+	uaLowerPool.Put(bp)
+	return ok
 }
 
 func loadIPFiles(files []string) ([]net.IPNet, error) {

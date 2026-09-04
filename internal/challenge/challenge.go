@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/Quad4-Software/ravenguard/internal/strhash"
@@ -51,6 +52,14 @@ type Manager struct {
 	Captcha    CaptchaVerifier
 	nonces     nonceStore
 	risks      riskCache
+	live       atomic.Pointer[liveSettings]
+}
+
+type liveSettings struct {
+	Difficulty int
+	Algorithm  string
+	CookieName string
+	CookieTTL  time.Duration
 }
 
 type Token struct {
@@ -73,10 +82,11 @@ func (m *Manager) Issue(clientID string) (Token, string, error) {
 	if _, err := rand.Read(nb[:]); err != nil {
 		return Token{}, "", err
 	}
+	ls := m.settings()
 	t := Token{
 		Nonce:      hex.EncodeToString(nb[:]),
 		IssuedAt:   time.Now().Unix(),
-		Difficulty: m.Difficulty,
+		Difficulty: ls.Difficulty,
 	}
 	sig := m.sign(t.Nonce, t.IssuedAt, t.Difficulty, clientID)
 	payload := fmt.Sprintf("%s.%d.%d.%s", t.Nonce, t.IssuedAt, t.Difficulty, sig)
@@ -165,16 +175,17 @@ func hashNonce(nonce string) uint32 {
 }
 
 func (m *Manager) ClearanceCookie(bindID, ray string, secure bool) *http.Cookie {
-	exp := time.Now().Add(m.CookieTTL)
+	ls := m.settings()
+	exp := time.Now().Add(ls.CookieTTL)
 	payload := fmt.Sprintf("%s|%d|%s", bindID, exp.Unix(), ray)
 	mac := m.mac(payload)
 	val := base64.RawURLEncoding.EncodeToString([]byte(payload)) + "." + mac
 	return &http.Cookie{
-		Name:     m.CookieName,
+		Name:     ls.CookieName,
 		Value:    val,
 		Path:     "/",
 		Expires:  exp,
-		MaxAge:   int(m.CookieTTL.Seconds()),
+		MaxAge:   int(ls.CookieTTL.Seconds()),
 		HttpOnly: true,
 		Secure:   secure,
 		SameSite: http.SameSiteLaxMode,
@@ -182,11 +193,54 @@ func (m *Manager) ClearanceCookie(bindID, ray string, secure bool) *http.Cookie 
 }
 
 func (m *Manager) HasClearance(r *http.Request, bindID string) bool {
-	c, err := r.Cookie(m.CookieName)
+	c, err := r.Cookie(m.settings().CookieName)
 	if err != nil || c.Value == "" {
 		return false
 	}
 	return m.validateCookie(c.Value, bindID) == nil
+}
+
+// ApplyLive updates cookie and PoW settings without tearing down the manager.
+func (m *Manager) ApplyLive(cookieName string, difficulty int, ttl time.Duration, algorithm string) {
+	if m == nil {
+		return
+	}
+	ls := m.settings()
+	if cookieName != "" {
+		ls.CookieName = cookieName
+	}
+	if difficulty > 0 {
+		ls.Difficulty = difficulty
+	}
+	if ttl > 0 {
+		ls.CookieTTL = ttl
+	}
+	if algorithm != "" {
+		ls.Algorithm = algorithm
+	}
+	m.live.Store(&ls)
+}
+
+func (m *Manager) settings() liveSettings {
+	if m == nil {
+		return liveSettings{}
+	}
+	if p := m.live.Load(); p != nil {
+		return *p
+	}
+	ls := liveSettings{
+		Difficulty: m.Difficulty,
+		Algorithm:  m.Algorithm,
+		CookieName: m.CookieName,
+		CookieTTL:  m.CookieTTL,
+	}
+	if m.live.CompareAndSwap(nil, &ls) {
+		return ls
+	}
+	if p := m.live.Load(); p != nil {
+		return *p
+	}
+	return ls
 }
 
 func (m *Manager) validateCookie(val, bindID string) error {

@@ -47,6 +47,8 @@ type Logger struct {
 	mu      sync.RWMutex
 	byRay   map[string]Event
 	order   []string
+	head    int
+	len     int
 	maxHot  int
 	persist Persister
 }
@@ -58,7 +60,7 @@ func New(hotCapacity int) *Logger {
 	}
 	return &Logger{
 		byRay:  make(map[string]Event, hotCapacity),
-		order:  make([]string, 0, hotCapacity),
+		order:  make([]string, hotCapacity),
 		maxHot: hotCapacity,
 	}
 }
@@ -90,12 +92,16 @@ func (l *Logger) Record(e Event) {
 		return
 	}
 	if _, ok := l.byRay[e.Ray]; !ok {
-		if len(l.order) >= l.maxHot {
-			old := l.order[0]
-			l.order = l.order[1:]
+		if l.len >= l.maxHot {
+			old := l.order[l.head]
 			delete(l.byRay, old)
+			l.order[l.head] = e.Ray
+			l.head = (l.head + 1) % l.maxHot
+		} else {
+			idx := (l.head + l.len) % l.maxHot
+			l.order[idx] = e.Ray
+			l.len++
 		}
-		l.order = append(l.order, e.Ray)
 	}
 	l.byRay[e.Ray] = e
 	p := l.persist
@@ -137,13 +143,14 @@ func (l *Logger) Recent(limit int) []Event {
 	}
 	l.mu.RLock()
 	defer l.mu.RUnlock()
-	n := len(l.order)
-	if n == 0 {
+	if l.len == 0 {
 		return nil
 	}
 	out := make([]Event, 0, limit)
-	for i := n - 1; i >= 0 && len(out) < limit; i-- {
-		if e, ok := l.byRay[l.order[i]]; ok {
+	for i := 0; i < l.len && len(out) < limit; i++ {
+		idx := (l.head + l.len - 1 - i) % l.maxHot
+		ray := l.order[idx]
+		if e, ok := l.byRay[ray]; ok {
 			out = append(out, e)
 		}
 	}

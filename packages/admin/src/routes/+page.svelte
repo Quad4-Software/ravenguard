@@ -19,21 +19,25 @@
   let refreshedAt = $state('')
   let timer: ReturnType<typeof setInterval> | undefined
   let toggling = $state<ModuleKey | null>(null)
+  let loadSeq = 0
 
   const canWrite = $derived(canWriteConfig(auth.role))
 
   async function load() {
     if (typeof document !== 'undefined' && document.hidden) return
+    const seq = ++loadSeq
     try {
       const [st, hist] = await Promise.all([api.status.get(), api.status.history()])
+      if (seq !== loadSeq) return
       status = st
       samples = hist.samples ?? []
       refreshedAt = new Date().toLocaleTimeString()
       error = ''
     } catch (err) {
+      if (seq !== loadSeq) return
       error = err instanceof APIError ? err.message : 'failed to load status'
     } finally {
-      loading = false
+      if (seq === loadSeq) loading = false
     }
   }
 
@@ -46,6 +50,7 @@
   })
 
   onDestroy(() => {
+    loadSeq++
     if (timer) clearInterval(timer)
     if (typeof document !== 'undefined') {
       document.removeEventListener('visibilitychange', handleVisibility)

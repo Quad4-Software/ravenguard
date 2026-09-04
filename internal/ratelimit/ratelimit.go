@@ -5,6 +5,7 @@ package ratelimit
 
 import (
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/Quad4-Software/ravenguard/internal/strhash"
@@ -12,13 +13,17 @@ import (
 
 const shards = 256
 
+type liveCfg struct {
+	rate    float64
+	burstF  float64
+	perPath bool
+}
+
 type Limiter struct {
 	requests int
 	burst    int
 	window   time.Duration
-	perPath  bool
-	rate     float64
-	burstF   float64
+	live     atomic.Pointer[liveCfg]
 	shards   [shards]shard
 }
 
@@ -61,10 +66,13 @@ func New(requests, burst int, window time.Duration, perPath bool) *Limiter {
 		requests: requests,
 		burst:    burst,
 		window:   window,
-		perPath:  perPath,
-		rate:     float64(requests) / window.Seconds(),
-		burstF:   float64(burst),
 	}
+	cfg := &liveCfg{
+		rate:    float64(requests) / window.Seconds(),
+		burstF:  float64(burst),
+		perPath: perPath,
+	}
+	l.live.Store(cfg)
 	for i := range l.shards {
 		l.shards[i].ents = make(map[string]*clientBucket)
 	}
@@ -79,6 +87,10 @@ func (l *Limiter) AllowN(ip, path string, cost int) bool {
 	if cost <= 0 {
 		cost = 1
 	}
+	cfg := l.live.Load()
+	if cfg == nil {
+		return true
+	}
 	s := &l.shards[strhash.String(ip)%shards]
 	now := time.Now()
 	need := float64(cost)
@@ -87,7 +99,7 @@ func (l *Limiter) AllowN(ip, path string, cost int) bool {
 	b, ok := s.ents[ip]
 	if !ok {
 		b = bucketPool.Get().(*clientBucket)
-		b.tokens = l.burstF
+		b.tokens = cfg.burstF
 		b.last = now
 		if b.paths != nil {
 			clear(b.paths)
@@ -95,8 +107,8 @@ func (l *Limiter) AllowN(ip, path string, cost int) bool {
 		s.ents[ip] = b
 	}
 
-	if !l.perPath {
-		ok = refillAllow(&b.tokens, &b.last, now, l.rate, l.burstF, need)
+	if !cfg.perPath {
+		ok = refillAllow(&b.tokens, &b.last, now, cfg.rate, cfg.burstF, need)
 		s.mu.Unlock()
 		return ok
 	}
@@ -110,11 +122,11 @@ func (l *Limiter) AllowN(ip, path string, cost int) bool {
 	e, ok := b.paths[path]
 	if !ok {
 		e = entryPool.Get().(*entry)
-		e.tokens = l.burstF
+		e.tokens = cfg.burstF
 		e.last = now
 		b.paths[path] = e
 	}
-	ok = refillAllow(&e.tokens, &e.last, now, l.rate, l.burstF, need)
+	ok = refillAllow(&e.tokens, &e.last, now, cfg.rate, cfg.burstF, need)
 	s.mu.Unlock()
 	return ok
 }
@@ -135,11 +147,13 @@ func refillAllow(tokens *float64, last *time.Time, now time.Time, rate, burst, n
 
 func (l *Limiter) Sweep(maxAge time.Duration) {
 	cutoff := time.Now().Add(-maxAge)
+	cfg := l.live.Load()
+	perPath := cfg != nil && cfg.perPath
 	for i := range l.shards {
 		s := &l.shards[i]
 		s.mu.Lock()
 		for k, b := range s.ents {
-			if l.perPath && b.paths != nil {
+			if perPath && b.paths != nil {
 				for pk, e := range b.paths {
 					if e.last.Before(cutoff) {
 						delete(b.paths, pk)
@@ -207,7 +221,9 @@ func (l *Limiter) Update(requests, burst int, window time.Duration, perPath bool
 	l.requests = requests
 	l.burst = burst
 	l.window = window
-	l.perPath = perPath
-	l.rate = float64(requests) / window.Seconds()
-	l.burstF = float64(burst)
+	l.live.Store(&liveCfg{
+		rate:    float64(requests) / window.Seconds(),
+		burstF:  float64(burst),
+		perPath: perPath,
+	})
 }

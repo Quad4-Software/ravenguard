@@ -187,11 +187,12 @@ func NormalizeGate(gate string) string {
 }
 
 func (m *Manager) selectEffort(risk RiskLevel) (algo string, diff int, params map[string]int) {
-	diff = m.Difficulty
+	ls := m.settings()
+	diff = ls.Difficulty
 	if diff <= 0 {
 		diff = 16
 	}
-	mode := strings.ToLower(strings.TrimSpace(m.Algorithm))
+	mode := strings.ToLower(strings.TrimSpace(ls.Algorithm))
 	switch mode {
 	case "sha256", "sha-256":
 		return AlgoSHA256, diff, nil

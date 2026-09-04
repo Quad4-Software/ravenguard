@@ -35,8 +35,9 @@ type Result struct {
 }
 
 type compiled struct {
-	schema Schema
-	router routers.Router
+	schema    Schema
+	router    routers.Router
+	detectOnly bool
 }
 
 // Manager holds compiled schemas keyed by id.
@@ -85,7 +86,7 @@ func compileSchema(s Schema) (*compiled, error) {
 		mode = "block"
 	}
 	s.Mode = mode
-	return &compiled{schema: s, router: rtr}, nil
+	return &compiled{schema: s, router: rtr, detectOnly: mode == "detect"}, nil
 }
 
 // Validate checks the request against the schema. Empty schemaID skips.
@@ -113,7 +114,7 @@ func (m *Manager) Validate(r *http.Request, schemaID string) Result {
 			Reason:   "no matching operation in OpenAPI schema",
 			SchemaID: schemaID,
 		}
-		res.ShouldBlock = !strings.EqualFold(c.schema.Mode, "detect")
+		res.ShouldBlock = !c.detectOnly
 		return res
 	}
 
@@ -127,7 +128,7 @@ func (m *Manager) Validate(r *http.Request, schemaID string) Result {
 			Reason:   "failed to read request body for schema validation",
 			SchemaID: schemaID,
 		}
-		res.ShouldBlock = !strings.EqualFold(c.schema.Mode, "detect")
+		res.ShouldBlock = !c.detectOnly
 		return res
 	}
 
@@ -148,7 +149,7 @@ func (m *Manager) Validate(r *http.Request, schemaID string) Result {
 			Reason:   err.Error(),
 			SchemaID: schemaID,
 		}
-		res.ShouldBlock = !strings.EqualFold(c.schema.Mode, "detect")
+		res.ShouldBlock = !c.detectOnly
 		return res
 	}
 	return Result{OK: true, SchemaID: schemaID}

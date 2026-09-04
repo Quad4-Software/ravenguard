@@ -21,7 +21,7 @@ LDFLAGS ?= -s -w \
 # Minimum total statement coverage for the cover gate (percent).
 COVER_MIN ?= 50
 
-.PHONY: all build test cover bench fuzz tools fmt fix vet lint sec vuln check tidy clean widget admin e2e
+.PHONY: all build test cover bench fuzz race tools fmt fix vet lint sec vuln check tidy clean widget admin e2e
 
 all: check build
 
@@ -84,6 +84,12 @@ fuzz:
 	$(GO) test ./internal/challenge -fuzz=FuzzVerifyPoW -fuzztime=20s
 	$(GO) test ./internal/detect -fuzz=FuzzIsScannerUA -fuzztime=20s
 	$(GO) test ./internal/qfeeds -fuzz=FuzzParseFeed -fuzztime=20s
+	$(GO) test ./internal/faststr -fuzz=FuzzMatcherContains -fuzztime=20s
+	$(GO) test ./internal/requestlog -fuzz=FuzzLoggerRecord -fuzztime=20s
+	$(GO) test ./internal/bodybuf -fuzz=FuzzCapture -fuzztime=20s
+
+race:
+	$(GO) test -race ./internal/pipeline ./internal/protect ./internal/ratelimit ./internal/requestlog ./internal/challenge ./internal/router ./internal/detect ./internal/blocklist ./internal/bodybuf ./internal/faststr ./internal/schemagate -count=1
 
 # Install lint, security, and formatting tools into GOPATH/bin.
 tools:

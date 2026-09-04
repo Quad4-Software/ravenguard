@@ -4,7 +4,8 @@
 package rayid
 
 import (
-	"crypto/rand"
+	"encoding/binary"
+	"math/rand/v2"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -23,7 +24,7 @@ const hexdigits = "0123456789abcdef"
 
 func New() string {
 	var rb [8]byte
-	_, _ = rand.Read(rb[:])
+	binary.LittleEndian.PutUint64(rb[:], rand.Uint64())
 	n := counter.Add(1)
 	ts := uint64(time.Now().UnixNano()) // #nosec G115
 

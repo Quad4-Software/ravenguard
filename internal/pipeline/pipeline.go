@@ -191,11 +191,15 @@ func (h *Handler) handleHealthz(w http.ResponseWriter, r *http.Request) {
 
 // ServeHTTP implements http.Handler.
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if h.acmeHTTP != nil && strings.HasPrefix(r.URL.Path, "/.well-known/acme-challenge/") {
-		h.acmeHTTP.ServeHTTP(w, r)
+	h.mu.RLock()
+	acme := h.acmeHTTP
+	redirect := h.redirectHTTP
+	h.mu.RUnlock()
+	if acme != nil && strings.HasPrefix(r.URL.Path, "/.well-known/acme-challenge/") {
+		acme.ServeHTTP(w, r)
 		return
 	}
-	if h.redirectHTTP && r.TLS == nil && r.Method != http.MethodConnect {
+	if redirect && r.TLS == nil && r.Method != http.MethodConnect {
 		if !strings.HasPrefix(r.URL.Path, "/.well-known/acme-challenge/") {
 			host := r.Host
 			target := "https://" + host + r.URL.RequestURI()
@@ -346,14 +350,12 @@ func (h *Handler) ApplyConfig(cfg config.Config) {
 		}
 	}
 	if h.chal != nil {
-		if cfg.Challenge.CookieName != "" {
-			h.chal.CookieName = cfg.Challenge.CookieName
-		}
-		h.chal.Difficulty = cfg.Challenge.Difficulty
-		h.chal.CookieTTL = cfg.Challenge.CookieTTL.Duration
-		if cfg.Challenge.Algorithm != "" {
-			h.chal.Algorithm = cfg.Challenge.Algorithm
-		}
+		h.chal.ApplyLive(
+			cfg.Challenge.CookieName,
+			cfg.Challenge.Difficulty,
+			cfg.Challenge.CookieTTL.Duration,
+			cfg.Challenge.Algorithm,
+		)
 	}
 }
 
@@ -624,7 +626,7 @@ func (h *Handler) guard(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
-		res := detect.ScoreDebug(r, h.detectCfg)
+		res := detect.Score(r, h.detectCfg)
 		if h.beh != nil {
 			br := h.beh.Score(bindID)
 			res.Score += br.Score
@@ -639,8 +641,15 @@ func (h *Handler) guard(w http.ResponseWriter, r *http.Request) {
 				h.prot.Strike(bindID)
 			}
 			details := map[string]string{}
-			if len(res.Reasons) > 0 {
-				details["reasons"] = strings.Join(res.Reasons, ",")
+			if res.Score > 0 {
+				dbg := detect.ScoreDebug(r, h.detectCfg)
+				if h.beh != nil {
+					br := h.beh.Score(bindID)
+					dbg.Reasons = append(dbg.Reasons, br.Reasons...)
+				}
+				if len(dbg.Reasons) > 0 {
+					details["reasons"] = strings.Join(dbg.Reasons, ",")
+				}
 			}
 			h.emitBlock(w, r, ray, bindID, ipStr, host, ua, "Request blocked", res.Score, details)
 			return
@@ -729,7 +738,7 @@ func (h *Handler) upstreamHealthy(r *http.Request) bool {
 	routes := h.routes
 	hc := h.health
 	h.mu.RUnlock()
-	if routes != nil && (routes.HasRoutes() || true) {
+	if routes != nil {
 		return routes.Healthy(r)
 	}
 	if hc != nil {
@@ -852,7 +861,7 @@ func (h *Handler) proxy(w http.ResponseWriter, r *http.Request, ray string, clie
 		}
 		iputil.SetClientForwardHeadersIP(r, ipStr, proto)
 	}
-	if name := strings.TrimSpace(h.config().Stealth.RayHeader); name != "" {
+	if name := strings.TrimSpace(cfg.Stealth.RayHeader); name != "" {
 		r.Header.Set(name, ray)
 	}
 

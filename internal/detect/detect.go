@@ -101,6 +101,11 @@ var lowerPool = sync.Pool{
 	},
 }
 
+var (
+	scannerMatcher = faststr.NewMatcher(scannerUA)
+	aiMatcher      = faststr.NewMatcher(aiUA)
+)
+
 func Score(r *http.Request, cfg Config) Result {
 	return score(r, cfg, false)
 }
@@ -127,13 +132,13 @@ func score(r *http.Request, cfg Config, wantReasons bool) Result {
 			res.Reasons = append(res.Reasons, "missing_ua")
 		}
 	} else {
-		if matchAnyBytes(lowUA, scannerUA) {
+		if scannerMatcher.Contains(lowUA) {
 			res.Score += cfg.ScannerUAScore
 			if wantReasons {
 				res.Reasons = append(res.Reasons, "scanner_ua")
 			}
 		}
-		if matchAnyBytes(lowUA, aiUA) {
+		if aiMatcher.Contains(lowUA) {
 			score := cfg.AIUAScore
 			if score <= 0 {
 				score = cfg.ScannerUAScore
@@ -311,22 +316,13 @@ func scoreProxyHeader(r *http.Request, h string, cfg Config, res *Result, wantRe
 	return false
 }
 
-func matchAnyBytes(low []byte, pats []string) bool {
-	for _, p := range pats {
-		if faststr.ContainsBytes(low, p) {
-			return true
-		}
-	}
-	return false
-}
-
-func matchAnyFold(s string, pats []string) bool {
-	if s == "" {
+func matchAnyFold(s string, m *faststr.Matcher) bool {
+	if s == "" || m == nil {
 		return false
 	}
 	bp := lowerPool.Get().(*[]byte)
 	low := faststr.AppendLowerASCII((*bp)[:0], s)
-	ok := matchAnyBytes(low, pats)
+	ok := m.Contains(low)
 	*bp = low[:0]
 	lowerPool.Put(bp)
 	return ok
@@ -432,9 +428,9 @@ func secCHUAMismatchBytes(r *http.Request, lowUA []byte) bool {
 }
 
 func IsScannerUA(ua string) bool {
-	return matchAnyFold(ua, scannerUA) || matchAnyFold(ua, aiUA)
+	return matchAnyFold(ua, scannerMatcher) || matchAnyFold(ua, aiMatcher)
 }
 
 func IsAIUA(ua string) bool {
-	return matchAnyFold(ua, aiUA)
+	return matchAnyFold(ua, aiMatcher)
 }

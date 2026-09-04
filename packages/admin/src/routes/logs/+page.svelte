@@ -2,7 +2,7 @@
   import { onMount, onDestroy } from 'svelte'
   import { api, APIError, type LogEntry } from '$lib/api'
 
-  let logs = $state<LogEntry[]>([])
+  let logs = $state.raw<LogEntry[]>([])
   let loading = $state(true)
   let error = $state('')
   let level = $state('')
@@ -10,30 +10,35 @@
   let auto = $state(true)
   let filter = $state('')
   let timer: ReturnType<typeof setInterval> | undefined
+  let loadSeq = 0
 
-  const filtered = $derived(
-    logs.filter((e) => {
-      if (!filter.trim()) return true
-      const q = filter.toLowerCase()
+  const filterQ = $derived(filter.trim().toLowerCase())
+  const filtered = $derived.by(() => {
+    const q = filterQ
+    if (!q) return logs
+    return logs.filter((e) => {
       if (e.message.toLowerCase().includes(q)) return true
       if (e.level.toLowerCase().includes(q)) return true
       if (e.attrs) {
         return Object.values(e.attrs).some((v) => String(v).toLowerCase().includes(q))
       }
       return false
-    }),
-  )
+    })
+  })
 
   async function load() {
     if (typeof document !== 'undefined' && document.hidden) return
+    const seq = ++loadSeq
     try {
       const res = await api.logs.list(limit, level)
+      if (seq !== loadSeq) return
       logs = res.logs ?? []
       error = ''
     } catch (err) {
+      if (seq !== loadSeq) return
       error = err instanceof APIError ? err.message : 'failed to load logs'
     } finally {
-      loading = false
+      if (seq === loadSeq) loading = false
     }
   }
 
@@ -60,18 +65,19 @@
   }
 
   function handleVisibility() {
-    if (!document.hidden && auto) load()
+    if (!document.hidden && auto) void load()
   }
 
   onMount(() => {
-    load()
+    void load()
     timer = setInterval(() => {
-      if (auto) load()
+      if (auto) void load()
     }, 3000)
     document.addEventListener('visibilitychange', handleVisibility)
   })
 
   onDestroy(() => {
+    loadSeq++
     if (timer) clearInterval(timer)
     if (typeof document !== 'undefined') {
       document.removeEventListener('visibilitychange', handleVisibility)
