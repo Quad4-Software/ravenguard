@@ -324,3 +324,28 @@ trusted_proxies = ["10.0.0.0/8"]
 		t.Fatalf("trusted_proxies=%v", cfg.Trust.TrustedProxies)
 	}
 }
+
+func TestResolveRunMode(t *testing.T) {
+	t.Setenv("RG_MODE", "")
+	mode, rest, err := config.ResolveRunMode([]string{"-config", "x.toml"})
+	if err != nil || mode != "all" || len(rest) != 2 {
+		t.Fatalf("default mode=%q rest=%v err=%v", mode, rest, err)
+	}
+
+	t.Setenv("RG_MODE", "hub")
+	mode, rest, err = config.ResolveRunMode([]string{"-config", "x.toml"})
+	if err != nil || mode != "hub" || len(rest) != 2 {
+		t.Fatalf("env mode=%q rest=%v err=%v", mode, rest, err)
+	}
+
+	mode, rest, err = config.ResolveRunMode([]string{"proxy", "-config", "x.toml"})
+	if err != nil || mode != "proxy" || len(rest) != 2 || rest[0] != "-config" {
+		t.Fatalf("cli beats env mode=%q rest=%v err=%v", mode, rest, err)
+	}
+
+	t.Setenv("RG_MODE", "nope")
+	_, _, err = config.ResolveRunMode(nil)
+	if err == nil {
+		t.Fatal("expected invalid RG_MODE error")
+	}
+}

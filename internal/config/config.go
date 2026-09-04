@@ -923,6 +923,29 @@ func (c *Config) SetRunMode(mode string) {
 	c.runMode = strings.ToLower(strings.TrimSpace(mode))
 }
 
+// ResolveRunMode picks process mode for Coolify-style deploys that cannot set a custom command.
+// Precedence: first CLI token (hub|proxy|all) then RG_MODE then all.
+func ResolveRunMode(args []string) (mode string, rest []string, err error) {
+	mode = "all"
+	if v := strings.ToLower(strings.TrimSpace(os.Getenv("RG_MODE"))); v != "" {
+		mode = v
+	}
+	rest = args
+	if len(args) > 0 {
+		switch args[0] {
+		case "hub", "proxy", "all":
+			mode = args[0]
+			rest = args[1:]
+		}
+	}
+	switch mode {
+	case "hub", "proxy", "all":
+		return mode, rest, nil
+	default:
+		return "", rest, fmt.Errorf("mode must be all, hub, or proxy (got %q)", mode)
+	}
+}
+
 func (c Config) Validate() error {
 	hubOnly := c.runMode == "hub"
 	if !hubOnly {

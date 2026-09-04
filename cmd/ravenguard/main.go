@@ -47,14 +47,10 @@ import (
 )
 
 func main() {
-	args := os.Args[1:]
-	mode := "all"
-	if len(args) > 0 {
-		switch args[0] {
-		case "hub", "proxy", "all":
-			mode = args[0]
-			args = args[1:]
-		}
+	mode, args, err := config.ResolveRunMode(os.Args[1:])
+	if err != nil {
+		slog.Error("config", "err", err)
+		os.Exit(1)
 	}
 
 	flags, err := config.ParseFlags(args)

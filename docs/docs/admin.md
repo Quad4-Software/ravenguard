@@ -130,11 +130,13 @@ When admin starts with an empty route table, RavenGuard seeds a default upstream
 
 RavenGuard can run as separate processes:
 
-| Command | Role |
-|---------|------|
-| `ravenguard hub` | Admin SPA, SQLite, agent WebSocket accept (no public WAF) |
-| `ravenguard proxy` | Public WAF + outbound agent to the hub |
-| `ravenguard` / `ravenguard all` | Combined single-process mode (backcompat) |
+| Mode | Role |
+|------|------|
+| hub | Admin SPA, SQLite, agent WebSocket accept (no public WAF) |
+| proxy | Public WAF and outbound agent to the hub |
+| all | Combined single-process mode (default) |
+
+Start with `ravenguard hub`, `ravenguard proxy`, or set `RG_MODE` when the process manager cannot pass a custom command. Optional `RG_CONFIG` selects the TOML path.
 
 Preferred deploy keeps the hub on a private overlay (Tailscale, Netbird, or WireGuard). Bind `admin.listen` to the overlay IP only. Proxies set `agent.hub_url` to that address. Operators open the panel from a machine on the same mesh. Nothing management-facing needs a public A record.
 

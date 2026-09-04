@@ -6,35 +6,35 @@ description: Build RavenGuard and place the WAF in front of your origin.
 
 # Getting started
 
-RavenGuard is an HTTP Web Application Firewall (WAF) and reverse proxy. Primary topology:
+RavenGuard is an HTTP Web Application Firewall and reverse proxy.
 
 ```text
 Client -> RavenGuard (:80/:443) -> origin(s)
 ```
 
-It can also sit behind an external reverse proxy:
+Behind an external reverse proxy:
 
 ```text
 Client -> reverse proxy (TLS) -> RavenGuard -> origin
 ```
 
-Fleet mode separates the management plane from public edges:
+Fleet mode separates management from public edges:
 
 ```text
-Public clients -> ravenguard proxy (WAF + outbound agent)
-Overlay        -> ravenguard hub (admin SPA + agent WebSocket)
+Public clients -> ravenguard proxy
+Overlay        -> ravenguard hub
 ```
 
-It terminates TLS (static PEM or automatic Let's Encrypt), routes by host and path, runs the WAF pipeline (blocklists, rate limits, attack filters, detect scoring, optional PoW challenge), applies optional access gates, then forwards to HTTP, HTTPS, WebSocket, or unix-socket upstreams.
+It terminates TLS, routes by host and path, runs the WAF pipeline, applies optional access gates, then forwards to HTTP, HTTPS, WebSocket, or unix-socket upstreams.
 
-Optional [admin control plane](./admin.md): separate listen address, multi-user auth (argon2id), live upstream/route/access editing, proxy enrollment, Move services, and an embedded SPA.
+Optional [admin control plane](./admin.md): separate listen address, multi-user auth, live route editing, proxy enrollment, and an embedded SPA.
 
 ## Requirements
 
 - Go 1.26.6 or newer to build from source
 - For edge TLS: public DNS pointing at this host and open ports 80/443
 - Or a reverse proxy that terminates TLS and forwards the client address
-- An upstream origin on TCP (`http`/`https`/`ws`/`wss`) or a unix socket
+- An upstream origin on TCP or a unix socket
 - For fleet mode: a private overlay (Tailscale, Netbird, or WireGuard) for the hub
 
 ## Build and run
@@ -46,15 +46,28 @@ make build
 ./bin/ravenguard -config configs/ravenguard.toml
 ```
 
-Process modes:
+| Mode | Role |
+|------|------|
+| all (default) | Combined WAF and optional admin |
+| hub | Admin SPA, SQLite, agent accept |
+| proxy | Public WAF and outbound agent to the hub |
 
-| Command | Role |
-|---------|------|
-| `ravenguard` / `ravenguard all` | Combined WAF + optional admin (single host) |
-| `ravenguard hub` | Admin SPA, SQLite, agent accept (no public WAF) |
-| `ravenguard proxy` | Public WAF + outbound agent to the hub |
+Set the mode with the first CLI argument (`ravenguard hub`) or `RG_MODE` when the process manager cannot set a custom command:
 
-Set `upstream.url` and a production challenge secret:
+```bash
+RG_MODE=hub
+RG_CONFIG=/config/hub.toml
+```
+
+```bash
+RG_MODE=proxy
+RG_CONFIG=/config/ravenguard.toml
+RG_AGENT_HUB_URL=http://ravenguard-hub:8080
+RG_AGENT_TOKEN=...
+RG_AGENT_HUB_PUBKEY=...
+```
+
+Point at an upstream and a production challenge secret:
 
 ```bash
 ./bin/ravenguard \
@@ -70,14 +83,14 @@ cd deploy
 docker compose up --build
 ```
 
-The compose file builds RavenGuard, mounts sample config and blocklists, and proxies to a `whoami` origin on port `8080`.
+The compose file builds RavenGuard, mounts sample config and blocklists, and proxies to a whoami origin on port 8080.
 
 ## First checks
 
-1. Set `trust.mode = "behind_proxy"` and list every trusted hop in `trust.trusted_proxies`, or use `edge` when RavenGuard owns TLS.
+1. Set `trust.mode` to `behind_proxy` with every trusted hop in `trusted_proxies`, or use `edge` when RavenGuard owns TLS.
 2. Prefer `real_ip_header = "X-Real-IP"` when the proxy sets a single client address.
-3. Set `RG_CHALLENGE_SECRET` (min 16 characters, not `change-me*`) before exposing the challenge path.
-4. Keep `ui.test_mode` off outside local preview use.
+3. Set `RG_CHALLENGE_SECRET` (min 16 characters, not a `change-me` placeholder) before exposing the challenge path.
+4. Keep `ui.test_mode` off outside local preview.
 5. For fleet installs, bind the hub to an overlay IP only and enroll proxies from the Proxies UI.
 
 ## Next
