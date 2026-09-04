@@ -99,11 +99,6 @@ const config: Config = {
           position: 'left',
         },
         {
-          to: '/docs/admin',
-          label: 'Admin',
-          position: 'left',
-        },
-        {
           href: 'https://github.com/Quad4-Software/ravenguard',
           label: 'GitHub',
           position: 'right',

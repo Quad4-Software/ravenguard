@@ -86,11 +86,6 @@ function HomepageHeader(): ReactNode {
             <Link className="button button--primary button--lg" to="/docs/intro">
               Docs
             </Link>
-            <Link
-              className="button button--outline button--lg"
-              to="/docs/admin">
-              Admin and fleet
-            </Link>
           </div>
         </div>
         <div className={styles.visual} aria-hidden="true">
