@@ -26,6 +26,7 @@ type Config struct {
 	RateLimit  RateLimitConfig  `toml:"ratelimit"`
 	Protect    ProtectConfig    `toml:"protect"`
 	Detect     DetectConfig     `toml:"detect"`
+	Coraza     CorazaConfig     `toml:"coraza"`
 	Challenge  ChallengeConfig  `toml:"challenge"`
 	Stealth    StealthConfig    `toml:"stealth"`
 	Privacy    PrivacyConfig    `toml:"privacy"`
@@ -168,6 +169,7 @@ type PrivacyConfig struct {
 	IPHashSecret     string   `toml:"ip_hash_secret"`
 	LogIP            string   `toml:"log_ip"`
 	Retention        Duration `toml:"retention"`
+	WAFEventsTTL     Duration `toml:"waf_events_ttl"`
 	PrivacyNoticeURL string   `toml:"privacy_notice_url"`
 }
 
@@ -217,6 +219,19 @@ type ProtectConfig struct {
 	AttackBlock         bool     `toml:"attack_block"`
 	AttackScore         int      `toml:"attack_score"`
 	WriteMethodCost     int      `toml:"write_method_cost"`
+}
+
+// CorazaConfig configures the optional Coraza / OWASP CRS engine.
+type CorazaConfig struct {
+	Enabled          bool     `toml:"enabled"`
+	Mode             string   `toml:"mode"`
+	CRS              bool     `toml:"crs"`
+	Paranoia         int      `toml:"paranoia"`
+	RulesDir         string   `toml:"rules_dir"`
+	RulesFile        string   `toml:"rules_file"`
+	Directives       string   `toml:"directives"`
+	MaxBodyInspect   int64    `toml:"max_body_inspect"`
+	SkipPathPrefixes []string `toml:"skip_path_prefixes"`
 }
 
 type DetectConfig struct {
@@ -445,6 +460,14 @@ func Default() Config {
 			AttackScore:         90,
 			WriteMethodCost:     3,
 		},
+		Coraza: CorazaConfig{
+			Enabled:          false,
+			Mode:             "block",
+			CRS:              true,
+			Paranoia:         1,
+			MaxBodyInspect:   1 << 20,
+			SkipPathPrefixes: []string{"/_rg"},
+		},
 		Detect: DetectConfig{
 			Enabled: true, ChallengeScore: 40, BlockScore: 90,
 			MissingUAScore: 25, ScannerUAScore: 50, AIUAScore: 55,
@@ -483,6 +506,7 @@ func Default() Config {
 			HashClientIP: true,
 			LogIP:        "hash",
 			Retention:    Duration{30 * time.Minute},
+			WAFEventsTTL: Duration{24 * time.Hour},
 		},
 		UI: UIConfig{
 			Brand: "RavenGuard", StatusText: "Checking your browser before accessing this site.",
@@ -867,6 +891,21 @@ func normalize(c *Config) {
 	if c.Privacy.Retention.Duration <= 0 {
 		c.Privacy.Retention = Duration{30 * time.Minute}
 	}
+	if c.Privacy.WAFEventsTTL.Duration <= 0 {
+		c.Privacy.WAFEventsTTL = Duration{24 * time.Hour}
+	}
+	if c.Coraza.Mode == "" {
+		c.Coraza.Mode = "block"
+	}
+	if c.Coraza.Paranoia < 1 {
+		c.Coraza.Paranoia = 1
+	}
+	if c.Coraza.MaxBodyInspect <= 0 {
+		c.Coraza.MaxBodyInspect = 1 << 20
+	}
+	if c.Coraza.SkipPathPrefixes == nil {
+		c.Coraza.SkipPathPrefixes = []string{"/_rg"}
+	}
 	if c.Site.Robots == "" {
 		c.Site.Robots = "noindex, nofollow"
 	}
@@ -1115,6 +1154,19 @@ func (c Config) Validate() error {
 		case "fail_open", "fail_closed":
 		default:
 			return fmt.Errorf("qfeeds.on_error must be fail_open or fail_closed")
+		}
+	}
+	if !hubOnly && c.Coraza.Enabled {
+		switch strings.ToLower(strings.TrimSpace(c.Coraza.Mode)) {
+		case "block", "detect":
+		default:
+			return fmt.Errorf("coraza.mode must be block or detect")
+		}
+		if c.Coraza.Paranoia < 1 || c.Coraza.Paranoia > 4 {
+			return fmt.Errorf("coraza.paranoia must be between 1 and 4")
+		}
+		if !c.Coraza.CRS && strings.TrimSpace(c.Coraza.RulesDir) == "" && strings.TrimSpace(c.Coraza.RulesFile) == "" && strings.TrimSpace(c.Coraza.Directives) == "" {
+			return fmt.Errorf("coraza requires crs, rules_dir, rules_file, or directives when enabled")
 		}
 	}
 	if !hubOnly && c.RateLimit.Enabled {

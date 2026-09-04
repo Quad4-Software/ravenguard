@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import { api, APIError, type Route, type Upstream, type AccessPolicy } from '$lib/api'
+  import { api, APIError, type Route, type Upstream, type AccessPolicy, type APISchema } from '$lib/api'
   import { toast } from '$lib/toast.svelte'
   import { auth } from '$lib/auth.svelte'
   import { canWriteConfig } from '$lib/rbac'
@@ -9,6 +9,7 @@
   let routes = $state<Route[]>([])
   let upstreams = $state<Upstream[]>([])
   let policies = $state<AccessPolicy[]>([])
+  let schemas = $state<APISchema[]>([])
   let loading = $state(true)
   let error = $state('')
   let name = $state('')
@@ -19,6 +20,7 @@
   let stripPrefix = $state(false)
   let priority = $state(0)
   let accessPolicyId = $state('')
+  let openapiSchemaId = $state('')
   let submitting = $state(false)
   let saving = $state(false)
   let confirmDelete = $state<Route | null>(null)
@@ -29,6 +31,7 @@
   let editPathPrefix = $state('/')
   let editUpstreamId = $state('')
   let editAccessPolicyId = $state('')
+  let editOpenapiSchemaId = $state('')
   let editPriority = $state(0)
   let editStripPrefix = $state(false)
   let editEnabled = $state(true)
@@ -42,6 +45,11 @@
   function policyName(id: string | null | undefined): string {
     if (!id) return '—'
     return policies.find((p) => p.id === id)?.name ?? id
+  }
+
+  function schemaName(id: string | null | undefined): string {
+    if (!id) return '—'
+    return schemas.find((s) => s.id === id)?.name ?? id
   }
 
   function parseHosts(value: string): string[] {
@@ -58,6 +66,7 @@
     editPathPrefix = rt.path_prefix || '/'
     editUpstreamId = rt.upstream_id
     editAccessPolicyId = rt.access_policy_id ?? ''
+    editOpenapiSchemaId = rt.openapi_schema_id ?? ''
     editPriority = rt.priority
     editStripPrefix = rt.strip_prefix
     editEnabled = rt.enabled
@@ -70,14 +79,16 @@
   async function load() {
     loading = true
     try {
-      const [rt, up, pol] = await Promise.all([
+      const [rt, up, pol, sch] = await Promise.all([
         api.routes.list(),
         api.upstreams.list(),
         api.accessPolicies.list(),
+        api.apiSchemas.list(),
       ])
       routes = rt.routes ?? []
       upstreams = up.upstreams ?? []
       policies = pol.access_policies ?? []
+      schemas = sch.api_schemas ?? []
       if (!upstreamId && upstreams.length > 0) {
         upstreamId = upstreams[0].id
       }
@@ -105,6 +116,7 @@
         strip_prefix: stripPrefix,
         priority: Number(priority) || 0,
         access_policy_id: accessPolicyId || null,
+        openapi_schema_id: openapiSchemaId || null,
       })
       toast.info(`Route ${n} created`)
       name = ''
@@ -114,6 +126,7 @@
       stripPrefix = false
       priority = 0
       accessPolicyId = ''
+      openapiSchemaId = ''
       await load()
     } catch (err) {
       toast.error(err instanceof APIError ? err.message : 'failed to create route')
@@ -136,6 +149,7 @@
         path_prefix: editPathPrefix.trim() || '/',
         upstream_id: editUpstreamId,
         access_policy_id: editAccessPolicyId || null,
+        openapi_schema_id: editOpenapiSchemaId || null,
         priority: Number(editPriority) || 0,
         strip_prefix: editStripPrefix,
         enabled: editEnabled,
@@ -208,6 +222,15 @@
         </select>
       </div>
       <div class="field">
+        <label for="rt-edit-schema">API schema</label>
+        <select id="rt-edit-schema" bind:value={editOpenapiSchemaId}>
+          <option value="">None</option>
+          {#each schemas as s (s.id)}
+            <option value={s.id}>{s.name}</option>
+          {/each}
+        </select>
+      </div>
+      <div class="field">
         <label for="rt-edit-priority">Priority</label>
         <input id="rt-edit-priority" type="number" bind:value={editPriority} />
       </div>
@@ -275,6 +298,15 @@
         </select>
       </div>
       <div class="field">
+        <label for="rt-schema">API schema</label>
+        <select id="rt-schema" bind:value={openapiSchemaId}>
+          <option value="">None</option>
+          {#each schemas as s (s.id)}
+            <option value={s.id}>{s.name}</option>
+          {/each}
+        </select>
+      </div>
+      <div class="field">
         <label for="rt-enabled">
           <input id="rt-enabled" type="checkbox" bind:checked={enabled} />
           Enabled
@@ -314,6 +346,7 @@
         <th>Priority</th>
         <th>Enabled</th>
         <th>Access</th>
+        <th>Schema</th>
         {#if canWrite}<th class="actions">Actions</th>{/if}
       </tr>
     </thead>
@@ -327,6 +360,7 @@
           <td class="mono">{rt.priority}</td>
           <td class="muted">{rt.enabled ? 'yes' : 'no'}</td>
           <td class="muted">{policyName(rt.access_policy_id)}</td>
+          <td class="muted">{schemaName(rt.openapi_schema_id)}</td>
           {#if canWrite}
             <td class="actions">
               <div class="actions-row">
@@ -339,7 +373,7 @@
           {/if}
         </tr>
       {:else}
-        <tr class="empty-row"><td colspan={canWrite ? 8 : 7}>No routes</td></tr>
+        <tr class="empty-row"><td colspan={canWrite ? 9 : 8}>No routes</td></tr>
       {/each}
     </tbody>
   </table>

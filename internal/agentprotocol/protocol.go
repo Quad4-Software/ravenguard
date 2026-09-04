@@ -38,6 +38,8 @@ const (
 	OpQFeedsPut        = "qfeeds.put"
 	OpQFeedsRefresh    = "qfeeds.refresh"
 	OpLogsSnapshot     = "logs.snapshot"
+	OpRequestByRay     = "request.by_ray"
+	OpRequestsRecent   = "requests.recent"
 	OpCertsStatus      = "certs.status"
 	OpCertsDetail      = "certs.detail"
 	OpCertsPut         = "certs.put"
@@ -99,6 +101,7 @@ type RoutingSnapshot struct {
 	Upstreams      json.RawMessage `json:"upstreams"`
 	Routes         json.RawMessage `json:"routes"`
 	AccessPolicies json.RawMessage `json:"access_policies"`
+	APISchemas     json.RawMessage `json:"api_schemas,omitempty"`
 }
 
 type BanCreatePayload struct {
@@ -118,6 +121,14 @@ type BlocklistEntryPayload struct {
 type LogsPayload struct {
 	Limit int    `json:"limit"`
 	Level string `json:"level"`
+}
+
+type RequestByRayPayload struct {
+	Ray string `json:"ray"`
+}
+
+type RequestsRecentPayload struct {
+	Limit int `json:"limit"`
 }
 
 type CertHostPayload struct {

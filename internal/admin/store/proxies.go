@@ -294,7 +294,7 @@ func (s *Store) SetRouteProxy(routeID, proxyID string) error {
 
 func (s *Store) ListRoutesForProxy(proxyID string) ([]RouteRow, error) {
 	rows, err := s.db.Query(`SELECT id, name, enabled, hosts_json, path_prefix, upstream_id,
-		strip_prefix, priority, access_policy_id, COALESCE(proxy_id,''), created_at, updated_at
+		strip_prefix, priority, access_policy_id, COALESCE(proxy_id,''), openapi_schema_id, created_at, updated_at
 		FROM routes WHERE proxy_id = ? OR (? = '' AND (proxy_id = '' OR proxy_id IS NULL))
 		ORDER BY priority DESC, name ASC, id ASC`, proxyID, proxyID)
 	if err != nil {

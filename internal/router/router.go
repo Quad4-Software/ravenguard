@@ -44,7 +44,8 @@ type Route struct {
 	UpstreamID     string   `json:"upstream_id"`
 	StripPrefix    bool     `json:"strip_prefix"`
 	Priority       int      `json:"priority"`
-	AccessPolicyID string   `json:"access_policy_id,omitempty"`
+	AccessPolicyID  string   `json:"access_policy_id,omitempty"`
+	OpenAPISchemaID string   `json:"openapi_schema_id,omitempty"`
 }
 
 // Match holds the resolved route for a request.

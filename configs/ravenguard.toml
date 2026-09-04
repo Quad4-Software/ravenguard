@@ -103,6 +103,14 @@ attack_block = true
 attack_score = 90
 write_method_cost = 3
 
+[coraza]
+enabled = false
+mode = "block"
+crs = true
+paranoia = 1
+max_body_inspect = 1048576
+skip_path_prefixes = ["/_rg"]
+
 [detect]
 enabled = true
 challenge_score = 40
@@ -157,6 +165,7 @@ hash_client_ip = true
 # ip_hash_secret = ""  # empty derives from challenge.secret
 log_ip = "hash"
 retention = "30m"
+waf_events_ttl = "24h"
 # privacy_notice_url = "https://example.com/privacy"
 
 [ui]

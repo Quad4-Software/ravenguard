@@ -272,6 +272,7 @@ export interface SafeConfig {
   ratelimit: RateLimitSafe
   protect: ProtectSafe
   detect: DetectSafe
+  coraza: CorazaSafe
   challenge: ChallengeSafe
   ui: UISafe
   trust: TrustSafe
@@ -279,6 +280,13 @@ export interface SafeConfig {
   privacy: PrivacySafe
   logging: LoggingSafe
   qfeeds?: QFeedsSafe
+}
+
+export interface CorazaSafe {
+  enabled: boolean
+  loaded?: boolean
+  mode: string
+  paranoia: number
 }
 
 export interface ConfigView {
@@ -292,6 +300,7 @@ export function normalizeSafeConfig(raw: Partial<SafeConfig> | null | undefined)
   const rl = r.ratelimit ?? ({} as Partial<RateLimitSafe>)
   const pr = r.protect ?? ({} as Partial<ProtectSafe>)
   const dt = r.detect ?? ({} as Partial<DetectSafe>)
+  const cz = r.coraza ?? ({} as Partial<CorazaSafe>)
   const ps = dt.proxy_signals ?? ({} as Partial<ProxySignalsSafe>)
   const ch = r.challenge ?? ({} as Partial<ChallengeSafe>)
   const ui = r.ui ?? ({} as Partial<UISafe>)
@@ -352,6 +361,12 @@ export function normalizeSafeConfig(raw: Partial<SafeConfig> | null | undefined)
         ja4_header: String(ps.ja4_header ?? 'X-JA4'),
         low_score_points: Number(ps.low_score_points ?? 40),
       },
+    },
+    coraza: {
+      enabled: !!cz.enabled,
+      loaded: !!cz.loaded,
+      mode: String(cz.mode ?? 'block'),
+      paranoia: Number(cz.paranoia ?? 1),
     },
     challenge: {
       enabled: ch.enabled !== false,
@@ -464,6 +479,7 @@ export interface Route {
   strip_prefix: boolean
   priority: number
   access_policy_id?: string | null
+  openapi_schema_id?: string | null
   proxy_id?: string
   created_at: string
   updated_at: string
@@ -534,6 +550,15 @@ export interface AccessPolicy {
   updated_at: string
 }
 
+export interface APISchema {
+  id: string
+  name: string
+  mode: string
+  spec_text: string
+  created_at: string
+  updated_at: string
+}
+
 export interface CertStatus {
   hostname: string
   source?: string
@@ -555,6 +580,21 @@ export interface LogEntry {
   level: string
   message: string
   attrs?: Record<string, string>
+}
+
+export interface WAFEvent {
+  ray: string
+  action: string
+  reason: string
+  method: string
+  path: string
+  host: string
+  ua: string
+  ip_hash: string
+  bind_id: string
+  score: number
+  details?: Record<string, string>
+  created_at: string
 }
 
 export class APIError extends Error {
@@ -820,6 +860,25 @@ export const api = {
     },
   },
 
+  requests: {
+    list(limit = 50, proxyId = '') {
+      const params = new URLSearchParams()
+      if (limit) params.set('limit', String(limit))
+      if (proxyId) params.set('proxy_id', proxyId)
+      const qs = params.toString()
+      return request<{ events: WAFEvent[] }>('GET', `/requests${qs ? `?${qs}` : ''}`)
+    },
+    get(ray: string, proxyId = '') {
+      const params = new URLSearchParams()
+      if (proxyId) params.set('proxy_id', proxyId)
+      const qs = params.toString()
+      return request<{ event: WAFEvent }>(
+        'GET',
+        `/requests/${encodeURIComponent(ray)}${qs ? `?${qs}` : ''}`,
+      )
+    },
+  },
+
   audit: {
     list(cursor?: number, limit?: number) {
       const params = new URLSearchParams()
@@ -912,6 +971,24 @@ export const api = {
     },
     remove(id: string) {
       return request<{ ok: string }>('DELETE', `/access-policies/${encodeURIComponent(id)}`)
+    },
+  },
+
+  apiSchemas: {
+    list() {
+      return request<{ api_schemas: APISchema[] }>('GET', '/api-schemas')
+    },
+    create(body: Partial<APISchema>) {
+      return request<APISchema>('POST', '/api-schemas', body)
+    },
+    get(id: string) {
+      return request<APISchema>('GET', `/api-schemas/${encodeURIComponent(id)}`)
+    },
+    update(id: string, body: Partial<APISchema>) {
+      return request<APISchema>('PUT', `/api-schemas/${encodeURIComponent(id)}`, body)
+    },
+    remove(id: string) {
+      return request<{ ok: string }>('DELETE', `/api-schemas/${encodeURIComponent(id)}`)
     },
   },
 

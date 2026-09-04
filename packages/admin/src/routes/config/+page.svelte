@@ -290,6 +290,37 @@
     </fieldset>
 
     <fieldset>
+      <legend>Coraza</legend>
+      <div class="field checkbox-field">
+        <input id="cz-enabled" type="checkbox" bind:checked={form.coraza.enabled} disabled={!canWrite} />
+        <label for="cz-enabled">Enabled (rules load requires restart)</label>
+      </div>
+      {#if form.coraza.enabled && form.coraza.loaded === false}
+        <p class="hint">Rules are not loaded yet. Save config with Coraza enabled and restart the process.</p>
+      {/if}
+      <div class="field-row">
+        <div class="field">
+          <label for="cz-mode">Mode</label>
+          <select id="cz-mode" bind:value={form.coraza.mode} disabled={!canWrite}>
+            <option value="block">block</option>
+            <option value="detect">detect</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="cz-paranoia">Paranoia</label>
+          <input
+            id="cz-paranoia"
+            type="number"
+            min="1"
+            max="4"
+            bind:value={form.coraza.paranoia}
+            disabled={!canWrite}
+          />
+        </div>
+      </div>
+    </fieldset>
+
+    <fieldset>
       <legend>Detect</legend>
       <div class="field checkbox-field">
         <input id="dt-enabled" type="checkbox" bind:checked={form.detect.enabled} disabled={!canWrite} />

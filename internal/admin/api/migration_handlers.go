@@ -201,6 +201,9 @@ func (s *Server) stageRoutesOnDest(ctx context.Context, m *store.ServiceMigratio
 		return err
 	}
 	routes, _ := s.Store.ListRoutes()
+	upstreams, _ := s.Store.ListUpstreams()
+	policies, _ := s.Store.ListAccessPolicies()
+	allSchemas, _ := s.Store.ListAPISchemas()
 	var extra []store.RouteRow
 	for _, rid := range m.RouteIDs {
 		for _, rt := range routes {
@@ -219,6 +222,56 @@ func (s *Server) stageRoutesOnDest(ctx context.Context, m *store.ServiceMigratio
 	_ = json.Unmarshal(snap.Routes, &existing)
 	existing = append(existing, extra...)
 	snap.Routes, _ = json.Marshal(existing)
+
+	var existingUp []store.UpstreamRow
+	_ = json.Unmarshal(snap.Upstreams, &existingUp)
+	upByID := map[string]store.UpstreamRow{}
+	for _, u := range existingUp {
+		upByID[u.ID] = u
+	}
+	var existingPol []store.AccessPolicyRow
+	_ = json.Unmarshal(snap.AccessPolicies, &existingPol)
+	polByID := map[string]store.AccessPolicyRow{}
+	for _, p := range existingPol {
+		polByID[p.ID] = p
+	}
+	var existingSchema []store.APISchemaRow
+	_ = json.Unmarshal(snap.APISchemas, &existingSchema)
+	schemaByID := map[string]store.APISchemaRow{}
+	for _, sc := range existingSchema {
+		schemaByID[sc.ID] = sc
+	}
+	for _, rt := range extra {
+		if up, err := findUpstream(upstreams, rt.UpstreamID); err == nil {
+			upByID[up.ID] = up
+		}
+		if rt.AccessPolicyID != nil {
+			if p, err := findPolicy(policies, *rt.AccessPolicyID); err == nil {
+				polByID[p.ID] = p
+			}
+		}
+		if rt.OpenAPISchemaID != nil {
+			if sc, err := findSchema(allSchemas, *rt.OpenAPISchemaID); err == nil {
+				schemaByID[sc.ID] = sc
+			}
+		}
+	}
+	upList := make([]store.UpstreamRow, 0, len(upByID))
+	for _, u := range upByID {
+		upList = append(upList, u)
+	}
+	polList := make([]store.AccessPolicyRow, 0, len(polByID))
+	for _, p := range polByID {
+		polList = append(polList, p)
+	}
+	schemaList := make([]store.APISchemaRow, 0, len(schemaByID))
+	for _, sc := range schemaByID {
+		schemaList = append(schemaList, sc)
+	}
+	snap.Upstreams, _ = json.Marshal(upList)
+	snap.AccessPolicies, _ = json.Marshal(polList)
+	snap.APISchemas, _ = json.Marshal(schemaList)
+
 	state.Routing, _ = json.Marshal(snap)
 	rev, _ := s.Store.NextDesiredRevision(m.ToProxyID)
 	state.Revision = rev

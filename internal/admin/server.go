@@ -43,6 +43,8 @@ type Options struct {
 	CertStatus           func() any
 	CertRenew            func(ctx context.Context, host string) error
 	LogSnapshot          func(limit int, level string) any
+	RequestByRay         func(ray string) (any, bool)
+	RequestsRecent       func(limit int) any
 	ManualCertPut        func(hostname, certPEM, keyPEM string) error
 	ManualCertDelete     func(hostname string) error
 	CertDetail           func(hostname string) (any, error)
@@ -134,6 +136,12 @@ func New(opts Options) (*Server, error) {
 		if opts.LogSnapshot != nil {
 			opts.Runtime.LogSnapshot = opts.LogSnapshot
 		}
+		if opts.RequestByRay != nil {
+			opts.Runtime.RequestByRay = opts.RequestByRay
+		}
+		if opts.RequestsRecent != nil {
+			opts.Runtime.RequestsRecent = opts.RequestsRecent
+		}
 		if opts.ManualCertPut != nil {
 			opts.Runtime.ManualCertPut = opts.ManualCertPut
 		}
@@ -158,6 +166,8 @@ func New(opts Options) (*Server, error) {
 		CertStatus:       opts.CertStatus,
 		CertRenew:        opts.CertRenew,
 		LogSnapshot:      opts.LogSnapshot,
+		RequestByRay:     opts.RequestByRay,
+		RequestsRecent:   opts.RequestsRecent,
 		ManualCertPut:    opts.ManualCertPut,
 		ManualCertDelete: opts.ManualCertDelete,
 		CertDetail:       opts.CertDetail,

@@ -13,6 +13,7 @@ import (
 	"github.com/Quad4-Software/ravenguard/internal/admin/ops"
 	"github.com/Quad4-Software/ravenguard/internal/admin/rbac"
 	"github.com/Quad4-Software/ravenguard/internal/admin/store"
+	"github.com/Quad4-Software/ravenguard/internal/agentprotocol"
 	"github.com/Quad4-Software/ravenguard/internal/tlscerts"
 )
 
@@ -359,6 +360,119 @@ func (s *Server) handleAccessPolicyID(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (s *Server) handleAPISchemas(w http.ResponseWriter, r *http.Request) {
+	actor := actorFrom(r)
+	switch r.Method {
+	case http.MethodGet:
+		if !rbac.CanRead(actor.User.Role) {
+			writeErr(w, http.StatusForbidden, "forbidden")
+			return
+		}
+		list, err := s.Store.ListAPISchemas()
+		if err != nil {
+			writeErr(w, http.StatusInternalServerError, "list")
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"api_schemas": list})
+	case http.MethodPost:
+		if !rbac.CanWriteConfig(actor.User.Role) {
+			writeErr(w, http.StatusForbidden, "forbidden")
+			return
+		}
+		if !s.checkCSRF(w, r, actor) {
+			return
+		}
+		var body store.APISchemaRow
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			writeErr(w, http.StatusBadRequest, "invalid json")
+			return
+		}
+		p, err := s.Store.CreateAPISchema(body)
+		if err != nil {
+			writeErr(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		_ = s.reloadRouting()
+		s.audit(actor, r, "api_schemas.create", p.ID, p.Name)
+		writeJSON(w, http.StatusCreated, p)
+	default:
+		writeErr(w, http.StatusMethodNotAllowed, "method")
+	}
+}
+
+func (s *Server) handleAPISchemaID(w http.ResponseWriter, r *http.Request) {
+	actor := actorFrom(r)
+	id := pathID(r, "api-schemas")
+	if id == "" {
+		writeErr(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	switch r.Method {
+	case http.MethodGet:
+		if !rbac.CanRead(actor.User.Role) {
+			writeErr(w, http.StatusForbidden, "forbidden")
+			return
+		}
+		p, err := s.Store.GetAPISchema(id)
+		if errors.Is(err, store.ErrNotFound) {
+			writeErr(w, http.StatusNotFound, "not found")
+			return
+		}
+		if err != nil {
+			writeErr(w, http.StatusInternalServerError, "get")
+			return
+		}
+		writeJSON(w, http.StatusOK, p)
+	case http.MethodPut, http.MethodPatch:
+		if !rbac.CanWriteConfig(actor.User.Role) {
+			writeErr(w, http.StatusForbidden, "forbidden")
+			return
+		}
+		if !s.checkCSRF(w, r, actor) {
+			return
+		}
+		var body store.APISchemaRow
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			writeErr(w, http.StatusBadRequest, "invalid json")
+			return
+		}
+		p, err := s.Store.UpdateAPISchema(id, body)
+		if errors.Is(err, store.ErrNotFound) {
+			writeErr(w, http.StatusNotFound, "not found")
+			return
+		}
+		if err != nil {
+			writeErr(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		_ = s.reloadRouting()
+		s.audit(actor, r, "api_schemas.update", p.ID, p.Name)
+		writeJSON(w, http.StatusOK, p)
+	case http.MethodDelete:
+		if !rbac.CanWriteConfig(actor.User.Role) {
+			writeErr(w, http.StatusForbidden, "forbidden")
+			return
+		}
+		if !s.checkCSRF(w, r, actor) {
+			return
+		}
+		err := s.Store.DeleteAPISchema(id)
+		if errors.Is(err, store.ErrNotFound) {
+			writeErr(w, http.StatusNotFound, "not found")
+			return
+		}
+		if err != nil {
+			writeErr(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		_ = s.reloadRouting()
+		s.audit(actor, r, "api_schemas.delete", id, "")
+		writeJSON(w, http.StatusOK, map[string]string{"ok": "1"})
+	default:
+		writeErr(w, http.StatusMethodNotAllowed, "method")
+	}
+}
+
 func (s *Server) handleCerts(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		writeErr(w, http.StatusMethodNotAllowed, "method")
@@ -392,6 +506,99 @@ func (s *Server) handleLogs(w http.ResponseWriter, r *http.Request) {
 	level := r.URL.Query().Get("level")
 	entries := s.logSnapshot(limit, level)
 	writeJSON(w, http.StatusOK, map[string]any{"logs": entries})
+}
+
+func (s *Server) handleRequests(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeErr(w, http.StatusMethodNotAllowed, "method")
+		return
+	}
+	actor := actorFrom(r)
+	if !rbac.CanRead(actor.User.Role) {
+		writeErr(w, http.StatusForbidden, "forbidden")
+		return
+	}
+	limit := 50
+	if v := r.URL.Query().Get("limit"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			limit = n
+		}
+	}
+	proxyID := strings.TrimSpace(r.URL.Query().Get("proxy_id"))
+	if proxyID != "" && proxyID != "local" {
+		target := s.targetFor(proxyID)
+		env, err := target.Call(r.Context(), agentprotocol.OpRequestsRecent, agentprotocol.RequestsRecentPayload{Limit: limit})
+		if err != nil {
+			writeErr(w, http.StatusBadGateway, err.Error())
+			return
+		}
+		var events any
+		_ = json.Unmarshal(env.Payload, &events)
+		writeJSON(w, http.StatusOK, map[string]any{"events": events})
+		return
+	}
+	events := s.requestsRecent(limit)
+	writeJSON(w, http.StatusOK, map[string]any{"events": events})
+}
+
+func (s *Server) handleRequestRay(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeErr(w, http.StatusMethodNotAllowed, "method")
+		return
+	}
+	actor := actorFrom(r)
+	if !rbac.CanRead(actor.User.Role) {
+		writeErr(w, http.StatusForbidden, "forbidden")
+		return
+	}
+	ray := pathID(r, "requests")
+	if ray == "" {
+		writeErr(w, http.StatusBadRequest, "ray required")
+		return
+	}
+	proxyID := strings.TrimSpace(r.URL.Query().Get("proxy_id"))
+	if proxyID != "" && proxyID != "local" {
+		target := s.targetFor(proxyID)
+		env, err := target.Call(r.Context(), agentprotocol.OpRequestByRay, agentprotocol.RequestByRayPayload{Ray: ray})
+		if err != nil {
+			if strings.Contains(err.Error(), "not found") {
+				writeErr(w, http.StatusNotFound, "not found")
+				return
+			}
+			writeErr(w, http.StatusBadGateway, err.Error())
+			return
+		}
+		var event any
+		_ = json.Unmarshal(env.Payload, &event)
+		writeJSON(w, http.StatusOK, map[string]any{"event": event})
+		return
+	}
+	ev, ok := s.requestByRay(ray)
+	if !ok {
+		writeErr(w, http.StatusNotFound, "not found")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"event": ev})
+}
+
+func (s *Server) requestByRay(ray string) (any, bool) {
+	if s.RequestByRay != nil {
+		return s.RequestByRay(ray)
+	}
+	if s.Runtime != nil && s.Runtime.RequestByRay != nil {
+		return s.Runtime.RequestByRay(ray)
+	}
+	return nil, false
+}
+
+func (s *Server) requestsRecent(limit int) any {
+	if s.RequestsRecent != nil {
+		return s.RequestsRecent(limit)
+	}
+	if s.Runtime != nil && s.Runtime.RequestsRecent != nil {
+		return s.Runtime.RequestsRecent(limit)
+	}
+	return []any{}
 }
 
 func (s *Server) handleCertsPath(w http.ResponseWriter, r *http.Request) {

@@ -154,6 +154,26 @@ func (d *RuntimeDispatcher) Handle(ctx context.Context, op string, payload json.
 			return []any{}, nil
 		}
 		return rt.LogSnapshot(p.Limit, p.Level), nil
+	case agentprotocol.OpRequestByRay:
+		var p agentprotocol.RequestByRayPayload
+		if err := json.Unmarshal(payload, &p); err != nil {
+			return nil, err
+		}
+		if rt.RequestByRay == nil {
+			return nil, fmt.Errorf("request log unavailable")
+		}
+		ev, ok := rt.RequestByRay(p.Ray)
+		if !ok {
+			return nil, fmt.Errorf("not found")
+		}
+		return ev, nil
+	case agentprotocol.OpRequestsRecent:
+		var p agentprotocol.RequestsRecentPayload
+		_ = json.Unmarshal(payload, &p)
+		if rt.RequestsRecent == nil {
+			return []any{}, nil
+		}
+		return rt.RequestsRecent(p.Limit), nil
 	case agentprotocol.OpCertsStatus:
 		if rt.CertStatus == nil {
 			return map[string]any{"certs": []any{}}, nil

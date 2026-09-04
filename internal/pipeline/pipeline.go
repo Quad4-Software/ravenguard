@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -20,6 +21,7 @@ import (
 	"github.com/Quad4-Software/ravenguard/internal/blocklist"
 	"github.com/Quad4-Software/ravenguard/internal/challenge"
 	"github.com/Quad4-Software/ravenguard/internal/config"
+	"github.com/Quad4-Software/ravenguard/internal/corazaeng"
 	"github.com/Quad4-Software/ravenguard/internal/detect"
 	"github.com/Quad4-Software/ravenguard/internal/health"
 	"github.com/Quad4-Software/ravenguard/internal/iputil"
@@ -28,7 +30,9 @@ import (
 	"github.com/Quad4-Software/ravenguard/internal/qfeeds"
 	"github.com/Quad4-Software/ravenguard/internal/ratelimit"
 	"github.com/Quad4-Software/ravenguard/internal/rayid"
+	"github.com/Quad4-Software/ravenguard/internal/requestlog"
 	"github.com/Quad4-Software/ravenguard/internal/router"
+	"github.com/Quad4-Software/ravenguard/internal/schemagate"
 	"github.com/Quad4-Software/ravenguard/internal/ui"
 )
 
@@ -57,6 +61,9 @@ type Handler struct {
 	high404Action   uint8
 	writeCost       int
 	redirectHTTP    bool
+	reqLog          *requestlog.Logger
+	coraza          *corazaeng.Engine
+	schemas         *schemagate.Manager
 }
 
 const (
@@ -234,6 +241,66 @@ func (h *Handler) SetRedirectHTTP(enabled bool) {
 	h.mu.Unlock()
 }
 
+// SetRequestLog attaches the WAF deny event logger.
+func (h *Handler) SetRequestLog(l *requestlog.Logger) {
+	h.mu.Lock()
+	h.reqLog = l
+	h.mu.Unlock()
+}
+
+// SetCoraza attaches the optional Coraza engine.
+func (h *Handler) SetCoraza(e *corazaeng.Engine) {
+	h.mu.Lock()
+	h.coraza = e
+	h.mu.Unlock()
+}
+
+// SetSchemaGate attaches the OpenAPI schema manager.
+func (h *Handler) SetSchemaGate(m *schemagate.Manager) {
+	h.mu.Lock()
+	h.schemas = m
+	h.mu.Unlock()
+}
+
+func (h *Handler) recordEvent(r *http.Request, ray, bindID, ipStr, host, ua, action, reason string, score int, details map[string]string) {
+	h.mu.RLock()
+	l := h.reqLog
+	h.mu.RUnlock()
+	if l == nil {
+		return
+	}
+	method, path := "", ""
+	if r != nil {
+		method = r.Method
+		if r.URL != nil {
+			path = r.URL.Path
+		}
+	}
+	l.Record(requestlog.Event{
+		Ray:     ray,
+		Action:  action,
+		Reason:  reason,
+		Method:  method,
+		Path:    path,
+		Host:    host,
+		UA:      ua,
+		IPHash:  h.logIP(ipStr),
+		BindID:  bindID,
+		Score:   score,
+		Details: details,
+	})
+}
+
+func (h *Handler) emitBlock(w http.ResponseWriter, r *http.Request, ray, bindID, ipStr, host, ua, reason string, score int, details map[string]string) {
+	h.recordEvent(r, ray, bindID, ipStr, host, ua, requestlog.ActionBlock, reason, score, details)
+	h.pages.RenderBlock(w, ray, reason)
+}
+
+func (h *Handler) emitRateLimit(w http.ResponseWriter, r *http.Request, ray, bindID, ipStr, host, ua string) {
+	h.recordEvent(r, ray, bindID, ipStr, host, ua, requestlog.ActionRateLimit, "Rate limited", 0, nil)
+	h.pages.RenderRateLimit(w, ray)
+}
+
 // ApplyConfig updates live-tunable config fields from the admin plane.
 func (h *Handler) ApplyConfig(cfg config.Config) {
 	h.mu.Lock()
@@ -409,16 +476,22 @@ func (h *Handler) guard(w http.ResponseWriter, r *http.Request) {
 
 	if h.prot != nil && h.prot.Enabled() {
 		if reason := h.prot.CheckRequestSize(r); reason != "" {
-			h.pages.RenderBlock(w, ray, reason)
+			host := stripPort(r.Host)
+			ua := r.Header.Get("User-Agent")
+			h.emitBlock(w, r, ray, bindID, ipStr, host, ua, reason, 0, nil)
 			return
 		}
 		h.prot.LimitBody(w, r)
 		if h.prot.Banned(bindID) {
-			h.pages.RenderBlock(w, ray, "Temporarily banned")
+			host := stripPort(r.Host)
+			ua := r.Header.Get("User-Agent")
+			h.emitBlock(w, r, ray, bindID, ipStr, host, ua, "Temporarily banned", 0, nil)
 			return
 		}
 		if !h.prot.Acquire(bindID) {
-			h.pages.RenderRateLimit(w, ray)
+			host := stripPort(r.Host)
+			ua := r.Header.Get("User-Agent")
+			h.emitRateLimit(w, r, ray, bindID, ipStr, host, ua)
 			return
 		}
 		defer h.prot.Release(bindID)
@@ -430,26 +503,26 @@ func (h *Handler) guard(w http.ResponseWriter, r *http.Request) {
 
 	if h.lists != nil {
 		if h.lists.IPBlocked(clientIP) {
-			h.pages.RenderBlock(w, ray, "IP blocked")
+			h.emitBlock(w, r, ray, bindID, ipStr, host, ua, "IP blocked", 0, nil)
 			return
 		}
 		if h.lists.DNSBlocked(host) {
-			h.pages.RenderBlock(w, ray, "Host blocked")
+			h.emitBlock(w, r, ray, bindID, ipStr, host, ua, "Host blocked", 0, nil)
 			return
 		}
 		if h.lists.UABlocked(ua) {
-			h.pages.RenderBlock(w, ray, "Client blocked")
+			h.emitBlock(w, r, ray, bindID, ipStr, host, ua, "Client blocked", 0, nil)
 			return
 		}
 	}
 
 	if h.feeds != nil {
 		if h.feeds.IPBlocked(clientIP) {
-			h.pages.RenderBlock(w, ray, "Threat feed match")
+			h.emitBlock(w, r, ray, bindID, ipStr, host, ua, "Threat feed match", 0, nil)
 			return
 		}
 		if h.feeds.DomainBlocked(host) {
-			h.pages.RenderBlock(w, ray, "Threat feed match")
+			h.emitBlock(w, r, ray, bindID, ipStr, host, ua, "Threat feed match", 0, nil)
 			return
 		}
 	}
@@ -459,17 +532,43 @@ func (h *Handler) guard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if attack := detect.AttackMatch(r); attack != "" {
-		slog.Debug("attack signature", "ray", ray, "ip", h.logIP(ipStr), "reason", attack)
-		if h.prot == nil || !h.prot.Enabled() || h.prot.AttackBlock() {
-			if h.prot != nil && h.prot.Enabled() {
-				h.prot.BanNow(bindID)
+	skipAttack := false
+	if h.coraza != nil && h.coraza.Enabled() {
+		cr := h.coraza.Evaluate(r)
+		if cr.Matched {
+			details := map[string]string{
+				"rule_id": strconv.Itoa(cr.RuleID),
+				"action":  cr.Action,
+				"data":    cr.Data,
 			}
-			h.pages.RenderBlock(w, ray, "Attack pattern blocked")
-			return
+			if cr.ShouldBlock {
+				if h.prot != nil && h.prot.Enabled() {
+					h.prot.BanNow(bindID)
+				}
+				h.recordEvent(r, ray, bindID, ipStr, host, ua, requestlog.ActionCoraza, "Coraza rule matched", 0, details)
+				h.pages.RenderBlock(w, ray, "Request blocked by WAF rules")
+				return
+			}
+			h.recordEvent(r, ray, bindID, ipStr, host, ua, requestlog.ActionCoraza, "Coraza detect match", 0, details)
 		}
-		if h.prot != nil {
-			h.prot.Strike(bindID)
+		if strings.EqualFold(h.coraza.Mode(), "block") {
+			skipAttack = true
+		}
+	}
+
+	if !skipAttack {
+		if attack := detect.AttackMatch(r); attack != "" {
+			slog.Debug("attack signature", "ray", ray, "ip", h.logIP(ipStr), "reason", attack)
+			if h.prot == nil || !h.prot.Enabled() || h.prot.AttackBlock() {
+				if h.prot != nil && h.prot.Enabled() {
+					h.prot.BanNow(bindID)
+				}
+				h.emitBlock(w, r, ray, bindID, ipStr, host, ua, "Attack pattern blocked", 0, map[string]string{"attack": attack})
+				return
+			}
+			if h.prot != nil {
+				h.prot.Strike(bindID)
+			}
 		}
 	}
 
@@ -483,6 +582,7 @@ func (h *Handler) guard(w http.ResponseWriter, r *http.Request) {
 				h.prot.Strike(bindID)
 			}
 			if isWebSocketUpgrade(r) {
+				h.recordEvent(r, ray, bindID, ipStr, host, ua, requestlog.ActionRateLimit, "Rate limited", 0, nil)
 				http.Error(w, "rate limited", http.StatusTooManyRequests)
 				return
 			}
@@ -490,17 +590,21 @@ func (h *Handler) guard(w http.ResponseWriter, r *http.Request) {
 				h.serveChallenge(w, r, ray, bindID, challenge.RiskElevated)
 				return
 			}
-			h.pages.RenderRateLimit(w, ray)
+			h.emitRateLimit(w, r, ray, bindID, ipStr, host, ua)
 			return
 		}
 	}
 
 	if isWebSocketUpgrade(r) {
 		if !allowed && cfg.Challenge.Enabled && h.chal != nil && !h.chal.HasClearance(r, bindID) {
+			h.recordEvent(r, ray, bindID, ipStr, host, ua, requestlog.ActionChallenge, "clearance required", 0, nil)
 			http.Error(w, "clearance required", http.StatusForbidden)
 			return
 		}
 		if !h.checkAccess(w, r, ray, bindID, clientIP, true) {
+			return
+		}
+		if !h.checkOpenAPI(w, r, ray, bindID, ipStr, host, ua) {
 			return
 		}
 		h.proxy(w, r, ray, clientIP, ipStr, bindID)
@@ -516,14 +620,15 @@ func (h *Handler) guard(w http.ResponseWriter, r *http.Request) {
 				if h.prot != nil && h.prot.Enabled() {
 					h.prot.BanNow(bindID)
 				}
-				h.pages.RenderBlock(w, ray, "Too many failed challenges")
+				h.emitBlock(w, r, ray, bindID, ipStr, host, ua, "Too many failed challenges", 0, nil)
 				return
 			}
 		}
-		res := detect.Score(r, h.detectCfg)
+		res := detect.ScoreDebug(r, h.detectCfg)
 		if h.beh != nil {
 			br := h.beh.Score(bindID)
 			res.Score += br.Score
+			res.Reasons = append(res.Reasons, br.Reasons...)
 		}
 		detectScore = res.Score
 		if res.Score > 0 {
@@ -533,7 +638,11 @@ func (h *Handler) guard(w http.ResponseWriter, r *http.Request) {
 			if h.prot != nil && h.prot.Enabled() {
 				h.prot.Strike(bindID)
 			}
-			h.pages.RenderBlock(w, ray, "Request blocked")
+			details := map[string]string{}
+			if len(res.Reasons) > 0 {
+				details["reasons"] = strings.Join(res.Reasons, ",")
+			}
+			h.emitBlock(w, r, ray, bindID, ipStr, host, ua, "Request blocked", res.Score, details)
 			return
 		}
 		if res.Score >= cfg.Detect.ChallengeScore {
@@ -545,7 +654,7 @@ func (h *Handler) guard(w http.ResponseWriter, r *http.Request) {
 				if h.prot != nil && h.prot.Enabled() {
 					h.prot.Strike(bindID)
 				}
-				h.pages.RenderBlock(w, ray, "Too many missing pages")
+				h.emitBlock(w, r, ray, bindID, ipStr, host, ua, "Too many missing pages", 0, nil)
 				return
 			case high404Off:
 			default:
@@ -557,6 +666,9 @@ func (h *Handler) guard(w http.ResponseWriter, r *http.Request) {
 	if !allowed && cfg.Challenge.Enabled && h.chal != nil {
 		if h.chal.HasClearance(r, bindID) {
 			if !h.checkAccess(w, r, ray, bindID, clientIP, false) {
+				return
+			}
+			if !h.checkOpenAPI(w, r, ray, bindID, ipStr, host, ua) {
 				return
 			}
 			h.proxy(w, r, ray, clientIP, ipStr, bindID)
@@ -576,7 +688,40 @@ func (h *Handler) guard(w http.ResponseWriter, r *http.Request) {
 	if !h.checkAccess(w, r, ray, bindID, clientIP, false) {
 		return
 	}
+	if !h.checkOpenAPI(w, r, ray, bindID, ipStr, host, ua) {
+		return
+	}
 	h.proxy(w, r, ray, clientIP, ipStr, bindID)
+}
+
+func (h *Handler) checkOpenAPI(w http.ResponseWriter, r *http.Request, ray, bindID, ipStr, host, ua string) bool {
+	h.mu.RLock()
+	schemas := h.schemas
+	routes := h.routes
+	h.mu.RUnlock()
+	if schemas == nil || routes == nil {
+		return true
+	}
+	m, ok := routes.Lookup(r)
+	if !ok || m.Route.OpenAPISchemaID == "" {
+		return true
+	}
+	res := schemas.Validate(r, m.Route.OpenAPISchemaID)
+	if res.OK {
+		return true
+	}
+	details := map[string]string{"schema_id": res.SchemaID}
+	if res.ShouldBlock {
+		h.recordEvent(r, ray, bindID, ipStr, host, ua, requestlog.ActionOpenAPI, res.Reason, 0, details)
+		if isWebSocketUpgrade(r) {
+			http.Error(w, "openapi schema violation", http.StatusForbidden)
+			return false
+		}
+		h.pages.RenderBlock(w, ray, "OpenAPI schema violation")
+		return false
+	}
+	h.recordEvent(r, ray, bindID, ipStr, host, ua, requestlog.ActionOpenAPI, res.Reason, 0, details)
+	return true
 }
 
 func (h *Handler) upstreamHealthy(r *http.Request) bool {
@@ -614,11 +759,20 @@ func (h *Handler) checkAccess(w http.ResponseWriter, r *http.Request, ray, bindI
 	if res.OK {
 		return true
 	}
+	ipStr := ""
+	if clientIP != nil {
+		ipStr = clientIP.String()
+	}
+	host := stripPort(r.Host)
+	ua := r.Header.Get("User-Agent")
+	details := map[string]string{"policy_id": policyID}
 	if websocket {
+		h.recordEvent(r, ray, bindID, ipStr, host, ua, requestlog.ActionAccess, res.Reason, 0, details)
 		http.Error(w, res.Reason, res.Status)
 		return false
 	}
 	if res.NeedForm {
+		h.recordEvent(r, ray, bindID, ipStr, host, ua, requestlog.ActionAccess, "access form required", 0, details)
 		h.setRayHeader(w, ray)
 		action := h.config().Challenge.PathPrefix + "/access"
 		if h.pages != nil {
@@ -640,6 +794,7 @@ func (h *Handler) checkAccess(w http.ResponseWriter, r *http.Request, ray, bindI
 		}
 		return false
 	}
+	h.recordEvent(r, ray, bindID, ipStr, host, ua, requestlog.ActionAccess, res.Reason, 0, details)
 	h.pages.RenderBlock(w, ray, res.Reason)
 	return false
 }
@@ -766,17 +921,24 @@ func isWebSocketUpgrade(r *http.Request) bool {
 	return false
 }
 
-func (h *Handler) serveChallenge(w http.ResponseWriter, _ *http.Request, ray, bindID string, risk challenge.RiskLevel) {
+func (h *Handler) serveChallenge(w http.ResponseWriter, r *http.Request, ray, bindID string, risk challenge.RiskLevel) {
 	if h.chal == nil {
 		h.pages.RenderError(w, ray, "Challenge unavailable", "Browser challenge is not configured on this edge.", http.StatusInternalServerError)
 		return
 	}
+	ipStr := ""
+	if clientIP := h.resolveClientIP(r); clientIP != nil {
+		ipStr = clientIP.String()
+	}
+	host := stripPort(r.Host)
+	ua := r.Header.Get("User-Agent")
 	mode := h.cfg.Challenge.Mode
 	prevRisk, prevGate := h.chal.TakeChallenge(bindID)
 	risk = max(prevRisk, challenge.FloorRiskForMode(mode, risk))
 	gate := challenge.ResolveGate(mode, risk, prevGate, h.cfg.Challenge.Captcha.Enabled)
 	h.chal.RememberChallenge(bindID, risk, gate)
 	captchaOn := h.cfg.Challenge.Captcha.Enabled && gate == challenge.GateInteractive
+	h.recordEvent(r, ray, bindID, ipStr, host, ua, requestlog.ActionChallenge, "Challenge required", 0, map[string]string{"gate": gate})
 	h.pages.ServeChallenge(w, ui.Data{
 		StatusText:       h.cfg.UI.StatusText,
 		RayID:            ray,
@@ -865,6 +1027,21 @@ func (h *Handler) handleChallengePOST(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
+	if rayFromBody := strings.TrimSpace(body.Ray); rayFromBody != "" && rayFromBody != ray {
+		// Allow challenge UI to continue the issued Ray, but refuse spoofing a Ray
+		// already bound to a different client.
+		if h.reqLog != nil {
+			if existing, ok := h.reqLog.GetByRay(rayFromBody); ok && existing.BindID != "" && existing.BindID != bindID {
+				slog.Debug("challenge ray spoof ignored", "ray", ray, "spoof", rayFromBody)
+			} else {
+				ray = rayFromBody
+				h.setRayHeader(w, ray)
+			}
+		} else {
+			ray = rayFromBody
+			h.setRayHeader(w, ray)
+		}
+	}
 
 	var (
 		diff int
@@ -919,10 +1096,17 @@ func (h *Handler) handleChallengePOST(w http.ResponseWriter, r *http.Request) {
 			}
 			h.chal.RememberChallenge(bindID, challenge.RiskHigh, challenge.GateInteractive)
 			slog.Debug("challenge env refuse", "ray", ray, "ip", h.logIP(ipStr), "reasons", verdict.Reasons)
+			host := stripPort(r.Host)
+			ua := r.Header.Get("User-Agent")
 			if (h.beh != nil && h.beh.StrikesExceeded(bindID)) || (h.prot != nil && h.prot.Banned(bindID)) {
-				h.pages.RenderBlock(w, ray, "Too many failed challenges")
+				h.emitBlock(w, r, ray, bindID, ipStr, host, ua, "Too many failed challenges", 0, map[string]string{
+					"env": strings.Join(verdict.Reasons, ","),
+				})
 				return
 			}
+			h.recordEvent(r, ray, bindID, ipStr, host, ua, requestlog.ActionBlock, "challenge env refuse", 0, map[string]string{
+				"env": strings.Join(verdict.Reasons, ","),
+			})
 			http.Error(w, challenge.FormatEnvReasons(verdict.Reasons), http.StatusForbidden)
 			return
 		}

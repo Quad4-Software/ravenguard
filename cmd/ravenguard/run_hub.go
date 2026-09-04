@@ -21,6 +21,7 @@ import (
 	"github.com/Quad4-Software/ravenguard/internal/logging"
 	"github.com/Quad4-Software/ravenguard/internal/router"
 	"github.com/Quad4-Software/ravenguard/internal/sandbox"
+	"github.com/Quad4-Software/ravenguard/internal/schemagate"
 )
 
 func runHub(cfg config.Config) {
@@ -117,7 +118,7 @@ func stripHostPortListen(addr string) string {
 	return addr
 }
 
-func applyRoutingSnapshot(routeTable *router.Table, accessMgr *access.Manager, raw json.RawMessage) error {
+func applyRoutingSnapshot(routeTable *router.Table, accessMgr *access.Manager, schemaMgr *schemagate.Manager, raw json.RawMessage) error {
 	if len(raw) == 0 || routeTable == nil {
 		return nil
 	}
@@ -127,15 +128,16 @@ func applyRoutingSnapshot(routeTable *router.Table, accessMgr *access.Manager, r
 	}
 	var ups []router.Upstream
 	var rts []struct {
-		ID             string   `json:"id"`
-		Name           string   `json:"name"`
-		Enabled        bool     `json:"enabled"`
-		Hosts          []string `json:"hosts"`
-		PathPrefix     string   `json:"path_prefix"`
-		UpstreamID     string   `json:"upstream_id"`
-		StripPrefix    bool     `json:"strip_prefix"`
-		Priority       int      `json:"priority"`
-		AccessPolicyID *string  `json:"access_policy_id"`
+		ID              string   `json:"id"`
+		Name            string   `json:"name"`
+		Enabled         bool     `json:"enabled"`
+		Hosts           []string `json:"hosts"`
+		PathPrefix      string   `json:"path_prefix"`
+		UpstreamID      string   `json:"upstream_id"`
+		StripPrefix     bool     `json:"strip_prefix"`
+		Priority        int      `json:"priority"`
+		AccessPolicyID  *string  `json:"access_policy_id"`
+		OpenAPISchemaID *string  `json:"openapi_schema_id"`
 	}
 	var polRows []struct {
 		ID        string        `json:"id"`
@@ -144,9 +146,29 @@ func applyRoutingSnapshot(routeTable *router.Table, accessMgr *access.Manager, r
 		Rules     []access.Rule `json:"rules"`
 		CookieTTL string        `json:"cookie_ttl"`
 	}
+	var schemaRows []struct {
+		ID       string `json:"id"`
+		Name     string `json:"name"`
+		Mode     string `json:"mode"`
+		SpecText string `json:"spec_text"`
+	}
 	_ = json.Unmarshal(snap.Upstreams, &ups)
 	_ = json.Unmarshal(snap.Routes, &rts)
 	_ = json.Unmarshal(snap.AccessPolicies, &polRows)
+	_ = json.Unmarshal(snap.APISchemas, &schemaRows)
+
+	// Load schemas before routes so OpenAPI refs never fail-open during swap.
+	if schemaMgr != nil {
+		sg := make([]schemagate.Schema, 0, len(schemaRows))
+		for _, s := range schemaRows {
+			sg = append(sg, schemagate.Schema{
+				ID: s.ID, Name: s.Name, Mode: s.Mode, SpecText: s.SpecText,
+			})
+		}
+		if err := schemaMgr.Replace(sg); err != nil {
+			return err
+		}
+	}
 
 	rr := make([]router.Route, 0, len(rts))
 	for _, rt := range rts {
@@ -154,11 +176,15 @@ func applyRoutingSnapshot(routeTable *router.Table, accessMgr *access.Manager, r
 		if rt.AccessPolicyID != nil {
 			policyID = *rt.AccessPolicyID
 		}
+		schemaID := ""
+		if rt.OpenAPISchemaID != nil {
+			schemaID = *rt.OpenAPISchemaID
+		}
 		rr = append(rr, router.Route{
 			ID: rt.ID, Name: rt.Name, Enabled: rt.Enabled, Hosts: rt.Hosts,
 			PathPrefix: rt.PathPrefix, UpstreamID: rt.UpstreamID,
 			StripPrefix: rt.StripPrefix, Priority: rt.Priority,
-			AccessPolicyID: policyID,
+			AccessPolicyID: policyID, OpenAPISchemaID: schemaID,
 		})
 	}
 	if err := routeTable.Replace(ups, rr); err != nil {

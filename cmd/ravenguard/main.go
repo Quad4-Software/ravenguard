@@ -27,6 +27,7 @@ import (
 	"github.com/Quad4-Software/ravenguard/internal/blocklist"
 	"github.com/Quad4-Software/ravenguard/internal/challenge"
 	"github.com/Quad4-Software/ravenguard/internal/config"
+	"github.com/Quad4-Software/ravenguard/internal/corazaeng"
 	"github.com/Quad4-Software/ravenguard/internal/detect"
 	"github.com/Quad4-Software/ravenguard/internal/health"
 	"github.com/Quad4-Software/ravenguard/internal/iputil"
@@ -38,8 +39,10 @@ import (
 	"github.com/Quad4-Software/ravenguard/internal/proxy"
 	"github.com/Quad4-Software/ravenguard/internal/qfeeds"
 	"github.com/Quad4-Software/ravenguard/internal/ratelimit"
+	"github.com/Quad4-Software/ravenguard/internal/requestlog"
 	"github.com/Quad4-Software/ravenguard/internal/router"
 	"github.com/Quad4-Software/ravenguard/internal/sandbox"
+	"github.com/Quad4-Software/ravenguard/internal/schemagate"
 	rgsentry "github.com/Quad4-Software/ravenguard/internal/sentry"
 	"github.com/Quad4-Software/ravenguard/internal/tlsacme"
 	"github.com/Quad4-Software/ravenguard/internal/tlscerts"
@@ -284,11 +287,60 @@ func runEdge(cfg config.Config, proxyOnly bool, configPath string, sentryRep *rg
 	if cfg.Stealth.AccessCookieName != "" {
 		accessMgr.CookieName = cfg.Stealth.AccessCookieName
 	}
+	schemaMgr := schemagate.NewManager()
 
 	pipe := pipeline.New(cfg, lists, feeds, limiter, chal, pages, up, trusted, nf, hc, priv, beh, prot)
 	pipe.SetRouter(routeTable)
 	pipe.SetAccess(accessMgr)
 	pipe.SetAllowlists(allows)
+	pipe.SetSchemaGate(schemaMgr)
+	reqLog := requestlog.New(2000)
+	pipe.SetRequestLog(reqLog)
+
+	var corazaEng *corazaeng.Engine
+	{
+		ce, cerr := corazaeng.New(cfg.Coraza)
+		if cerr != nil {
+			slog.Error("coraza", "err", cerr)
+			os.Exit(1)
+		}
+		corazaEng = ce
+		pipe.SetCoraza(corazaEng)
+	}
+
+	bindRequestLog := func(rt *ops.Runtime) {
+		if rt == nil {
+			return
+		}
+		rt.RequestByRay = func(ray string) (any, bool) {
+			e, ok := reqLog.GetByRay(ray)
+			if !ok {
+				return nil, false
+			}
+			return e, true
+		}
+		rt.RequestsRecent = func(limit int) any {
+			return reqLog.RecentPreferDB(limit)
+		}
+	}
+	startRequestLogPurge := func(ctx context.Context) {
+		ttl := cfg.Privacy.WAFEventsTTL.Duration
+		if ttl <= 0 {
+			ttl = 24 * time.Hour
+		}
+		go func() {
+			t := time.NewTicker(time.Hour)
+			defer t.Stop()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-t.C:
+					reqLog.PurgeOlderThan(time.Now().UTC().Add(-ttl))
+				}
+			}
+		}()
+	}
 
 	var acmeMgr *tlsacme.Manager
 	acmeStorage := ""
@@ -457,13 +509,31 @@ func runEdge(cfg config.Config, proxyOnly bool, configPath string, sentryRep *rg
 			if rt.AccessPolicyID != nil {
 				policyID = *rt.AccessPolicyID
 			}
+			schemaID := ""
+			if rt.OpenAPISchemaID != nil {
+				schemaID = *rt.OpenAPISchemaID
+			}
 			rr = append(rr, router.Route{
 				ID: rt.ID, Name: rt.Name, Enabled: rt.Enabled, Hosts: rt.Hosts,
 				PathPrefix: rt.PathPrefix, UpstreamID: rt.UpstreamID,
 				StripPrefix: rt.StripPrefix, Priority: rt.Priority,
-				AccessPolicyID: policyID,
+				AccessPolicyID: policyID, OpenAPISchemaID: schemaID,
 			})
 			hosts = append(hosts, rt.Hosts...)
+		}
+		schemas, serr := st.ListAPISchemas()
+		if serr != nil {
+			return serr
+		}
+		sg := make([]schemagate.Schema, 0, len(schemas))
+		for _, s := range schemas {
+			sg = append(sg, schemagate.Schema{
+				ID: s.ID, Name: s.Name, Mode: s.Mode, SpecText: s.SpecText,
+			})
+		}
+		// Schemas before routes so OpenAPI refs never fail-open during swap.
+		if err := schemaMgr.Replace(sg); err != nil {
+			return err
 		}
 		if err := routeTable.Replace(ru, rr); err != nil {
 			return err
@@ -498,7 +568,10 @@ func runEdge(cfg config.Config, proxyOnly bool, configPath string, sentryRep *rg
 		rt = ops.NewRuntime(cfg, prot, lists, limiter, hc, feeds, chal)
 		rt.RootCtx = ctx
 		rt.SetPipeline(pipe)
+		rt.Coraza = corazaEng
 		rt.StartSampler(ctx)
+		bindRequestLog(rt)
+		startRequestLogPurge(ctx)
 		secureCookie := admin.CookieSecure(cfg.Admin.CookieSecure, cfg.Admin.HTTPS != "" || cfg.Listen.HTTPS != "" || cfg.Listen.QUIC != "")
 		reloadFn := func() error {
 			if adminSrv == nil {
@@ -540,6 +613,16 @@ func runEdge(cfg config.Config, proxyOnly bool, configPath string, sentryRep *rg
 					return []logging.Entry{}
 				}
 				return ring.Snapshot(limit, level)
+			},
+			RequestByRay: func(ray string) (any, bool) {
+				e, ok := reqLog.GetByRay(ray)
+				if !ok {
+					return nil, false
+				}
+				return e, true
+			},
+			RequestsRecent: func(limit int) any {
+				return reqLog.RecentPreferDB(limit)
 			},
 			CertStatus: func() any {
 				return mergeCertDetails(manualStore, acmeMgr)
@@ -584,6 +667,7 @@ func runEdge(cfg config.Config, proxyOnly bool, configPath string, sentryRep *rg
 			slog.Error("admin", "err", err)
 			os.Exit(1)
 		}
+		reqLog.SetPersister(adminSrv.Store())
 		rt.CertExport = func(host string) (string, string, error) {
 			if manualStore == nil {
 				return "", "", ops.ErrManualCertUnavailable
@@ -618,7 +702,10 @@ func runEdge(cfg config.Config, proxyOnly bool, configPath string, sentryRep *rg
 			rt = ops.NewRuntime(cfg, prot, lists, limiter, hc, feeds, chal)
 			rt.RootCtx = ctx
 			rt.SetPipeline(pipe)
+			rt.Coraza = corazaEng
 			rt.StartSampler(ctx)
+			bindRequestLog(rt)
+			startRequestLogPurge(ctx)
 			rt.LogSnapshot = func(limit int, level string) any {
 				ring := logging.DefaultRing()
 				if ring == nil {
@@ -695,7 +782,7 @@ func runEdge(cfg config.Config, proxyOnly bool, configPath string, sentryRep *rg
 					return err
 				}
 			}
-			if err := applyRoutingSnapshot(routeTable, accessMgr, state.Routing); err != nil {
+			if err := applyRoutingSnapshot(routeTable, accessMgr, schemaMgr, state.Routing); err != nil {
 				return err
 			}
 			if acmeMgr != nil && len(state.ACMEHosts) > 0 {
@@ -723,7 +810,7 @@ func runEdge(cfg config.Config, proxyOnly bool, configPath string, sentryRep *rg
 			Dispatcher: &ops.RuntimeDispatcher{
 				Runtime: rt,
 				ApplyRouting: func(c context.Context, raw json.RawMessage) error {
-					return applyRoutingSnapshot(routeTable, accessMgr, raw)
+					return applyRoutingSnapshot(routeTable, accessMgr, schemaMgr, raw)
 				},
 				ApplyDesired: applyDesired,
 			},

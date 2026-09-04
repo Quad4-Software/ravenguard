@@ -38,6 +38,8 @@ type Server struct {
 	CertStatus       func() any
 	CertRenew        func(ctx context.Context, host string) error
 	LogSnapshot      func(limit int, level string) any
+	RequestByRay     func(ray string) (any, bool)
+	RequestsRecent   func(limit int) any
 	ManualCertPut    func(hostname, certPEM, keyPEM string) error
 	ManualCertDelete func(hostname string) error
 	CertDetail       func(hostname string) (any, error)
@@ -95,9 +97,13 @@ func (s *Server) Mount(mux *http.ServeMux, base string) {
 	mux.HandleFunc(api+"/routes/", s.auth(s.handleRouteID))
 	mux.HandleFunc(api+"/access-policies", s.auth(s.handleAccessPolicies))
 	mux.HandleFunc(api+"/access-policies/", s.auth(s.handleAccessPolicyID))
+	mux.HandleFunc(api+"/api-schemas", s.auth(s.handleAPISchemas))
+	mux.HandleFunc(api+"/api-schemas/", s.auth(s.handleAPISchemaID))
 	mux.HandleFunc(api+"/certs", s.auth(s.handleCerts))
 	mux.HandleFunc(api+"/certs/", s.auth(s.handleCertsPath))
 	mux.HandleFunc(api+"/logs", s.auth(s.handleLogs))
+	mux.HandleFunc(api+"/requests", s.auth(s.handleRequests))
+	mux.HandleFunc(api+"/requests/", s.auth(s.handleRequestRay))
 	mux.HandleFunc(api+"/proxies", s.auth(s.csrf(s.handleProxies)))
 	mux.HandleFunc(api+"/proxies/", s.auth(s.csrf(s.handleProxyID)))
 	mux.HandleFunc(api+"/migrations", s.auth(s.csrf(s.handleMigrations)))

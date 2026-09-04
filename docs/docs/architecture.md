@@ -33,11 +33,19 @@ Controls run at the HTTP application layer. Volumetric DDoS mitigation belongs a
 1. **ACME HTTP-01** at `/.well-known/acme-challenge/` (bypasses WAF)
 2. **Optional HTTP to HTTPS redirect** when edge ACME is enabled
 3. **Client IP** from `RemoteAddr`, trusted `X-Real-IP`, an `X-Forwarded-For` walk, or PROXY protocol
-4. **IP / DNS / UA blocklists** loaded from files and reloaded on an interval
-5. **Optional Q-Feeds cache** for malware IP and domain entries
-6. **Rate limit** keyed by privacy client identity (hashed IP by default). Write methods cost more
-7. **Protect** size limits, concurrency caps, attack signatures, and temp bans
-8. **Detect** HTTP heuristics, short-window behavior, and optional proxy bot-score headers (skipped for WebSocket upgrades and allowlisted clients)
+4. **Protect** size limits, concurrency caps, and temp bans (body size wrap)
+5. **IP / DNS / UA blocklists** loaded from files and reloaded on an interval
+6. **Optional Q-Feeds cache** for malware IP and domain entries
+7. **Optional Coraza** (OWASP CRS) request inspection. When Coraza is enabled in `block` mode, builtin attack signatures are skipped
+8. **Builtin attack signatures** on path/query (when Coraza is off or in detect mode)
+9. **Rate limit** keyed by privacy client identity (hashed IP by default). Write methods cost more
+10. **Detect** HTTP heuristics, short-window behavior, and optional proxy bot-score headers (skipped for WebSocket upgrades and allowlisted clients)
+11. **Challenge** PoW gate when risk thresholds require it
+12. **Access policies** per matched route
+13. **OpenAPI schema gate** when a schema is attached to the route
+14. **Proxy** to upstream
+
+Deny outcomes (block, challenge, rate limit, Coraza, OpenAPI, access) are recorded under the response Ray ID for admin lookup.
 9. **Challenge or block** (skipped when the client matches an IP, User-Agent, or header allowlist)
 10. **Access policy** (password, PIN, IP allowlist, header, User-Agent) when attached to the matched route
 11. **Route** by host + path prefix to an upstream, otherwise the default TOML upstream

@@ -25,6 +25,8 @@ Overlay        -> ravenguard hub
 - Host and path routing to multiple upstreams
 - Hub and proxy fleet with live admin cutover
 - Blocklists, rate limits, attack filters, and temp bans
+- Optional Coraza / OWASP CRS engine and per-route OpenAPI schema gates
+- Ray ID request lookup in the admin UI
 - Scanner and crawler detection with optional proof-of-work challenge
 - Per-route access gates (password, PIN, IP, header, User-Agent)
 - Optional admin control plane with embedded SPA

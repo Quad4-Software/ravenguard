@@ -39,11 +39,19 @@ type Runtime struct {
 	Pipeline interface {
 		ApplyConfig(cfg config.Config)
 	}
+	Coraza interface {
+		UpdateLive(enabled bool, mode string)
+		Enabled() bool
+		Loaded() bool
+		Mode() string
+	}
 
 	ReloadRoutes     func() error
 	CertStatus       func() any
 	CertRenew        func(ctx context.Context, host string) error
 	LogSnapshot      func(limit int, level string) any
+	RequestByRay     func(ray string) (any, bool)
+	RequestsRecent   func(limit int) any
 	ManualCertPut    func(hostname, certPEM, keyPEM string) error
 	ManualCertDelete func(hostname string) error
 	CertDetail       func(hostname string) (any, error)
@@ -127,6 +135,7 @@ type Status struct {
 	ProtectEnabled     bool            `json:"protect_enabled"`
 	RateLimitEnabled   bool            `json:"ratelimit_enabled"`
 	DetectEnabled      bool            `json:"detect_enabled"`
+	CorazaEnabled      bool            `json:"coraza_enabled"`
 	Version            string          `json:"version"`
 	Commit             string          `json:"commit"`
 	Process            ProcessStats    `json:"process"`
@@ -142,9 +151,13 @@ func (r *Runtime) Status() Status {
 		ProtectEnabled:   cfg.Protect.Enabled,
 		RateLimitEnabled: cfg.RateLimit.Enabled,
 		DetectEnabled:    cfg.Detect.Enabled,
+		CorazaEnabled:    cfg.Coraza.Enabled,
 		Version:          version.Release(),
 		Commit:           version.Short(),
 		Process:          r.processView(),
+	}
+	if r.Coraza != nil {
+		st.CorazaEnabled = r.Coraza.Enabled()
 	}
 	if r.Lists != nil {
 		st.Blocklists = r.Lists.Stats()
@@ -329,6 +342,14 @@ type SafeConfig struct {
 	Privacy   PrivacySafe   `json:"privacy"`
 	Logging   LoggingSafe   `json:"logging"`
 	QFeeds    *QFeedsSafe   `json:"qfeeds,omitempty"`
+	Coraza    CorazaSafe    `json:"coraza"`
+}
+
+type CorazaSafe struct {
+	Enabled  bool   `json:"enabled"`
+	Loaded   bool   `json:"loaded"`
+	Mode     string `json:"mode"`
+	Paranoia int    `json:"paranoia"`
 }
 
 type RateLimitSafe struct {
@@ -509,6 +530,21 @@ func (r *Runtime) ConfigView() ConfigView {
 					JA4Header: cfg.Detect.ProxySignals.JA4Header, LowScorePoints: cfg.Detect.ProxySignals.LowScorePoints,
 				},
 			},
+			Coraza: func() CorazaSafe {
+				cz := CorazaSafe{
+					Enabled:  cfg.Coraza.Enabled,
+					Mode:     cfg.Coraza.Mode,
+					Paranoia: cfg.Coraza.Paranoia,
+				}
+				if r.Coraza != nil {
+					cz.Loaded = r.Coraza.Loaded()
+					cz.Enabled = r.Coraza.Enabled()
+					if m := r.Coraza.Mode(); m != "" {
+						cz.Mode = m
+					}
+				}
+				return cz
+			}(),
 			Challenge: ChallengeSafe{
 				Enabled: cfg.Challenge.Enabled, Mode: cfg.Challenge.Mode,
 				Difficulty: cfg.Challenge.Difficulty, Algorithm: cfg.Challenge.Algorithm,
@@ -643,6 +679,13 @@ func (r *Runtime) ApplySafeConfig(safe SafeConfig) error {
 	}
 
 	applyDetectSafe(&cfg, safe.Detect)
+	cfg.Coraza.Enabled = safe.Coraza.Enabled
+	if safe.Coraza.Mode != "" {
+		cfg.Coraza.Mode = safe.Coraza.Mode
+	}
+	if safe.Coraza.Paranoia > 0 {
+		cfg.Coraza.Paranoia = safe.Coraza.Paranoia
+	}
 	applyChallengeSafe(&cfg, safe.Challenge)
 	applyUISafe(&cfg, safe.UI)
 	applyTrustSafe(&cfg, safe.Trust)
@@ -687,6 +730,15 @@ func (r *Runtime) ApplySafeConfig(safe SafeConfig) error {
 			r.Chal.Algorithm = cfg.Challenge.Algorithm
 		}
 	}
+	if r.Coraza != nil {
+		r.Coraza.UpdateLive(cfg.Coraza.Enabled, cfg.Coraza.Mode)
+		// Enabling without rules loaded is refused by UpdateLive.
+		cfg.Coraza.Enabled = r.Coraza.Enabled()
+		if m := r.Coraza.Mode(); m != "" {
+			cfg.Coraza.Mode = m
+		}
+		r.cfg = cfg
+	}
 	if r.Pipeline != nil {
 		r.Pipeline.ApplyConfig(cfg)
 	}
@@ -716,6 +768,16 @@ func validateSafeConfig(safe SafeConfig) error {
 		default:
 			return fmt.Errorf("logging.level must be debug, info, warn, or error")
 		}
+	}
+	if safe.Coraza.Mode != "" {
+		switch strings.ToLower(strings.TrimSpace(safe.Coraza.Mode)) {
+		case "block", "detect":
+		default:
+			return fmt.Errorf("coraza.mode must be block or detect")
+		}
+	}
+	if safe.Coraza.Paranoia != 0 && (safe.Coraza.Paranoia < 1 || safe.Coraza.Paranoia > 4) {
+		return fmt.Errorf("coraza.paranoia must be between 1 and 4")
 	}
 	if safe.Logging.Format != "" {
 		switch strings.ToLower(strings.TrimSpace(safe.Logging.Format)) {
@@ -933,6 +995,13 @@ func setNonEmpty(dst *string, v string) {
 // OverlaySafe copies cfg and applies the editable subset without touching live subsystems.
 func OverlaySafe(cfg config.Config, safe SafeConfig) config.Config {
 	applyDetectSafe(&cfg, safe.Detect)
+	cfg.Coraza.Enabled = safe.Coraza.Enabled
+	if safe.Coraza.Mode != "" {
+		cfg.Coraza.Mode = safe.Coraza.Mode
+	}
+	if safe.Coraza.Paranoia > 0 {
+		cfg.Coraza.Paranoia = safe.Coraza.Paranoia
+	}
 	applyChallengeSafe(&cfg, safe.Challenge)
 	applyUISafe(&cfg, safe.UI)
 	applyTrustSafe(&cfg, safe.Trust)

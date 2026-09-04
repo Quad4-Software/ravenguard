@@ -138,6 +138,30 @@ var migrations = []string{
 		detail TEXT NOT NULL DEFAULT ''
 	)`,
 	`ALTER TABLE routes ADD COLUMN proxy_id TEXT NOT NULL DEFAULT ''`,
+	`CREATE TABLE IF NOT EXISTS waf_events (
+		ray_id TEXT PRIMARY KEY,
+		created_at TEXT NOT NULL,
+		action TEXT NOT NULL,
+		reason TEXT NOT NULL DEFAULT '',
+		method TEXT NOT NULL DEFAULT '',
+		path TEXT NOT NULL DEFAULT '',
+		host TEXT NOT NULL DEFAULT '',
+		ua TEXT NOT NULL DEFAULT '',
+		ip_hash TEXT NOT NULL DEFAULT '',
+		bind_id TEXT NOT NULL DEFAULT '',
+		score INTEGER NOT NULL DEFAULT 0,
+		detail_json TEXT NOT NULL DEFAULT '{}'
+	)`,
+	`CREATE INDEX IF NOT EXISTS idx_waf_events_created ON waf_events(created_at)`,
+	`CREATE TABLE IF NOT EXISTS api_schemas (
+		id TEXT PRIMARY KEY,
+		name TEXT NOT NULL,
+		mode TEXT NOT NULL DEFAULT 'block',
+		spec_text TEXT NOT NULL,
+		created_at TEXT NOT NULL,
+		updated_at TEXT NOT NULL
+	)`,
+	`ALTER TABLE routes ADD COLUMN openapi_schema_id TEXT REFERENCES api_schemas(id) ON DELETE SET NULL`,
 }
 
 func migrate(db *sql.DB) error {
