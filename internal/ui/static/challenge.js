@@ -48,6 +48,19 @@
     }
   }
 
+  function isSameDocument(next) {
+    try {
+      var dest = new URL(next, window.location.href);
+      return (
+        dest.origin === window.location.origin &&
+        dest.pathname === window.location.pathname &&
+        dest.search === window.location.search
+      );
+    } catch (e) {
+      return true;
+    }
+  }
+
   async function submitPayload(payload, captcha) {
     var body = { payload: payload, ray: cfg.ray || "" };
     if (cfg.captcha) body.captcha = captcha || "";
@@ -65,7 +78,15 @@
   }
 
   function goNext() {
-    window.location.replace(nextURL());
+    var next = nextURL();
+    // Challenge is served in-place at the requested URL. location.replace to that
+    // same URL is a no-op in many browsers, which leaves the interstitial stuck
+    // even though the clearance cookie is already set. Reload forces a new GET.
+    if (isSameDocument(next)) {
+      window.location.reload();
+      return;
+    }
+    window.location.replace(next);
   }
 
   function arm() {

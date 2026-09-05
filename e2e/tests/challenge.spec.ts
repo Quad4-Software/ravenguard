@@ -45,6 +45,19 @@ test.describe('attack mode', () => {
     await clickWidget(page)
     await waitUpstream(page)
   })
+
+  test('same-path interstitial reloads into upstream without manual refresh', async ({ page, browserName }) => {
+    test.skip(browserName !== 'chromium', 'same-path reload covered on chromium')
+    const path = '/deep/forge/path'
+    await page.goto(ATTACK + path)
+    await expect(page.locator('body')).toHaveClass(/gate-interactive/)
+    await expect(page.locator('#rg-widget')).toBeAttached()
+    await clickWidget(page)
+    await waitUpstream(page)
+    await expect(page.locator('body')).not.toHaveClass(/gate-interactive/)
+    expect(new URL(page.url()).pathname).toBe(path)
+    expect(await page.locator('body').innerText()).toContain('upstream-ok')
+  })
 })
 
 test.describe('captcha stub', () => {

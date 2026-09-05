@@ -215,7 +215,7 @@ export class RavenGuardWidget extends HTMLElement {
     this.#applyTheme()
     this.#armInteraction()
     queueMicrotask(() => {
-      this.dispatchEvent(new CustomEvent('load', { bubbles: true }))
+      this.dispatchEvent(new CustomEvent('load', { bubbles: true, composed: true }))
       if (this.#opts.auto === 'onload') void this.verify()
     })
   }
@@ -269,13 +269,13 @@ export class RavenGuardWidget extends HTMLElement {
         this.#payload = 'test'
         this.#syncValue(this.#payload)
         this.#setState('verified')
-        this.dispatchEvent(new CustomEvent('verified', { detail: { payload: this.#payload }, bubbles: true }))
+        this.dispatchEvent(new CustomEvent('verified', { detail: { payload: this.#payload }, bubbles: true, composed: true }))
         return this.#payload
       }
       const ch = await this.#loadChallenge()
       if (Date.now() / 1000 > ch.expires) {
         this.#setState('expired')
-        this.dispatchEvent(new CustomEvent('expired', { bubbles: true }))
+        this.dispatchEvent(new CustomEvent('expired', { bubbles: true, composed: true }))
         throw new Error('expired')
       }
       const workers = this.#opts.workers ?? 2
@@ -300,7 +300,7 @@ export class RavenGuardWidget extends HTMLElement {
       this.#payload = encodePayload(payload)
       this.#syncValue(this.#payload)
       this.#setState('verified')
-      this.dispatchEvent(new CustomEvent('verified', { detail: { payload: this.#payload }, bubbles: true }))
+      this.dispatchEvent(new CustomEvent('verified', { detail: { payload: this.#payload }, bubbles: true, composed: true }))
       return this.#payload
     } catch (e) {
       this.#started = false
@@ -309,6 +309,7 @@ export class RavenGuardWidget extends HTMLElement {
         new CustomEvent('error', {
           detail: { error: e instanceof Error ? e.message : String(e) },
           bubbles: true,
+          composed: true,
         }),
       )
       throw e
@@ -392,7 +393,7 @@ export class RavenGuardWidget extends HTMLElement {
   #setState(s: WidgetState) {
     this.#state = s
     this.#paint()
-    this.dispatchEvent(new CustomEvent('statechange', { detail: { state: s }, bubbles: true }))
+    this.dispatchEvent(new CustomEvent('statechange', { detail: { state: s }, bubbles: true, composed: true }))
   }
 
   #paint() {
