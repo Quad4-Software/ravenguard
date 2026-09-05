@@ -52,3 +52,29 @@ func TestLoggerRejectForeignBindOverwrite(t *testing.T) {
 		t.Fatalf("same bind should update: %+v", e)
 	}
 }
+
+func TestLoggerCounters(t *testing.T) {
+	l := New(10)
+	l.Record(Event{Ray: "a", Action: ActionChallenge, BindID: "x"})
+	l.Record(Event{Ray: "b", Action: ActionBlock})
+	l.Record(Event{Ray: "c", Action: ActionRateLimit})
+	l.Record(Event{Ray: "d", Action: ActionChallenge})
+	// Foreign bind must not overwrite or bump.
+	l.Record(Event{Ray: "a", Action: ActionBlock, BindID: "y"})
+
+	got := l.Totals()
+	if got.Challenges != 2 || got.Blocks != 1 || got.RateLimits != 1 {
+		t.Fatalf("totals=%+v", got)
+	}
+	iv := l.TakeInterval()
+	if iv.Challenges != 2 || iv.Blocks != 1 || iv.RateLimits != 1 {
+		t.Fatalf("interval=%+v", iv)
+	}
+	iv2 := l.TakeInterval()
+	if iv2.Sum() != 0 {
+		t.Fatalf("interval should clear: %+v", iv2)
+	}
+	if l.Totals().Challenges != 2 {
+		t.Fatalf("totals should keep: %+v", l.Totals())
+	}
+}

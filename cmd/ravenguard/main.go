@@ -381,6 +381,9 @@ func runEdge(cfg config.Config, proxyOnly bool, configPath string, sentryRep *rg
 		rt.RequestsRecent = func(limit int) any {
 			return reqLog.RecentPreferDB(limit)
 		}
+		rt.WAFStats = func() (interval, total requestlog.Counters) {
+			return reqLog.TakeInterval(), reqLog.Totals()
+		}
 	}
 	startRequestLogPurge := func(ctx context.Context) {
 		ttl := cfg.Privacy.WAFEventsTTL.Duration

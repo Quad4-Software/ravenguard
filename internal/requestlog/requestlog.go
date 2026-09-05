@@ -6,6 +6,7 @@ package requestlog
 import (
 	"encoding/json"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -36,6 +37,23 @@ type Event struct {
 	CreatedAt time.Time         `json:"created_at"`
 }
 
+// Counters are WAF outcome tallies for stats and admin views.
+type Counters struct {
+	Challenges uint64 `json:"challenges"`
+	Blocks     uint64 `json:"blocks"`
+	RateLimits uint64 `json:"ratelimits"`
+	Coraza     uint64 `json:"coraza"`
+	Access     uint64 `json:"access"`
+	OpenAPI    uint64 `json:"openapi"`
+	Semantic   uint64 `json:"semantic"`
+	ML         uint64 `json:"ml"`
+}
+
+// Sum returns the total of all action counters.
+func (c Counters) Sum() uint64 {
+	return c.Challenges + c.Blocks + c.RateLimits + c.Coraza + c.Access + c.OpenAPI + c.Semantic + c.ML
+}
+
 // Persister stores events durably (optional).
 type Persister interface {
 	InsertWAFEvent(e Event) error
@@ -53,6 +71,24 @@ type Logger struct {
 	len     int
 	maxHot  int
 	persist Persister
+
+	challenges atomic.Uint64
+	blocks     atomic.Uint64
+	ratelimits atomic.Uint64
+	coraza     atomic.Uint64
+	access     atomic.Uint64
+	openapi    atomic.Uint64
+	semantic   atomic.Uint64
+	ml         atomic.Uint64
+
+	ivChallenges atomic.Uint64
+	ivBlocks     atomic.Uint64
+	ivRatelimits atomic.Uint64
+	ivCoraza     atomic.Uint64
+	ivAccess     atomic.Uint64
+	ivOpenAPI    atomic.Uint64
+	ivSemantic   atomic.Uint64
+	ivML         atomic.Uint64
 }
 
 // New creates a logger with a bounded hot index.
@@ -108,8 +144,75 @@ func (l *Logger) Record(e Event) {
 	l.byRay[e.Ray] = e
 	p := l.persist
 	l.mu.Unlock()
+	l.bump(e.Action)
 	if p != nil {
 		_ = p.InsertWAFEvent(e)
+	}
+}
+
+func (l *Logger) bump(action string) {
+	if l == nil {
+		return
+	}
+	switch action {
+	case ActionChallenge:
+		l.challenges.Add(1)
+		l.ivChallenges.Add(1)
+	case ActionBlock:
+		l.blocks.Add(1)
+		l.ivBlocks.Add(1)
+	case ActionRateLimit:
+		l.ratelimits.Add(1)
+		l.ivRatelimits.Add(1)
+	case ActionCoraza:
+		l.coraza.Add(1)
+		l.ivCoraza.Add(1)
+	case ActionAccess:
+		l.access.Add(1)
+		l.ivAccess.Add(1)
+	case ActionOpenAPI:
+		l.openapi.Add(1)
+		l.ivOpenAPI.Add(1)
+	case ActionSemantic:
+		l.semantic.Add(1)
+		l.ivSemantic.Add(1)
+	case ActionML:
+		l.ml.Add(1)
+		l.ivML.Add(1)
+	}
+}
+
+// Totals returns lifetime WAF outcome counts since process start.
+func (l *Logger) Totals() Counters {
+	if l == nil {
+		return Counters{}
+	}
+	return Counters{
+		Challenges: l.challenges.Load(),
+		Blocks:     l.blocks.Load(),
+		RateLimits: l.ratelimits.Load(),
+		Coraza:     l.coraza.Load(),
+		Access:     l.access.Load(),
+		OpenAPI:    l.openapi.Load(),
+		Semantic:   l.semantic.Load(),
+		ML:         l.ml.Load(),
+	}
+}
+
+// TakeInterval returns and clears per-interval counters for stats logging.
+func (l *Logger) TakeInterval() Counters {
+	if l == nil {
+		return Counters{}
+	}
+	return Counters{
+		Challenges: l.ivChallenges.Swap(0),
+		Blocks:     l.ivBlocks.Swap(0),
+		RateLimits: l.ivRatelimits.Swap(0),
+		Coraza:     l.ivCoraza.Swap(0),
+		Access:     l.ivAccess.Swap(0),
+		OpenAPI:    l.ivOpenAPI.Swap(0),
+		Semantic:   l.ivSemantic.Swap(0),
+		ML:         l.ivML.Swap(0),
 	}
 }
 

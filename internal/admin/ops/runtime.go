@@ -21,6 +21,7 @@ import (
 	"github.com/Quad4-Software/ravenguard/internal/protect"
 	"github.com/Quad4-Software/ravenguard/internal/qfeeds"
 	"github.com/Quad4-Software/ravenguard/internal/ratelimit"
+	"github.com/Quad4-Software/ravenguard/internal/requestlog"
 	"github.com/Quad4-Software/ravenguard/internal/version"
 )
 
@@ -60,12 +61,15 @@ type Runtime struct {
 		SetAdapt(m *ml.Model)
 	}
 
-	ReloadRoutes     func() error
-	CertStatus       func() any
-	CertRenew        func(ctx context.Context, host string) error
-	LogSnapshot      func(limit int, level string) any
-	RequestByRay     func(ray string) (any, bool)
-	RequestsRecent   func(limit int) any
+	ReloadRoutes   func() error
+	CertStatus     func() any
+	CertRenew      func(ctx context.Context, host string) error
+	LogSnapshot    func(limit int, level string) any
+	RequestByRay   func(ray string) (any, bool)
+	RequestsRecent func(limit int) any
+	// WAFStats returns (interval since last take, lifetime totals) for stderr stats.
+	// Call only from StartStatsLog so TakeInterval is not drained by admin Status.
+	WAFStats         func() (interval, total requestlog.Counters)
 	ManualCertPut    func(hostname, certPEM, keyPEM string) error
 	ManualCertDelete func(hostname string) error
 	CertDetail       func(hostname string) (any, error)
@@ -269,7 +273,12 @@ func (r *Runtime) StartStatsLog(ctx context.Context, interval time.Duration) {
 		interval = 30 * time.Second
 	}
 	emit := func() {
-		slog.Info("ravenguard stats", StatsLogAttrs(r.Status())...)
+		st := r.Status()
+		var iv, total requestlog.Counters
+		if r.WAFStats != nil {
+			iv, total = r.WAFStats()
+		}
+		slog.Info("ravenguard stats", StatsLogAttrs(st, iv, total)...)
 	}
 	emit()
 	go func() {
@@ -286,19 +295,35 @@ func (r *Runtime) StartStatsLog(ctx context.Context, interval time.Duration) {
 	}()
 }
 
-// StatsLogAttrs builds slog attributes for a Status snapshot.
-func StatsLogAttrs(st Status) []any {
+// StatsLogAttrs builds slog attributes for a Status snapshot plus WAF counters.
+// iv is per stats interval (since last emit). total is lifetime since process start.
+func StatsLogAttrs(st Status, iv, total requestlog.Counters) []any {
 	attrs := []any{
 		"uptime_s", st.UptimeSeconds,
 		"bans", st.BanCount,
+		"challenges", iv.Challenges,
+		"blocks", iv.Blocks,
+		"ratelimits", iv.RateLimits,
+		"challenges_total", total.Challenges,
+		"blocks_total", total.Blocks,
+		"ratelimits_total", total.RateLimits,
 		"in_flight", st.ConcurrencyGlobal,
 		"clients", st.ConcurrencyClients,
 		"ratelimit_buckets", st.RateLimitBuckets,
+		"blocklist_ips", st.Blocklists.IPCount,
+		"blocklist_dns", st.Blocklists.DNSCount,
+		"blocklist_ua", st.Blocklists.UACount,
 		"cpu_pct", round1(st.Process.CPUPercent),
 		"rss_mb", st.Process.RSSBytes / (1024 * 1024),
 		"goroutines", st.Process.Goroutines,
 		"challenge", st.ChallengeEnabled,
 		"detect", st.DetectEnabled,
+	}
+	if n := iv.Coraza + iv.Access + iv.OpenAPI + iv.Semantic + iv.ML; n > 0 {
+		attrs = append(attrs,
+			"waf_other", n,
+			"waf_other_total", total.Coraza+total.Access+total.OpenAPI+total.Semantic+total.ML,
+		)
 	}
 	if st.UpstreamHealthy != nil {
 		attrs = append(attrs, "upstream_ok", *st.UpstreamHealthy)
