@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -253,6 +254,60 @@ func (r *Runtime) StartSampler(ctx context.Context) {
 			}
 		}
 	}()
+}
+
+// StartStatsLog emits a compact status line to the process logger on an interval.
+// Use with docker logs / journald when running edge without the admin UI.
+func (r *Runtime) StartStatsLog(ctx context.Context, interval time.Duration) {
+	if r == nil {
+		return
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if interval < time.Second {
+		interval = 30 * time.Second
+	}
+	emit := func() {
+		slog.Info("ravenguard stats", StatsLogAttrs(r.Status())...)
+	}
+	emit()
+	go func() {
+		t := time.NewTicker(interval)
+		defer t.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+				emit()
+			}
+		}
+	}()
+}
+
+// StatsLogAttrs builds slog attributes for a Status snapshot.
+func StatsLogAttrs(st Status) []any {
+	attrs := []any{
+		"uptime_s", st.UptimeSeconds,
+		"bans", st.BanCount,
+		"in_flight", st.ConcurrencyGlobal,
+		"clients", st.ConcurrencyClients,
+		"ratelimit_buckets", st.RateLimitBuckets,
+		"cpu_pct", round1(st.Process.CPUPercent),
+		"rss_mb", st.Process.RSSBytes / (1024 * 1024),
+		"goroutines", st.Process.Goroutines,
+		"challenge", st.ChallengeEnabled,
+		"detect", st.DetectEnabled,
+	}
+	if st.UpstreamHealthy != nil {
+		attrs = append(attrs, "upstream_ok", *st.UpstreamHealthy)
+	}
+	return attrs
+}
+
+func round1(v float64) float64 {
+	return float64(int(v*10+0.5)) / 10
 }
 
 // QFeedsSafe is the editable Q-Feeds subset for the admin UI.

@@ -135,6 +135,8 @@ lang = "en"
 [logging]
 level = "info"
 format = "text"
+stats = true
+stats_interval = "30s"
 
 [sentry]
 enabled = false

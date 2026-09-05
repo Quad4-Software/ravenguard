@@ -403,8 +403,10 @@ type SiteConfig struct {
 }
 
 type LoggingConfig struct {
-	Level  string `toml:"level"`
-	Format string `toml:"format"`
+	Level         string   `toml:"level"`
+	Format        string   `toml:"format"`
+	Stats         bool     `toml:"stats"`
+	StatsInterval Duration `toml:"stats_interval"`
 }
 
 // SentryConfig configures Sentry or GlitchTip error reporting.
@@ -602,7 +604,7 @@ func Default() Config {
 			Robots:      "noindex, nofollow",
 			Lang:        "en",
 		},
-		Logging: LoggingConfig{Level: "info", Format: "text"},
+		Logging: LoggingConfig{Level: "info", Format: "text", StatsInterval: Duration{30 * time.Second}},
 		Sentry: SentryConfig{
 			SampleRate:       1.0,
 			AttachStacktrace: true,
@@ -642,21 +644,24 @@ func Default() Config {
 }
 
 type Flags struct {
-	ConfigPath      string
-	ListenHTTP      string
-	ListenHTTPS     string
-	ListenQUIC      string
-	Upstream        string
-	Secret          string
-	TestMode        bool
-	TestModeSet     bool
-	PublicURL       string
-	LogLevel        string
-	LogFormat       string
-	AdminListen     string
-	AdminEnabled    bool
-	AdminEnabledSet bool
-	AdminDataDir    string
+	ConfigPath       string
+	ListenHTTP       string
+	ListenHTTPS      string
+	ListenQUIC       string
+	Upstream         string
+	Secret           string
+	TestMode         bool
+	TestModeSet      bool
+	PublicURL        string
+	LogLevel         string
+	LogFormat        string
+	LogStats         bool
+	LogStatsSet      bool
+	LogStatsInterval string
+	AdminListen      string
+	AdminEnabled     bool
+	AdminEnabledSet  bool
+	AdminDataDir     string
 }
 
 func ParseFlags(args []string) (Flags, error) {
@@ -671,21 +676,27 @@ func ParseFlags(args []string) (Flags, error) {
 	fs.StringVar(&f.PublicURL, "public-url", "", "public site URL for SEO canonical/OG")
 	fs.StringVar(&f.LogLevel, "log-level", "", "debug|info|warn|error")
 	fs.StringVar(&f.LogFormat, "log-format", "", "text|json")
+	fs.StringVar(&f.LogStatsInterval, "log-stats-interval", "", "periodic stats log interval (e.g. 30s)")
 	fs.StringVar(&f.AdminListen, "admin-listen", "", "admin HTTP listen address")
 	fs.StringVar(&f.AdminDataDir, "admin-data-dir", "", "admin SQLite data directory")
 	adminEnabled := fs.Bool("admin-enabled", false, "enable admin control plane")
+	logStats := fs.Bool("log-stats", false, "emit periodic process stats to stderr (docker logs)")
 	test := fs.Bool("test-mode", false, "enable UI test routes under /_rg/test")
 	if err := fs.Parse(args); err != nil {
 		return Flags{}, err
 	}
 	f.TestMode = *test
 	f.AdminEnabled = *adminEnabled
+	f.LogStats = *logStats
 	fs.Visit(func(fl *flag.Flag) {
 		if fl.Name == "test-mode" {
 			f.TestModeSet = true
 		}
 		if fl.Name == "admin-enabled" {
 			f.AdminEnabledSet = true
+		}
+		if fl.Name == "log-stats" {
+			f.LogStatsSet = true
 		}
 	})
 	return f, nil
@@ -820,6 +831,12 @@ func applyEnv(c *Config) {
 	setStr(&c.Site.Lang, "RG_SITE_LANG")
 	setStr(&c.Logging.Level, "RG_LOG_LEVEL")
 	setStr(&c.Logging.Format, "RG_LOG_FORMAT")
+	setBool(&c.Logging.Stats, "RG_LOG_STATS")
+	if v := os.Getenv("RG_LOG_STATS_INTERVAL"); v != "" {
+		if d, err := time.ParseDuration(v); err == nil {
+			c.Logging.StatsInterval = Duration{d}
+		}
+	}
 	setBool(&c.Upstream.Health.Enabled, "RG_UPSTREAM_HEALTH_ENABLED")
 	setStr(&c.Upstream.Health.Path, "RG_UPSTREAM_HEALTH_PATH")
 	setBool(&c.Sentry.Enabled, "RG_SENTRY_ENABLED")
@@ -899,6 +916,14 @@ func applyFlags(c *Config, f Flags) {
 	}
 	if f.LogFormat != "" {
 		c.Logging.Format = f.LogFormat
+	}
+	if f.LogStatsSet {
+		c.Logging.Stats = f.LogStats
+	}
+	if f.LogStatsInterval != "" {
+		if d, err := time.ParseDuration(f.LogStatsInterval); err == nil {
+			c.Logging.StatsInterval = Duration{d}
+		}
 	}
 	if f.TestModeSet {
 		c.UI.TestMode = f.TestMode
@@ -1060,6 +1085,9 @@ func normalize(c *Config) {
 	}
 	if c.Sentry.FlushTimeout.Duration <= 0 {
 		c.Sentry.FlushTimeout = Duration{2 * time.Second}
+	}
+	if c.Logging.StatsInterval.Duration <= 0 {
+		c.Logging.StatsInterval = Duration{30 * time.Second}
 	}
 	if c.Sentry.DSN != "" && !c.Sentry.Enabled {
 		c.Sentry.Enabled = true
@@ -1365,6 +1393,9 @@ func (c Config) Validate() error {
 	case "", "text", "json":
 	default:
 		return fmt.Errorf("logging.format must be text or json")
+	}
+	if c.Logging.Stats && c.Logging.StatsInterval.Duration < time.Second {
+		return fmt.Errorf("logging.stats_interval must be at least 1s when stats is enabled")
 	}
 	if c.Sentry.Enabled {
 		if strings.TrimSpace(c.Sentry.DSN) == "" {

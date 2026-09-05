@@ -28,6 +28,8 @@ Full example: [configs/ravenguard.toml](https://github.com/Quad4-Software/raveng
 | -test-mode | RG_UI_TEST_MODE | Enable /_rg/test UI previews |
 | -log-level | RG_LOG_LEVEL | debug / info / warn / error |
 | -log-format | RG_LOG_FORMAT | text / json |
+| -log-stats | RG_LOG_STATS | Emit periodic edge stats to stderr (docker logs) |
+| -log-stats-interval | RG_LOG_STATS_INTERVAL | Stats interval (default 30s) |
 | -admin-enabled | RG_ADMIN_ENABLED | Enable admin control plane |
 | -admin-listen | RG_ADMIN_LISTEN | Admin HTTP bind (default 127.0.0.1:9090) |
 | -admin-data-dir | RG_ADMIN_DATA_DIR | Admin SQLite directory |
@@ -389,7 +391,11 @@ retention = "30m"
 [logging]
 level = "info"
 format = "text"
+# stats = true              # periodic edge heartbeat on stderr (docker logs)
+# stats_interval = "30s"
 ```
+
+When `logging.stats` is true (or `-log-stats` / `RG_LOG_STATS=true`), RavenGuard prints a compact `ravenguard stats` line on stderr every `stats_interval` (default 30s). Useful for edge-only containers without the admin UI.
 
 See [Privacy](./privacy.md).
 

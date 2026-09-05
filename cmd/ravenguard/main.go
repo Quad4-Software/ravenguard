@@ -987,6 +987,23 @@ func runEdge(cfg config.Config, proxyOnly bool, configPath string, sentryRep *rg
 	})
 
 	slog.Info("ravenguard starting", "upstream", cfg.Upstream.URL, "trust_mode", cfg.Trust.Mode, "tls_mode", cfg.TLS.Mode, "admin", cfg.Admin.Enabled)
+	if cfg.Logging.Stats {
+		if rt == nil {
+			rt = ops.NewRuntime(cfg, prot, lists, limiter, hc, feeds, chal)
+			rt.RootCtx = ctx
+			rt.SetPipeline(pipe)
+			rt.Coraza = corazaEng
+			rt.Semantic = semEng
+			rt.ML = mlScorer
+			rt.StartSampler(ctx)
+		}
+		statsEvery := cfg.Logging.StatsInterval.Duration
+		if statsEvery < time.Second {
+			statsEvery = 30 * time.Second
+		}
+		rt.StartStatsLog(ctx, statsEvery)
+		slog.Info("stats logging enabled", "interval", statsEvery.String())
+	}
 	go func() {
 		<-ctx.Done()
 		slog.Info("shutting down")

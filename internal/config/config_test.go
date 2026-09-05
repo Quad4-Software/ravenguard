@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/Quad4-Software/ravenguard/internal/config"
 )
@@ -347,6 +348,42 @@ func TestResolveRunMode(t *testing.T) {
 	_, _, err = config.ResolveRunMode(nil)
 	if err == nil {
 		t.Fatal("expected invalid RG_MODE error")
+	}
+}
+
+func TestLogStatsFlagAndEnv(t *testing.T) {
+	t.Setenv("RG_LOG_STATS", "true")
+	t.Setenv("RG_LOG_STATS_INTERVAL", "15s")
+	f, err := config.ParseFlags([]string{
+		"-config", filepath.Join("..", "..", "configs", "ravenguard.toml"),
+		"-log-stats",
+		"-log-stats-interval", "45s",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !f.LogStatsSet || !f.LogStats {
+		t.Fatalf("flag stats=%v set=%v", f.LogStats, f.LogStatsSet)
+	}
+	cfg, err := config.LoadWithFlags(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.Logging.Stats {
+		t.Fatal("expected stats enabled")
+	}
+	if cfg.Logging.StatsInterval.Duration != 45*time.Second {
+		t.Fatalf("interval=%s", cfg.Logging.StatsInterval)
+	}
+}
+
+func TestValidateStatsInterval(t *testing.T) {
+	cfg := config.Default()
+	cfg.Challenge.Secret = "test-secret-16chars"
+	cfg.Logging.Stats = true
+	cfg.Logging.StatsInterval = config.Duration{Duration: 500 * time.Millisecond}
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected stats_interval validation error")
 	}
 }
 
