@@ -9,4 +9,10 @@ describe('widget styles', () => {
     expect(styles).toContain(":host([theme='light'])")
     expect(styles).toContain(":host([theme='dark'])")
   })
+
+  it('keeps checkbox and spinner box-sizing aligned', () => {
+    expect(styles).toContain('box-sizing: border-box')
+    expect(styles).toContain(".rg-check[data-state='verifying']")
+    expect(styles).toContain('border-color: transparent')
+  })
 })

@@ -1,8 +1,15 @@
 export const styles = `
 :host {
   display: block;
-  font-family: 'IBM Plex Sans', 'Segoe UI', sans-serif;
+  font-family: var(--rg-font, 'IBM Plex Sans', 'Segoe UI', sans-serif);
   color: var(--rg-fg, var(--fg, #e8e8e8));
+  box-sizing: border-box;
+}
+
+:host *,
+:host *::before,
+:host *::after {
+  box-sizing: border-box;
 }
 
 :host([theme='light']) {
@@ -32,7 +39,6 @@ export const styles = `
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  box-sizing: border-box;
 }
 
 .rg-check {
@@ -47,8 +53,22 @@ export const styles = `
   background: transparent;
   color: inherit;
   padding: 0;
+  margin: 0;
   font-size: 0.65rem;
   font-weight: 700;
+  line-height: 1;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.rg-check:disabled {
+  cursor: default;
+}
+
+.rg-check[data-state='verifying'] {
+  border-color: transparent;
+  background: transparent;
+  cursor: wait;
 }
 
 .rg-check[data-state='verified'] {
@@ -66,9 +86,11 @@ export const styles = `
   font-size: 0.875rem;
   line-height: 1.3;
   flex: 1;
+  min-width: 0;
 }
 
 .rg-spinner {
+  display: block;
   width: 1rem;
   height: 1rem;
   border: 2px solid var(--rg-border, var(--border, #2a2a2a));

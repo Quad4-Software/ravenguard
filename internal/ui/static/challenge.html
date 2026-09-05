@@ -30,7 +30,8 @@
       prefix: {{.Prefix}},
       ray: {{.RayID}},
       gate: {{.Gate}},
-      captcha: {{if .CaptchaEnabled}}true{{else}}false{{end}}
+      captcha: {{if .CaptchaEnabled}}true{{else}}false{{end}},
+      next: {{.Next}}
     };
   </script>
   <script src="{{.Prefix}}/static/{{.WidgetJS}}" defer></script>

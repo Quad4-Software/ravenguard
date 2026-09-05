@@ -282,6 +282,79 @@ func TestAttackModeInteractiveGate(t *testing.T) {
 	}
 }
 
+func TestHTMXChallengeRedirectsNotHTML(t *testing.T) {
+	h := testHandler(t, func(cfg *config.Config) {
+		cfg.Challenge.Mode = "always"
+		cfg.Detect.Enabled = false
+	})
+	req := httptest.NewRequest(http.MethodGet, "/admin/system_status", nil)
+	req.Host = "git.example"
+	req.Header.Set("User-Agent", "Mozilla/5.0")
+	req.Header.Set("HX-Request", "true")
+	req.Header.Set("Sec-Fetch-Dest", "empty")
+	req.Header.Set("Accept", "text/html")
+	req.Header.Set("Referer", "https://git.example/admin")
+	req.RemoteAddr = "192.0.2.41:1"
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("code=%d body=%s", rr.Code, rr.Body.String())
+	}
+	if rr.Header().Get("HX-Redirect") != "/admin" {
+		t.Fatalf("HX-Redirect=%q body=%q", rr.Header().Get("HX-Redirect"), rr.Body.String())
+	}
+	if rr.Header().Get("X-RavenGuard-Challenge") != "required" {
+		t.Fatal("missing challenge header")
+	}
+	if strings.Contains(rr.Body.String(), "rg-check") {
+		t.Fatal("HTMX challenge must not return interstitial HTML")
+	}
+}
+
+func TestJSONChallengeRequiredBody(t *testing.T) {
+	h := testHandler(t, func(cfg *config.Config) {
+		cfg.Challenge.Mode = "always"
+		cfg.Detect.Enabled = false
+	})
+	req := httptest.NewRequest(http.MethodGet, "/api/x", nil)
+	req.Header.Set("User-Agent", "Mozilla/5.0")
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Sec-Fetch-Dest", "empty")
+	req.RemoteAddr = "192.0.2.42:1"
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("code=%d", rr.Code)
+	}
+	if !strings.Contains(rr.Header().Get("Content-Type"), "application/json") {
+		t.Fatalf("content-type=%q", rr.Header().Get("Content-Type"))
+	}
+	if !strings.Contains(rr.Body.String(), "challenge_required") {
+		t.Fatalf("body=%q", rr.Body.String())
+	}
+}
+
+func TestDocumentChallengeEmbedsNext(t *testing.T) {
+	h := testHandler(t, func(cfg *config.Config) {
+		cfg.Challenge.Mode = "always"
+		cfg.Detect.Enabled = false
+	})
+	req := httptest.NewRequest(http.MethodGet, "/repos/foo", nil)
+	req.Header.Set("User-Agent", "Mozilla/5.0")
+	req.Header.Set("Accept", "text/html")
+	req.Header.Set("Sec-Fetch-Dest", "document")
+	req.RemoteAddr = "192.0.2.43:1"
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("code=%d", rr.Code)
+	}
+	body := rr.Body.String()
+	if !strings.Contains(body, `next: "/repos/foo"`) && !strings.Contains(body, `next:"/repos/foo"`) {
+		t.Fatalf("expected next in bootstrap: %s", body[strings.Index(body, "window"):min(len(body), strings.Index(body, "window")+280)])
+	}
+}
+
 func TestEnvProbeOffSkipsAutomation(t *testing.T) {
 	h := testHandler(t, func(cfg *config.Config) {
 		cfg.Challenge.Mode = "always"

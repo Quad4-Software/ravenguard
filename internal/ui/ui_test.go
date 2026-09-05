@@ -230,6 +230,9 @@ func TestSiteFromConfig(t *testing.T) {
 	if strings.Contains(body2, `window["\"__g__\""]`) {
 		t.Fatal("bootstrap global is double-escaped")
 	}
+	if strings.Contains(body2, "ZgotmplZ") {
+		t.Fatal("font/theme CSS was rejected by html/template")
+	}
 
 	rr3 := httptest.NewRecorder()
 	pages.RenderBlock(rr3, "ray-c", "blocked")

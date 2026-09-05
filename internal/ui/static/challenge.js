@@ -3,6 +3,7 @@
   var statusEl = document.getElementById("status");
   var subEl = document.getElementById("sub");
   var widget = document.getElementById("rg-widget");
+  var finishing = false;
 
   function setStatus(msg, working) {
     if (!statusEl) return;
@@ -26,10 +27,22 @@
     });
   }
 
+  function safePath(p) {
+    if (!p || typeof p !== "string") return "";
+    if (p.charAt(0) !== "/" || p.indexOf("//") === 0) return "";
+    if (p.indexOf("\\") >= 0 || p.indexOf("\n") >= 0 || p.indexOf("\r") >= 0) return "";
+    return p;
+  }
+
   function nextURL() {
     try {
       var u = new URL(window.location.href);
-      return u.searchParams.get("next") || "/";
+      var fromQuery = safePath(u.searchParams.get("next") || "");
+      if (fromQuery) return fromQuery;
+      var fromCfg = safePath(cfg.next || "");
+      if (fromCfg) return fromCfg;
+      var here = u.pathname + u.search;
+      return here || "/";
     } catch (e) {
       return "/";
     }
@@ -51,6 +64,10 @@
     return res.json();
   }
 
+  function goNext() {
+    window.location.replace(nextURL());
+  }
+
   function arm() {
     if (!widget) {
       setStatus("Widget failed to load", false);
@@ -64,6 +81,8 @@
       if (st === "expired") setStatus("Challenge expired", false);
     });
     widget.addEventListener("verified", function (ev) {
+      if (finishing) return;
+      finishing = true;
       var payload = ev.detail && ev.detail.payload;
       waitCaptcha()
         .then(function (captcha) {
@@ -71,9 +90,11 @@
         })
         .then(function () {
           setStatus("Access granted", false);
-          window.location.replace(nextURL());
+          if (subEl) subEl.textContent = "Redirecting…";
+          goNext();
         })
         .catch(function (err) {
+          finishing = false;
           if (widget.reset) widget.reset("unverified");
           setStatus(String(err.message || err), false);
         });

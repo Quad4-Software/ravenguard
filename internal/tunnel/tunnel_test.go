@@ -15,8 +15,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Quad4-Software/ravenguard/internal/tunnel"
 	"github.com/hashicorp/yamux"
+
+	"github.com/Quad4-Software/ravenguard/internal/tunnel"
 )
 
 func TestTicketRoundTrip(t *testing.T) {

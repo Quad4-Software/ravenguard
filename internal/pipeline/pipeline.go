@@ -1205,6 +1205,26 @@ func (h *Handler) serveChallenge(w http.ResponseWriter, r *http.Request, ray, bi
 	h.chal.RememberChallenge(bindID, risk, gate)
 	captchaOn := h.cfg.Challenge.Captcha.Enabled && gate == challenge.GateInteractive
 	h.recordEvent(r, ray, bindID, ipStr, host, ua, requestlog.ActionChallenge, "Challenge required", 0, map[string]string{"gate": gate})
+
+	if !wantsHTMLChallenge(r) {
+		ret := challengeReturnTo(r)
+		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("X-RavenGuard-Challenge", "required")
+		if r.Header.Get("HX-Request") != "" {
+			w.Header().Set("HX-Redirect", ret)
+			w.WriteHeader(http.StatusForbidden)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"ok":       false,
+			"error":    "challenge_required",
+			"redirect": ret,
+		})
+		return
+	}
+
 	h.pages.ServeChallenge(w, ui.Data{
 		StatusText:       h.cfg.UI.StatusText,
 		RayID:            ray,
@@ -1212,6 +1232,7 @@ func (h *Handler) serveChallenge(w http.ResponseWriter, r *http.Request, ray, bi
 		Gate:             gate,
 		CaptchaEnabled:   captchaOn,
 		PrivacyNoticeURL: h.cfg.Privacy.PrivacyNoticeURL,
+		Next:             safeNextPath(r.URL.RequestURI()),
 	})
 }
 

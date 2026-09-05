@@ -95,8 +95,8 @@ type viewBase struct {
 	Background        string
 	Foreground        string
 	Accent            string
-	FontSans          string
-	FontMono          string
+	FontSans          template.CSS
+	FontMono          template.CSS
 	FaviconURL        string
 	ServeManifest     bool
 	WidgetJS          string
@@ -116,6 +116,7 @@ type Data struct {
 	Gate             string
 	CaptchaEnabled   bool
 	PrivacyNoticeURL string
+	Next             string
 }
 
 // PageData is a status page view model.
@@ -386,8 +387,8 @@ func (p *Pages) base(site Site, pageTitle, pathSuffix string) viewBase {
 		Background:        site.Background,
 		Foreground:        site.Foreground,
 		Accent:            site.Accent,
-		FontSans:          site.FontSans,
-		FontMono:          site.FontMono,
+		FontSans:          template.CSS(site.FontSans), // #nosec G203 -- operator font stack from config
+		FontMono:          template.CSS(site.FontMono), // #nosec G203 -- operator font stack from config
 		FaviconURL:        site.FaviconURL,
 		ServeManifest:     site.ServeManifest,
 		WidgetJS:          site.WidgetJS,

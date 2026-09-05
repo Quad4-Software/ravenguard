@@ -396,18 +396,23 @@ export class RavenGuardWidget extends HTMLElement {
   }
 
   #paint() {
-    if (this.#checkEl) this.#checkEl.dataset.state = this.#state
-    if (this.#labelEl) {
-      this.#labelEl.textContent = labels[this.#state]
+    if (this.#checkEl) {
+      this.#checkEl.dataset.state = this.#state
+      this.#checkEl.disabled = this.#state === 'verifying' || this.#state === 'verified'
+      this.#checkEl.setAttribute('aria-busy', this.#state === 'verifying' ? 'true' : 'false')
       if (this.#state === 'verifying') {
         const spin = document.createElement('span')
         spin.className = 'rg-spinner'
-        this.#checkEl?.replaceChildren(spin)
+        spin.setAttribute('aria-hidden', 'true')
+        this.#checkEl.replaceChildren(spin)
       } else if (this.#state === 'verified') {
-        this.#checkEl?.replaceChildren(document.createTextNode('OK'))
+        this.#checkEl.replaceChildren(document.createTextNode('OK'))
       } else {
-        this.#checkEl?.replaceChildren()
+        this.#checkEl.replaceChildren()
       }
+    }
+    if (this.#labelEl) {
+      this.#labelEl.textContent = labels[this.#state]
     }
   }
 

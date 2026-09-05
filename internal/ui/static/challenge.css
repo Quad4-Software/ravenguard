@@ -147,6 +147,12 @@ footer {
   margin: 0 0 1.25rem;
 }
 
+.widget rg-check,
+.widget [id="rg-widget"] {
+  display: block;
+  width: 100%;
+}
+
 .widget-invisible {
   position: absolute;
   width: 1px;
@@ -154,6 +160,14 @@ footer {
   overflow: hidden;
   clip: rect(0 0 0 0);
   margin: 0;
+}
+
+body.gate-interactive .widget {
+  opacity: 1;
+}
+
+body.gate-invisible .status {
+  animation: pulse 1.4s ease-in-out infinite;
 }
 
 .captcha {
