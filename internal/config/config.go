@@ -604,7 +604,7 @@ func Default() Config {
 			Robots:      "noindex, nofollow",
 			Lang:        "en",
 		},
-		Logging: LoggingConfig{Level: "info", Format: "text", StatsInterval: Duration{30 * time.Second}},
+		Logging: LoggingConfig{Level: "info", Format: "text", Stats: true, StatsInterval: Duration{30 * time.Second}},
 		Sentry: SentryConfig{
 			SampleRate:       1.0,
 			AttachStacktrace: true,
@@ -680,7 +680,7 @@ func ParseFlags(args []string) (Flags, error) {
 	fs.StringVar(&f.AdminListen, "admin-listen", "", "admin HTTP listen address")
 	fs.StringVar(&f.AdminDataDir, "admin-data-dir", "", "admin SQLite data directory")
 	adminEnabled := fs.Bool("admin-enabled", false, "enable admin control plane")
-	logStats := fs.Bool("log-stats", false, "emit periodic process stats to stderr (docker logs)")
+	logStats := fs.Bool("log-stats", true, "emit periodic process stats to stderr (docker logs); use -log-stats=false to disable")
 	test := fs.Bool("test-mode", false, "enable UI test routes under /_rg/test")
 	if err := fs.Parse(args); err != nil {
 		return Flags{}, err

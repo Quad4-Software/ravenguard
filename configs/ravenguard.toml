@@ -240,9 +240,9 @@ lang = "en"
 [logging]
 level = "info"
 format = "text"
-# Periodic edge stats on stderr (visible via docker logs / journalctl).
-# stats = true
-# stats_interval = "30s"
+stats = true
+stats_interval = "30s"
+# stats = false  # disable periodic edge heartbeat on stderr
 
 # Sentry or GlitchTip (same DSN protocol for errors)
 [sentry]

@@ -30,6 +30,9 @@ func TestLoadExample(t *testing.T) {
 	if !cfg.Privacy.HashClientIP {
 		t.Fatal("expected privacy.hash_client_ip")
 	}
+	if !cfg.Logging.Stats {
+		t.Fatal("expected logging.stats enabled by default")
+	}
 }
 
 func TestValidateCaptchaRejected(t *testing.T) {
