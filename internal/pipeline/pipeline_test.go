@@ -329,8 +329,113 @@ func TestJSONChallengeRequiredBody(t *testing.T) {
 	if !strings.Contains(rr.Header().Get("Content-Type"), "application/json") {
 		t.Fatalf("content-type=%q", rr.Header().Get("Content-Type"))
 	}
+	body := rr.Body.String()
+	if !strings.Contains(body, "challenge_required") {
+		t.Fatalf("body=%q", body)
+	}
+	if !strings.Contains(body, `"data":[]`) && !strings.Contains(body, `"data": []`) {
+		t.Fatalf("expected forge-safe data array: %q", body)
+	}
+}
+
+func TestDetectModeAllowsSameOriginFetchWithoutClearance(t *testing.T) {
+	h := testHandler(t, func(cfg *config.Config) {
+		cfg.Challenge.Mode = "detect"
+		cfg.Challenge.Enabled = true
+		cfg.Detect.Enabled = true
+		cfg.Detect.ChallengeScore = 1
+		cfg.Detect.MissingUAScore = 50
+		cfg.Detect.BlockScore = 90
+	})
+	req := httptest.NewRequest(http.MethodGet, "/repo/search?uid=1&team_id=undefined&q=", nil)
+	req.Host = "git.example"
+	req.Header.Set("Accept", "*/*")
+	req.Header.Set("Sec-Fetch-Dest", "empty")
+	req.Header.Set("Sec-Fetch-Mode", "cors")
+	req.Header.Set("Sec-Fetch-Site", "same-origin")
+	req.Header.Set("Referer", "https://git.example/")
+	req.RemoteAddr = "192.0.2.77:1"
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("detect-mode same-origin fetch should proxy, code=%d body=%s", rr.Code, rr.Body.String())
+	}
+	if rr.Body.String() != "ok" {
+		t.Fatalf("body=%q", rr.Body.String())
+	}
+	if rr.Header().Get("X-RavenGuard-Challenge") != "" {
+		t.Fatal("must not challenge same-origin SPA fetch in detect mode")
+	}
+}
+
+func TestAlwaysModeStillChallengesSameOriginFetch(t *testing.T) {
+	h := testHandler(t, func(cfg *config.Config) {
+		cfg.Challenge.Mode = "always"
+		cfg.Detect.Enabled = false
+	})
+	req := httptest.NewRequest(http.MethodGet, "/repo/search?uid=1", nil)
+	req.Host = "git.example"
+	req.Header.Set("Accept", "*/*")
+	req.Header.Set("Sec-Fetch-Dest", "empty")
+	req.Header.Set("Sec-Fetch-Site", "same-origin")
+	req.Header.Set("Referer", "https://git.example/")
+	req.RemoteAddr = "192.0.2.78:1"
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("always mode must still gate fetch, code=%d", rr.Code)
+	}
 	if !strings.Contains(rr.Body.String(), "challenge_required") {
 		t.Fatalf("body=%q", rr.Body.String())
+	}
+}
+
+func TestDetectModeAllowsForgeEventSource(t *testing.T) {
+	h := testHandler(t, func(cfg *config.Config) {
+		cfg.Challenge.Mode = "detect"
+		cfg.Challenge.Enabled = true
+		cfg.Detect.Enabled = true
+		cfg.Detect.ChallengeScore = 1
+		cfg.Detect.MissingUAScore = 50
+		cfg.Detect.BlockScore = 90
+	})
+	req := httptest.NewRequest(http.MethodGet, "/user/events", nil)
+	req.Host = "git.example"
+	req.Header.Set("Accept", "text/event-stream")
+	req.Header.Set("Sec-Fetch-Dest", "empty")
+	req.Header.Set("Sec-Fetch-Site", "same-origin")
+	req.Header.Set("Referer", "https://git.example/")
+	req.RemoteAddr = "192.0.2.79:1"
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("Forge EventSource must not be JSON-gated in detect mode, code=%d body=%s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestDetectModeAllowsSharedWorkerScript(t *testing.T) {
+	h := testHandler(t, func(cfg *config.Config) {
+		cfg.Challenge.Mode = "detect"
+		cfg.Challenge.Enabled = true
+		cfg.Detect.Enabled = true
+		cfg.Detect.ChallengeScore = 1
+		cfg.Detect.MissingUAScore = 50
+		cfg.Detect.BlockScore = 90
+	})
+	req := httptest.NewRequest(http.MethodGet, "/assets/js/eventsource.sharedworker.js", nil)
+	req.Host = "git.example"
+	req.Header.Set("Accept", "*/*")
+	req.Header.Set("Sec-Fetch-Dest", "sharedworker")
+	req.Header.Set("Sec-Fetch-Site", "same-origin")
+	req.Header.Set("Referer", "https://git.example/")
+	req.RemoteAddr = "192.0.2.80:1"
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("sharedworker script must proxy in detect mode, code=%d body=%s", rr.Code, rr.Body.String())
+	}
+	if strings.Contains(rr.Body.String(), "challenge_required") || strings.Contains(rr.Body.String(), "rg-check") {
+		t.Fatal("must not return challenge payload for sharedworker script")
 	}
 }
 

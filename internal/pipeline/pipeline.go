@@ -805,13 +805,23 @@ func (h *Handler) guard(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if h.challengeAlways || needChallenge {
-			risk := challenge.RiskFromScore(detectScore, cfg.Detect.ChallengeScore, cfg.Detect.BlockScore)
-			if h.challengeAlways && detectScore == 0 {
-				risk = challenge.RiskLow
+			// Detect-mode SPA/XHR (Forgejo dashboard fetch, HTMX, etc.) cannot render the
+			// gate. Challenging them returns JSON that breaks app parsers. Keep the hard
+			// gate for always/attack and for real document navigations.
+			if !h.challengeAlways && !wantsHTMLChallenge(r) && isBrowserSameOriginSubrequest(r) {
+				risk := challenge.RiskFromScore(detectScore, cfg.Detect.ChallengeScore, cfg.Detect.BlockScore)
+				risk = challenge.FloorRiskForMode(cfg.Challenge.Mode, risk)
+				gate := challenge.ResolveGate(cfg.Challenge.Mode, risk, "", h.cfg.Challenge.Captcha.Enabled)
+				h.chal.RememberChallenge(bindID, risk, gate)
+			} else {
+				risk := challenge.RiskFromScore(detectScore, cfg.Detect.ChallengeScore, cfg.Detect.BlockScore)
+				if h.challengeAlways && detectScore == 0 {
+					risk = challenge.RiskLow
+				}
+				risk = challenge.FloorRiskForMode(cfg.Challenge.Mode, risk)
+				h.serveChallenge(w, r, ray, bindID, risk)
+				return
 			}
-			risk = challenge.FloorRiskForMode(cfg.Challenge.Mode, risk)
-			h.serveChallenge(w, r, ray, bindID, risk)
-			return
 		}
 	}
 
@@ -1210,6 +1220,10 @@ func (h *Handler) serveChallenge(w http.ResponseWriter, r *http.Request, ray, bi
 		ret := challengeReturnTo(r)
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("X-RavenGuard-Challenge", "required")
+		if isEventSourceRequest(r) {
+			http.Error(w, "clearance required", http.StatusForbidden)
+			return
+		}
 		if r.Header.Get("HX-Request") != "" {
 			w.Header().Set("HX-Redirect", ret)
 			w.WriteHeader(http.StatusForbidden)
@@ -1221,6 +1235,8 @@ func (h *Handler) serveChallenge(w http.ResponseWriter, r *http.Request, ray, bi
 			"ok":       false,
 			"error":    "challenge_required",
 			"redirect": ret,
+			// Forgejo and similar apps call response.json() then .data.map even on errors.
+			"data": []any{},
 		})
 		return
 	}

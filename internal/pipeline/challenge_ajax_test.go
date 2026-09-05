@@ -63,6 +63,32 @@ func TestWantsHTMLChallenge(t *testing.T) {
 			},
 			want: true,
 		},
+		{
+			name: "sharedworker script",
+			hdr: map[string]string{
+				"Sec-Fetch-Dest": "sharedworker",
+				"Sec-Fetch-Site": "same-origin",
+				"Accept":         "*/*",
+			},
+			want: false,
+		},
+		{
+			name: "classic script",
+			hdr: map[string]string{
+				"Sec-Fetch-Dest": "script",
+				"Accept":         "*/*",
+			},
+			want: false,
+		},
+		{
+			name: "eventsource",
+			hdr: map[string]string{
+				"Accept":         "text/event-stream",
+				"Sec-Fetch-Dest": "empty",
+				"Sec-Fetch-Site": "same-origin",
+			},
+			want: false,
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -114,5 +140,30 @@ func TestChallengeReturnTo(t *testing.T) {
 	req.Header.Del("Referer")
 	if got := challengeReturnTo(req); got != "/" {
 		t.Fatalf("missing referer got %q", got)
+	}
+}
+
+func TestIsBrowserSameOriginSubrequest(t *testing.T) {
+	t.Parallel()
+	req := httptest.NewRequest(http.MethodGet, "/repo/search", nil)
+	req.Host = "git.example"
+	req.Header.Set("Sec-Fetch-Dest", "empty")
+	req.Header.Set("Sec-Fetch-Site", "same-origin")
+	if !isBrowserSameOriginSubrequest(req) {
+		t.Fatal("expected same-origin fetch")
+	}
+	req.Header.Set("Sec-Fetch-Site", "cross-site")
+	if isBrowserSameOriginSubrequest(req) {
+		t.Fatal("cross-site must not count")
+	}
+	req.Header.Del("Sec-Fetch-Site")
+	req.Header.Set("Referer", "https://git.example/")
+	if !isBrowserSameOriginSubrequest(req) {
+		t.Fatal("same-host referer should count when sec-fetch-site absent")
+	}
+	doc := httptest.NewRequest(http.MethodGet, "/", nil)
+	doc.Header.Set("Sec-Fetch-Dest", "document")
+	if isBrowserSameOriginSubrequest(doc) {
+		t.Fatal("documents are not subrequests")
 	}
 }
