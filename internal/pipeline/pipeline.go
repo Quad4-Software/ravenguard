@@ -563,7 +563,11 @@ func (h *Handler) guard(w http.ResponseWriter, r *http.Request) {
 	allowed := h.allows != nil && h.allows.Match(clientIP, ua, r.Header)
 	isGitSmartHTTP := detect.IsGitSmartHTTP(r)
 	isStream := detect.IsStreamProtocol(r)
-	isSameOriginStream := isStream && isSameOriginRequest(r)
+	isHotForge := detect.ForgePathClass(r.URL.Path) == detect.ForgeHot
+	// SSE is the only stream that can soft-pass without clearance: EventSource is an
+	// HTTP subresource and browsers do not perform a pre-flight handshake. WebSocket
+	// and WebTransport require a prior page load, so they must present a clearance cookie.
+	isSameOriginSSE := !h.challengeAlways && detect.IsSSE(r) && isSameOriginRequest(r) && !isTopLevelNavigation(r) && !isHotForge
 
 	if h.lists != nil {
 		if h.lists.IPBlocked(clientIP) {
@@ -704,7 +708,8 @@ func (h *Handler) guard(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if detect.IsWebSocketUpgrade(r) {
-		if !allowed && cfg.Challenge.Enabled && h.chal != nil && !h.chal.HasClearance(r, bindID) && !isSameOriginStream {
+		// WebSocket handshakes cannot render a JS challenge; require a clearance cookie.
+		if !allowed && cfg.Challenge.Enabled && h.chal != nil && !h.chal.HasClearance(r, bindID) {
 			h.recordEvent(r, ray, bindID, ipStr, host, ua, requestlog.ActionChallenge, "clearance required", 0, nil)
 			http.Error(w, "clearance required", http.StatusForbidden)
 			return
@@ -808,9 +813,11 @@ func (h *Handler) guard(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if h.challengeAlways || needChallenge {
-			// SPA/XHR, EventSource, WebSocket, and WebTransport cannot render a JS gate.
-			// Same-origin stream requests must soft-pass so real-time apps keep working.
-			if isSameOriginStream || (!h.challengeAlways && !wantsHTMLChallenge(r) && isBrowserSameOriginSubrequest(r)) {
+			// SPA/XHR and EventSource cannot render a JS gate. In detect mode same-origin
+			// SSE soft-passes on non-hot paths, but must not be a top-level document
+			// navigation to avoid Accept spoofing that fetches HTML. WebSocket and
+			// WebTransport require a clearance cookie.
+			if isSameOriginSSE || (!h.challengeAlways && !wantsHTMLChallenge(r) && isBrowserSameOriginSubrequest(r) && !isHotForge) {
 				risk := challenge.RiskFromScore(detectScore, cfg.Detect.ChallengeScore, cfg.Detect.BlockScore)
 				risk = challenge.FloorRiskForMode(cfg.Challenge.Mode, risk)
 				gate := challenge.ResolveGate(cfg.Challenge.Mode, risk, "", h.cfg.Challenge.Captcha.Enabled)

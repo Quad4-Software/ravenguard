@@ -8,7 +8,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/Quad4-Software/ravenguard/internal/detect"
+	"github.com/Quad4-Software/ravenguard/internal/faststr"
 )
 
 // wantsHTMLChallenge reports whether this request should receive the full
@@ -22,27 +22,29 @@ func wantsHTMLChallenge(r *http.Request) bool {
 	if strings.EqualFold(r.Header.Get("X-Requested-With"), "XMLHttpRequest") {
 		return false
 	}
-	if detect.IsSSE(r) {
-		return false
-	}
-	dest := strings.ToLower(strings.TrimSpace(r.Header.Get("Sec-Fetch-Dest")))
-	switch dest {
-	case "document", "iframe":
+	if isTopLevelNavigation(r) {
 		return true
-	case "":
-		// Legacy clients omit Sec-Fetch-Dest. Fall through to Accept.
-	default:
-		// script, style, image, font, worker, sharedworker, empty, ...
-		return false
 	}
 	accept := r.Header.Get("Accept")
+	if faststr.ContainsFold(accept, "text/event-stream") {
+		return false
+	}
+	dest := faststr.TrimSpace(r.Header.Get("Sec-Fetch-Dest"))
+	if strings.EqualFold(dest, "document") || strings.EqualFold(dest, "iframe") {
+		return true
+	}
+	if dest != "" {
+		// explicit subresource dest (script, style, image, worker, empty, ...)
+		return false
+	}
+	// Legacy clients omit Sec-Fetch-Dest. Fall through to Accept.
 	if accept != "" {
 		htmlIdx := strings.Index(accept, "text/html")
 		jsonIdx := strings.Index(accept, "application/json")
 		if jsonIdx >= 0 && (htmlIdx < 0 || jsonIdx < htmlIdx) {
 			return false
 		}
-		if detect.IsSSE(r) {
+		if faststr.ContainsFold(accept, "text/event-stream") {
 			return false
 		}
 	}
@@ -56,28 +58,47 @@ func isSameOriginRequest(r *http.Request) bool {
 	if r == nil || r.Host == "" {
 		return false
 	}
-	site := strings.ToLower(strings.TrimSpace(r.Header.Get("Sec-Fetch-Site")))
-	switch site {
-	case "same-origin", "same-site":
+	site := faststr.TrimSpace(r.Header.Get("Sec-Fetch-Site"))
+	switch {
+	case strings.EqualFold(site, "same-origin"), strings.EqualFold(site, "same-site"):
 		return true
-	case "cross-site", "none":
+	case strings.EqualFold(site, "cross-site"), strings.EqualFold(site, "none"):
 		return false
 	}
 	host := stripPort(r.Host)
 	for _, hdr := range []string{"Origin", "Referer"} {
-		v := strings.TrimSpace(r.Header.Get(hdr))
+		v := faststr.TrimSpace(r.Header.Get(hdr))
 		if v == "" {
 			continue
 		}
-		u, err := url.Parse(v)
-		if err != nil || u.Host == "" {
+		uhost := hostFromURL(v)
+		if uhost == "" {
 			continue
 		}
-		if strings.EqualFold(stripPort(u.Host), host) {
+		if strings.EqualFold(uhost, host) {
 			return true
 		}
 	}
 	return false
+}
+
+// hostFromURL extracts the host:port from an absolute or protocol-relative
+// URL string without allocating. Relative paths have no host and return "".
+func hostFromURL(s string) string {
+	if i := strings.Index(s, "://"); i >= 0 {
+		s = s[i+3:]
+	} else if strings.HasPrefix(s, "//") {
+		s = s[2:]
+	} else {
+		return ""
+	}
+	if i := strings.IndexAny(s, "/?#"); i >= 0 {
+		s = s[:i]
+	}
+	if i := strings.LastIndexByte(s, '@'); i >= 0 {
+		s = s[i+1:]
+	}
+	return stripPort(s)
 }
 
 // isBrowserSameOriginSubrequest reports a same-tab fetch/XHR from a page on this origin.
@@ -85,6 +106,17 @@ func isSameOriginRequest(r *http.Request) bool {
 // challenges, never always/attack mode.
 func isBrowserSameOriginSubrequest(r *http.Request) bool {
 	return !wantsHTMLChallenge(r) && isSameOriginRequest(r)
+}
+
+// isTopLevelNavigation reports whether the request is a document navigation
+// based on Sec-Fetch headers. An absent value is treated as unknown, not true.
+func isTopLevelNavigation(r *http.Request) bool {
+	dest := faststr.TrimSpace(r.Header.Get("Sec-Fetch-Dest"))
+	if strings.EqualFold(dest, "document") || strings.EqualFold(dest, "iframe") {
+		return true
+	}
+	mode := faststr.TrimSpace(r.Header.Get("Sec-Fetch-Mode"))
+	return strings.EqualFold(mode, "navigate")
 }
 
 // safeNextPath returns a same-origin relative path suitable for post-challenge redirect.

@@ -1049,25 +1049,28 @@ func TestGitSmartHTTPBypassesChallenge(t *testing.T) {
 
 func TestStreamProtocolsBypassChallenge(t *testing.T) {
 	h := testHandler(t, func(cfg *config.Config) {
-		cfg.Challenge.Mode = "always"
+		cfg.Challenge.Mode = "detect"
 		cfg.Challenge.Enabled = true
 		cfg.Detect.Enabled = true
+		cfg.Detect.ChallengeScore = 1
+		cfg.Detect.MissingAcceptLangScore = 15
+		cfg.Detect.BlockScore = 90
 		cfg.RateLimit.Enabled = false
 	})
 
-	// WebSocket from same origin without clearance should still work.
-	t.Run("websocket same origin", func(t *testing.T) {
+	// WebSocket always requires a clearance cookie, even from same origin.
+	t.Run("websocket same origin still requires clearance", func(t *testing.T) {
 		req := wsUpgradeRequest("/ws", "192.0.2.90:1")
 		req.Host = "git.example"
 		req.Header.Set("Origin", "https://git.example")
 		rr := httptest.NewRecorder()
 		h.ServeHTTP(rr, req)
-		if rr.Code != http.StatusOK {
+		if rr.Code != http.StatusForbidden {
 			t.Fatalf("code=%d body=%s", rr.Code, rr.Body.String())
 		}
 	})
 
-	// SSE from same origin should soft-pass.
+	// SSE from same origin should soft-pass in detect mode.
 	t.Run("sse same origin", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/events", nil)
 		req.Host = "git.example"
@@ -1080,6 +1083,57 @@ func TestStreamProtocolsBypassChallenge(t *testing.T) {
 		rr := httptest.NewRecorder()
 		h.ServeHTTP(rr, req)
 		if rr.Code != http.StatusOK {
+			t.Fatalf("code=%d body=%s", rr.Code, rr.Body.String())
+		}
+	})
+
+	// A top-level navigation spoofing EventSource Accept must not soft-pass.
+	t.Run("sse top level navigation challenged", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.Host = "git.example"
+		req.Header.Set("User-Agent", "Mozilla/5.0")
+		req.Header.Set("Accept", "text/event-stream")
+		req.Header.Set("Sec-Fetch-Dest", "document")
+		req.Header.Set("Sec-Fetch-Site", "same-origin")
+		req.Header.Set("Referer", "https://git.example/")
+		req.RemoteAddr = "192.0.2.94:1"
+		rr := httptest.NewRecorder()
+		h.ServeHTTP(rr, req)
+		if rr.Code != http.StatusForbidden {
+			t.Fatalf("code=%d body=%s", rr.Code, rr.Body.String())
+		}
+	})
+
+	// SSE targeting a scraper-hot forge path must not soft-pass.
+	t.Run("sse hot forge path challenged", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/owner/repo/compare", nil)
+		req.Host = "git.example"
+		req.Header.Set("User-Agent", "Mozilla/5.0")
+		req.Header.Set("Accept", "text/event-stream")
+		req.Header.Set("Sec-Fetch-Dest", "empty")
+		req.Header.Set("Sec-Fetch-Site", "same-origin")
+		req.Header.Set("Referer", "https://git.example/")
+		req.RemoteAddr = "192.0.2.96:1"
+		rr := httptest.NewRecorder()
+		h.ServeHTTP(rr, req)
+		if rr.Code != http.StatusForbidden {
+			t.Fatalf("code=%d body=%s", rr.Code, rr.Body.String())
+		}
+	})
+
+	// Same-origin XHR targeting a scraper-hot forge path must not soft-pass.
+	t.Run("xhr hot forge path challenged", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/owner/repo/compare", nil)
+		req.Host = "git.example"
+		req.Header.Set("User-Agent", "Mozilla/5.0")
+		req.Header.Set("Accept", "application/json")
+		req.Header.Set("Sec-Fetch-Dest", "empty")
+		req.Header.Set("Sec-Fetch-Site", "same-origin")
+		req.Header.Set("Referer", "https://git.example/")
+		req.RemoteAddr = "192.0.2.97:1"
+		rr := httptest.NewRecorder()
+		h.ServeHTTP(rr, req)
+		if rr.Code != http.StatusForbidden {
 			t.Fatalf("code=%d body=%s", rr.Code, rr.Body.String())
 		}
 	})

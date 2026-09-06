@@ -124,7 +124,7 @@ func IsGitSmartHTTP(r *http.Request) bool {
 		return false
 	}
 	ua := r.Header.Get("User-Agent")
-	if !strings.HasPrefix(ua, "git/") {
+	if !faststr.HasPrefixFold(ua, "git/") {
 		return false
 	}
 	path := r.URL.Path
@@ -133,10 +133,34 @@ func IsGitSmartHTTP(r *http.Request) bool {
 		return true
 	}
 	if strings.HasSuffix(path, "/info/refs") {
-		svc := r.URL.Query().Get("service")
-		return svc == "git-upload-pack" || svc == "git-receive-pack"
+		svc, ok := rawQueryValue(r.URL.RawQuery, "service")
+		return ok && (strings.EqualFold(svc, "git-upload-pack") || strings.EqualFold(svc, "git-receive-pack"))
 	}
 	return false
+}
+
+// rawQueryValue returns the first value for key in a raw URL query string
+// without allocating. It does not unescape the value.
+func rawQueryValue(raw, key string) (string, bool) {
+	prefix := key + "="
+	n := len(prefix)
+	for raw != "" {
+		i := strings.Index(raw, prefix)
+		if i < 0 {
+			return "", false
+		}
+		if i > 0 && raw[i-1] != '&' {
+			// not at a key boundary, keep searching
+			raw = raw[i+n:]
+			continue
+		}
+		j := i + n
+		for j < len(raw) && raw[j] != '&' {
+			j++
+		}
+		return raw[i+n : j], true
+	}
+	return "", false
 }
 
 func score(r *http.Request, cfg Config, wantReasons bool) Result {
@@ -145,6 +169,14 @@ func score(r *http.Request, cfg Config, wantReasons bool) Result {
 		return res
 	}
 	ua := r.Header.Get("User-Agent")
+
+	// Spoofing the Git UA on non-smart-HTTP paths is a common bypass attempt.
+	if faststr.HasPrefixFold(ua, "git/") {
+		res.Score += cfg.ScannerUAScore
+		if wantReasons {
+			res.Reasons = append(res.Reasons, "git ua on non-smart path")
+		}
+	}
 
 	var lowUA []byte
 	var lowUAPtr *[]byte
@@ -473,7 +505,8 @@ func IsSSE(r *http.Request) bool {
 	if r == nil {
 		return false
 	}
-	return strings.Contains(strings.ToLower(r.Header.Get("Accept")), "text/event-stream")
+	// faststr.ContainsFold is ASCII case-insensitive and zero-alloc.
+	return faststr.ContainsFold(r.Header.Get("Accept"), "text/event-stream")
 }
 
 // IsWebSocketUpgrade reports whether r is a WebSocket handshake.
@@ -484,9 +517,55 @@ func IsWebSocketUpgrade(r *http.Request) bool {
 	if !strings.EqualFold(r.Header.Get("Upgrade"), "websocket") {
 		return false
 	}
-	for part := range strings.SplitSeq(r.Header.Get("Connection"), ",") {
-		if strings.EqualFold(strings.TrimSpace(part), "upgrade") {
-			return true
+	return headerHasTokenFold(r.Header.Get("Connection"), "upgrade")
+}
+
+// headerHasTokenFold reports whether a comma-separated header value contains
+// token using ASCII case folding. It scans the string without allocating.
+// token must be lowercase ASCII.
+func headerHasTokenFold(s, token string) bool {
+	tn := len(token)
+	if tn == 0 {
+		return true
+	}
+	n := len(s)
+	i := 0
+	for i < n {
+		// skip leading spaces and commas
+		for i < n && (s[i] == ' ' || s[i] == '\t' || s[i] == ',') {
+			i++
+		}
+		start := i
+		for i < n && s[i] != ',' {
+			i++
+		}
+		end := i
+		// trim trailing spaces
+		for end > start && (s[end-1] == ' ' || s[end-1] == '\t') {
+			end--
+		}
+		if end-start == tn {
+			match := true
+			for j := 0; j < tn; j++ {
+				c := s[start+j]
+				want := token[j]
+				if c == want {
+					continue
+				}
+				if c >= 'A' && c <= 'Z' {
+					c += 'a' - 'A'
+				}
+				if c != want {
+					match = false
+					break
+				}
+			}
+			if match {
+				return true
+			}
+		}
+		if i < n && s[i] == ',' {
+			i++
 		}
 	}
 	return false
