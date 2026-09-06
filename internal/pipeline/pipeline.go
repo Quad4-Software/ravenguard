@@ -562,6 +562,8 @@ func (h *Handler) guard(w http.ResponseWriter, r *http.Request) {
 	ua := r.Header.Get("User-Agent")
 	allowed := h.allows != nil && h.allows.Match(clientIP, ua, r.Header)
 	isGitSmartHTTP := detect.IsGitSmartHTTP(r)
+	isStream := detect.IsStreamProtocol(r)
+	isSameOriginStream := isStream && isSameOriginRequest(r)
 
 	if h.lists != nil {
 		if h.lists.IPBlocked(clientIP) {
@@ -687,7 +689,7 @@ func (h *Handler) guard(w http.ResponseWriter, r *http.Request) {
 			if h.prot != nil && h.prot.Enabled() {
 				h.prot.Strike(bindID)
 			}
-			if isWebSocketUpgrade(r) {
+			if isStream {
 				h.recordEvent(r, ray, bindID, ipStr, host, ua, requestlog.ActionRateLimit, "Rate limited", 0, nil)
 				http.Error(w, "rate limited", http.StatusTooManyRequests)
 				return
@@ -701,8 +703,8 @@ func (h *Handler) guard(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if isWebSocketUpgrade(r) {
-		if !allowed && cfg.Challenge.Enabled && h.chal != nil && !h.chal.HasClearance(r, bindID) {
+	if detect.IsWebSocketUpgrade(r) {
+		if !allowed && cfg.Challenge.Enabled && h.chal != nil && !h.chal.HasClearance(r, bindID) && !isSameOriginStream {
 			h.recordEvent(r, ray, bindID, ipStr, host, ua, requestlog.ActionChallenge, "clearance required", 0, nil)
 			http.Error(w, "clearance required", http.StatusForbidden)
 			return
@@ -806,10 +808,9 @@ func (h *Handler) guard(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if h.challengeAlways || needChallenge {
-			// Detect-mode SPA/XHR (Forgejo dashboard fetch, HTMX, etc.) cannot render the
-			// gate. Challenging them returns JSON that breaks app parsers. Keep the hard
-			// gate for always/attack and for real document navigations.
-			if !h.challengeAlways && !wantsHTMLChallenge(r) && isBrowserSameOriginSubrequest(r) {
+			// SPA/XHR, EventSource, WebSocket, and WebTransport cannot render a JS gate.
+			// Same-origin stream requests must soft-pass so real-time apps keep working.
+			if isSameOriginStream || (!h.challengeAlways && !wantsHTMLChallenge(r) && isBrowserSameOriginSubrequest(r)) {
 				risk := challenge.RiskFromScore(detectScore, cfg.Detect.ChallengeScore, cfg.Detect.BlockScore)
 				risk = challenge.FloorRiskForMode(cfg.Challenge.Mode, risk)
 				gate := challenge.ResolveGate(cfg.Challenge.Mode, risk, "", h.cfg.Challenge.Captcha.Enabled)
@@ -990,7 +991,7 @@ func (h *Handler) checkOpenAPI(w http.ResponseWriter, r *http.Request, ray, bind
 	details := map[string]string{"schema_id": res.SchemaID}
 	if res.ShouldBlock {
 		h.recordEvent(r, ray, bindID, ipStr, host, ua, requestlog.ActionOpenAPI, res.Reason, 0, details)
-		if isWebSocketUpgrade(r) {
+		if detect.IsWebSocketUpgrade(r) {
 			http.Error(w, "openapi schema violation", http.StatusForbidden)
 			return false
 		}
@@ -1141,7 +1142,7 @@ func (h *Handler) proxy(w http.ResponseWriter, r *http.Request, ray string, clie
 		up = routes
 	}
 
-	if isWebSocketUpgrade(r) || h.nf == nil || !cfg.Detect.Enabled {
+	if detect.IsStreamProtocol(r) || h.nf == nil || !cfg.Detect.Enabled {
 		up.ServeHTTP(w, r)
 		return
 	}
@@ -1183,21 +1184,6 @@ func (s *statusRecorder) Flush() {
 	}
 }
 
-func isWebSocketUpgrade(r *http.Request) bool {
-	if r == nil {
-		return false
-	}
-	if !strings.EqualFold(r.Header.Get("Upgrade"), "websocket") {
-		return false
-	}
-	for part := range strings.SplitSeq(r.Header.Get("Connection"), ",") {
-		if strings.EqualFold(strings.TrimSpace(part), "upgrade") {
-			return true
-		}
-	}
-	return false
-}
-
 func (h *Handler) serveChallenge(w http.ResponseWriter, r *http.Request, ray, bindID string, risk challenge.RiskLevel) {
 	if h.chal == nil {
 		h.pages.RenderError(w, ray, "Challenge unavailable", "Browser challenge is not configured on this edge.", http.StatusInternalServerError)
@@ -1221,7 +1207,7 @@ func (h *Handler) serveChallenge(w http.ResponseWriter, r *http.Request, ray, bi
 		ret := challengeReturnTo(r)
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("X-RavenGuard-Challenge", "required")
-		if isEventSourceRequest(r) {
+		if detect.IsSSE(r) {
 			http.Error(w, "clearance required", http.StatusForbidden)
 			return
 		}

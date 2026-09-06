@@ -467,3 +467,52 @@ func IsScannerUA(ua string) bool {
 func IsAIUA(ua string) bool {
 	return matchAnyFold(ua, aiMatcher)
 }
+
+// IsSSE reports whether r is an EventSource (text/event-stream) request.
+func IsSSE(r *http.Request) bool {
+	if r == nil {
+		return false
+	}
+	return strings.Contains(strings.ToLower(r.Header.Get("Accept")), "text/event-stream")
+}
+
+// IsWebSocketUpgrade reports whether r is a WebSocket handshake.
+func IsWebSocketUpgrade(r *http.Request) bool {
+	if r == nil {
+		return false
+	}
+	if !strings.EqualFold(r.Header.Get("Upgrade"), "websocket") {
+		return false
+	}
+	for part := range strings.SplitSeq(r.Header.Get("Connection"), ",") {
+		if strings.EqualFold(strings.TrimSpace(part), "upgrade") {
+			return true
+		}
+	}
+	return false
+}
+
+// IsWebTransport reports whether r is a WebTransport session request.
+// It matches HTTP/3 CONNECT with the webtransport protocol or the HTTP/2
+// Upgrade fallback and version negotiation header.
+func IsWebTransport(r *http.Request) bool {
+	if r == nil {
+		return false
+	}
+	if r.Method == http.MethodConnect && r.ProtoMajor >= 3 {
+		return true
+	}
+	if strings.EqualFold(r.Header.Get("Upgrade"), "webtransport") {
+		return true
+	}
+	if r.Header.Get("Sec-WebTransport-Version") != "" {
+		return true
+	}
+	return false
+}
+
+// IsStreamProtocol reports whether r uses a protocol that cannot render
+// a JavaScript challenge (SSE, WebSocket, or WebTransport).
+func IsStreamProtocol(r *http.Request) bool {
+	return IsSSE(r) || IsWebSocketUpgrade(r) || IsWebTransport(r)
+}

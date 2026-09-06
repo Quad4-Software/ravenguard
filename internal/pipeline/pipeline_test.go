@@ -1046,3 +1046,92 @@ func TestGitSmartHTTPBypassesChallenge(t *testing.T) {
 		})
 	}
 }
+
+func TestStreamProtocolsBypassChallenge(t *testing.T) {
+	h := testHandler(t, func(cfg *config.Config) {
+		cfg.Challenge.Mode = "always"
+		cfg.Challenge.Enabled = true
+		cfg.Detect.Enabled = true
+		cfg.RateLimit.Enabled = false
+	})
+
+	// WebSocket from same origin without clearance should still work.
+	t.Run("websocket same origin", func(t *testing.T) {
+		req := wsUpgradeRequest("/ws", "192.0.2.90:1")
+		req.Host = "git.example"
+		req.Header.Set("Origin", "https://git.example")
+		rr := httptest.NewRecorder()
+		h.ServeHTTP(rr, req)
+		if rr.Code != http.StatusOK {
+			t.Fatalf("code=%d body=%s", rr.Code, rr.Body.String())
+		}
+	})
+
+	// SSE from same origin should soft-pass.
+	t.Run("sse same origin", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/events", nil)
+		req.Host = "git.example"
+		req.Header.Set("User-Agent", "Mozilla/5.0")
+		req.Header.Set("Accept", "text/event-stream")
+		req.Header.Set("Sec-Fetch-Dest", "empty")
+		req.Header.Set("Sec-Fetch-Site", "same-origin")
+		req.Header.Set("Referer", "https://git.example/")
+		req.RemoteAddr = "192.0.2.91:1"
+		rr := httptest.NewRecorder()
+		h.ServeHTTP(rr, req)
+		if rr.Code != http.StatusOK {
+			t.Fatalf("code=%d body=%s", rr.Code, rr.Body.String())
+		}
+	})
+
+	// WebSocket without origin info must still require clearance.
+	t.Run("websocket no origin still challenged", func(t *testing.T) {
+		req := wsUpgradeRequest("/ws", "192.0.2.92:1")
+		rr := httptest.NewRecorder()
+		h.ServeHTTP(rr, req)
+		if rr.Code != http.StatusForbidden {
+			t.Fatalf("code=%d body=%s", rr.Code, rr.Body.String())
+		}
+	})
+}
+
+func TestStreamProtocolRateLimit(t *testing.T) {
+	cfg := config.Default()
+	cfg.Challenge.Secret = testSecret
+	cfg.Challenge.Enabled = true
+	cfg.Detect.Enabled = false
+	cfg.RateLimit.Enabled = true
+	cfg.RateLimit.Requests = 1
+	cfg.RateLimit.Burst = 1
+	cfg.RateLimit.Window = config.Duration{Duration: time.Minute}
+	cfg.RateLimit.ChallengeOver = true
+	cfg.Privacy.HashClientIP = false
+	pages, _ := ui.New(ui.Site{Brand: "RavenGuard", StatusText: "x", Prefix: "/_rg"})
+	limiter := ratelimit.New(1, 1, time.Minute, false)
+	upstream := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(200)
+		_, _ = w.Write([]byte("ok"))
+	})
+	h := pipeline.New(cfg, blocklist.New(), nil, limiter, nil, pages, upstream, nil, nil, nil, testPriv(cfg), nil, nil)
+
+	t.Run("sse rate limited returns 429 not challenge", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/events", nil)
+		req.Host = "git.example"
+		req.Header.Set("Accept", "text/event-stream")
+		req.Header.Set("Sec-Fetch-Site", "same-origin")
+		req.Header.Set("Referer", "https://git.example/")
+		req.RemoteAddr = "192.0.2.95:1"
+
+		rr := httptest.NewRecorder()
+		h.ServeHTTP(rr, req)
+		if rr.Code != http.StatusOK {
+			t.Fatalf("first request code=%d body=%s", rr.Code, rr.Body.String())
+		}
+
+		rr2 := httptest.NewRecorder()
+		h.ServeHTTP(rr2, req)
+		if rr2.Code != http.StatusTooManyRequests {
+			t.Fatalf("rate limited code=%d body=%s", rr2.Code, rr2.Body.String())
+		}
+	})
+}

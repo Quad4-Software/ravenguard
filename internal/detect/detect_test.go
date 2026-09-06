@@ -424,6 +424,47 @@ func TestGitSmartHTTP(t *testing.T) {
 	}
 }
 
+func TestStreamProtocolDetection(t *testing.T) {
+	cases := []struct {
+		name  string
+		setup func(*http.Request)
+		want  bool
+	}{
+		{"sse accept", func(r *http.Request) { r.Header.Set("Accept", "text/event-stream") }, true},
+		{"sse accept uppercase", func(r *http.Request) { r.Header.Set("Accept", "TEXT/EVENT-STREAM") }, true},
+		{"websocket upgrade", func(r *http.Request) {
+			r.Header.Set("Upgrade", "websocket")
+			r.Header.Set("Connection", "Upgrade")
+		}, true},
+		{"websocket token list", func(r *http.Request) {
+			r.Header.Set("Upgrade", "websocket")
+			r.Header.Set("Connection", "keep-alive, Upgrade")
+		}, true},
+		{"webtransport http3", func(r *http.Request) {
+			r.Method = http.MethodConnect
+			r.ProtoMajor = 3
+			r.Proto = "HTTP/3.0"
+		}, true},
+		{"webtransport upgrade", func(r *http.Request) { r.Header.Set("Upgrade", "webtransport") }, true},
+		{"webtransport version", func(r *http.Request) { r.Header.Set("Sec-WebTransport-Version", "draft02") }, true},
+		{"plain html", func(r *http.Request) { r.Header.Set("Accept", "text/html") }, false},
+		{"plain json", func(r *http.Request) { r.Header.Set("Accept", "application/json") }, false},
+		{"http2 connect without protocol", func(r *http.Request) {
+			r.Method = http.MethodConnect
+			r.ProtoMajor = 2
+		}, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			r := httptest.NewRequest(http.MethodGet, "/", nil)
+			tc.setup(r)
+			if got := detect.IsStreamProtocol(r); got != tc.want {
+				t.Fatalf("IsStreamProtocol=%v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
 func FuzzIsScannerUA(f *testing.F) {
 	f.Add("sqlmap")
 	f.Add("Mozilla/5.0")
