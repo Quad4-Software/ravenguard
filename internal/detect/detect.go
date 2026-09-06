@@ -116,8 +116,34 @@ func ScoreDebug(r *http.Request, cfg Config) Result {
 	return score(r, cfg, true)
 }
 
+// IsGitSmartHTTP reports whether r is a Git smart-HTTP negotiation or
+// pack transfer request. Git clients cannot render a browser challenge,
+// so these requests are excluded from detect scoring and challenge gating.
+func IsGitSmartHTTP(r *http.Request) bool {
+	if r == nil || r.URL == nil {
+		return false
+	}
+	ua := r.Header.Get("User-Agent")
+	if !strings.HasPrefix(ua, "git/") {
+		return false
+	}
+	path := r.URL.Path
+	if strings.HasSuffix(path, "/git-upload-pack") ||
+		strings.HasSuffix(path, "/git-receive-pack") {
+		return true
+	}
+	if strings.HasSuffix(path, "/info/refs") {
+		svc := r.URL.Query().Get("service")
+		return svc == "git-upload-pack" || svc == "git-receive-pack"
+	}
+	return false
+}
+
 func score(r *http.Request, cfg Config, wantReasons bool) Result {
 	var res Result
+	if IsGitSmartHTTP(r) {
+		return res
+	}
 	ua := r.Header.Get("User-Agent")
 
 	var lowUA []byte

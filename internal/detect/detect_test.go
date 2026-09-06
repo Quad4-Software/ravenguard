@@ -368,6 +368,62 @@ func TestForgeBrowseNoSingleHitScore(t *testing.T) {
 	}
 }
 
+func TestGitSmartHTTP(t *testing.T) {
+	cfg := testCfg()
+
+	smart := []struct {
+		method string
+		path   string
+		query  string
+	}{
+		{http.MethodGet, "/owner/repo.git/info/refs", "service=git-upload-pack"},
+		{http.MethodGet, "/owner/repo.git/info/refs", "service=git-receive-pack"},
+		{http.MethodPost, "/owner/repo.git/git-upload-pack", ""},
+		{http.MethodPost, "/owner/repo.git/git-receive-pack", ""},
+	}
+	for _, tc := range smart {
+		t.Run(tc.path+"_"+tc.method, func(t *testing.T) {
+			url := tc.path
+			if tc.query != "" {
+				url = url + "?" + tc.query
+			}
+			r := httptest.NewRequest(tc.method, url, nil)
+			r.Header.Set("User-Agent", "git/2.40.0")
+			if !detect.IsGitSmartHTTP(r) {
+				t.Fatal("expected git smart HTTP")
+			}
+			res := detect.Score(r, cfg)
+			if res.Score != 0 {
+				t.Fatalf("git smart HTTP scored %d, want 0", res.Score)
+			}
+		})
+	}
+
+	nonsmart := []struct {
+		method string
+		path   string
+		query  string
+		ua     string
+	}{
+		{http.MethodGet, "/owner/repo.git/info/refs", "", "git/2.40.0"},
+		{http.MethodGet, "/owner/repo.git/info/refs", "service=git-upload-pack", "Mozilla/5.0"},
+		{http.MethodGet, "/", "", "git/2.40.0"},
+	}
+	for _, tc := range nonsmart {
+		t.Run("not_"+tc.path, func(t *testing.T) {
+			url := tc.path
+			if tc.query != "" {
+				url = url + "?" + tc.query
+			}
+			r := httptest.NewRequest(tc.method, url, nil)
+			r.Header.Set("User-Agent", tc.ua)
+			if detect.IsGitSmartHTTP(r) {
+				t.Fatal("expected non-git smart HTTP")
+			}
+		})
+	}
+}
+
 func FuzzIsScannerUA(f *testing.F) {
 	f.Add("sqlmap")
 	f.Add("Mozilla/5.0")

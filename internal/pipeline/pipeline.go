@@ -561,6 +561,7 @@ func (h *Handler) guard(w http.ResponseWriter, r *http.Request) {
 	host := stripPort(r.Host)
 	ua := r.Header.Get("User-Agent")
 	allowed := h.allows != nil && h.allows.Match(clientIP, ua, r.Header)
+	isGitSmartHTTP := detect.IsGitSmartHTTP(r)
 
 	if h.lists != nil {
 		if h.lists.IPBlocked(clientIP) {
@@ -665,7 +666,7 @@ func (h *Handler) guard(w http.ResponseWriter, r *http.Request) {
 
 	mlExtra := 0
 	semNeedChal := false
-	if !allowed {
+	if !allowed && !isGitSmartHTTP {
 		extra, needChal, stop := h.runSemanticML(w, r, ray, bindID, ipStr, host, ua)
 		if stop {
 			return
@@ -718,7 +719,7 @@ func (h *Handler) guard(w http.ResponseWriter, r *http.Request) {
 
 	needChallenge := false
 	detectScore := 0
-	if !allowed && cfg.Detect.Enabled {
+	if !allowed && !isGitSmartHTTP && cfg.Detect.Enabled {
 		if h.beh != nil {
 			h.beh.Record(bindID, r.URL.Path, r.Method)
 			if h.beh.StrikesExceeded(bindID) {
@@ -793,7 +794,7 @@ func (h *Handler) guard(w http.ResponseWriter, r *http.Request) {
 		detectScore = mlExtra
 	}
 
-	if !allowed && cfg.Challenge.Enabled && h.chal != nil {
+	if !allowed && !isGitSmartHTTP && cfg.Challenge.Enabled && h.chal != nil {
 		if h.chal.HasClearance(r, bindID) {
 			if !h.checkAccess(w, r, ray, bindID, clientIP, false) {
 				return

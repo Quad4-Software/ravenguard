@@ -1012,3 +1012,37 @@ func TestCaptchaStubGate(t *testing.T) {
 		t.Fatalf("expected captcha ok post=%d %s", crr2.Code, crr2.Body.String())
 	}
 }
+
+func TestGitSmartHTTPBypassesChallenge(t *testing.T) {
+	h := testHandler(t, func(cfg *config.Config) {
+		cfg.Challenge.Mode = "always"
+		cfg.Challenge.Enabled = true
+		cfg.Detect.Enabled = true
+		cfg.RateLimit.Enabled = false
+	})
+
+	smart := []struct {
+		method string
+		path   string
+		query  string
+	}{
+		{http.MethodGet, "/owner/repo.git/info/refs", "service=git-upload-pack"},
+		{http.MethodPost, "/owner/repo.git/git-upload-pack", ""},
+	}
+	for _, tc := range smart {
+		t.Run(tc.path, func(t *testing.T) {
+			url := tc.path
+			if tc.query != "" {
+				url = url + "?" + tc.query
+			}
+			req := httptest.NewRequest(tc.method, url, nil)
+			req.Header.Set("User-Agent", "git/2.40.0")
+			req.RemoteAddr = "192.0.2.90:1"
+			rr := httptest.NewRecorder()
+			h.ServeHTTP(rr, req)
+			if rr.Code != http.StatusOK {
+				t.Fatalf("code=%d body=%s", rr.Code, rr.Body.String())
+			}
+		})
+	}
+}
