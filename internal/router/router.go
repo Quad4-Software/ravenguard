@@ -28,10 +28,17 @@ type Upstream struct {
 	MaxConnsPerHost     int      `json:"max_conns_per_host,omitempty"`
 	FlushInterval       string   `json:"flush_interval,omitempty"`
 	SetHeaders          []string `json:"set_headers,omitempty"`
+	Protocol            string   `json:"protocol,omitempty"`
+	AllowHTTP1          bool     `json:"allow_http1,omitempty"`
+	TLSCAFile           string   `json:"tls_ca_file,omitempty"`
+	TLSClientCertFile   string   `json:"tls_client_cert_file,omitempty"`
+	TLSClientKeyFile    string   `json:"tls_client_key_file,omitempty"`
+	InsecureSkipVerify  bool     `json:"insecure_skip_verify,omitempty"`
 	HealthEnabled       bool     `json:"health_enabled"`
 	HealthPath          string   `json:"health_path,omitempty"`
 	HealthInterval      string   `json:"health_interval,omitempty"`
 	HealthTimeout       string   `json:"health_timeout,omitempty"`
+	HealthSuccessCodes  []int    `json:"health_success_codes,omitempty"`
 }
 
 // Route maps host + path prefix to an upstream.
@@ -46,6 +53,7 @@ type Route struct {
 	Priority        int      `json:"priority"`
 	AccessPolicyID  string   `json:"access_policy_id,omitempty"`
 	OpenAPISchemaID string   `json:"openapi_schema_id,omitempty"`
+	SkipChallenge   bool     `json:"skip_challenge"`
 }
 
 // Match holds the resolved route for a request.
@@ -59,7 +67,7 @@ type compiled struct {
 	hosts    map[string]struct{}
 	prefix   string
 	upstream Upstream
-	proxy    http.Handler
+	proxy    *proxy.Proxy
 	health   *health.Checker
 }
 
@@ -111,7 +119,7 @@ func (t *Table) SetFallback(p http.Handler, hc *health.Checker) {
 	t.mu.Unlock()
 }
 
-// Close stops health checkers owned by the table.
+// Close stops health checkers owned by the table and releases proxy resources.
 func (t *Table) Close() {
 	t.cancel()
 	t.mu.Lock()
@@ -120,9 +128,15 @@ func (t *Table) Close() {
 		if c.health != nil {
 			c.health.Stop()
 		}
+		if c.proxy != nil {
+			_ = c.proxy.Close()
+		}
 	}
 	if t.fallbackHealth != nil {
 		t.fallbackHealth.Stop()
+	}
+	if p, ok := t.fallback.(*proxy.Proxy); ok {
+		_ = p.Close()
 	}
 }
 
@@ -139,6 +153,8 @@ func (t *Table) Replace(upstreams []Upstream, routes []Route) error {
 		preflen  int
 	}
 	var scoredList []scored
+	var built []compiled
+	var cleanup []compiled
 	for _, rt := range routes {
 		if !rt.Enabled {
 			continue
@@ -156,6 +172,15 @@ func (t *Table) Replace(upstreams []Upstream, routes []Route) error {
 		}
 		p, hc, err := t.buildProxy(up, rt.StripPrefix, prefix)
 		if err != nil {
+			// Stop health checkers created for this partial build.
+			for _, c := range cleanup {
+				if c.health != nil {
+					c.health.Stop()
+				}
+				if c.proxy != nil {
+					_ = c.proxy.Close()
+				}
+			}
 			return err
 		}
 		hosts := make(map[string]struct{}, len(rt.Hosts))
@@ -166,18 +191,20 @@ func (t *Table) Replace(upstreams []Upstream, routes []Route) error {
 			}
 			hosts[h] = struct{}{}
 		}
+		cm := compiled{
+			route:    rt,
+			hosts:    hosts,
+			prefix:   prefix,
+			upstream: up,
+			proxy:    p,
+			health:   hc,
+		}
 		scoredList = append(scoredList, scored{
-			c: compiled{
-				route:    rt,
-				hosts:    hosts,
-				prefix:   prefix,
-				upstream: up,
-				proxy:    p,
-				health:   hc,
-			},
+			c:        cm,
 			priority: rt.Priority,
 			preflen:  len(prefix),
 		})
+		cleanup = append(cleanup, cm)
 	}
 
 	for i := 0; i < len(scoredList); i++ {
@@ -194,7 +221,7 @@ func (t *Table) Replace(upstreams []Upstream, routes []Route) error {
 		}
 	}
 
-	built := make([]compiled, len(scoredList))
+	built = make([]compiled, len(scoredList))
 	byID := make(map[string]compiled, len(scoredList))
 	for i, s := range scoredList {
 		built[i] = s.c
@@ -207,15 +234,26 @@ func (t *Table) Replace(upstreams []Upstream, routes []Route) error {
 	t.byID = byID
 	t.mu.Unlock()
 
+	// Stop old health checkers and close their proxy transports.
 	for _, c := range old {
 		if c.health != nil {
 			c.health.Stop()
+		}
+		if c.proxy != nil {
+			_ = c.proxy.Close()
+		}
+	}
+
+	// Start new health checkers now that the table is live.
+	for _, c := range built {
+		if c.health != nil {
+			c.health.Start(t.ctx)
 		}
 	}
 	return nil
 }
 
-func (t *Table) buildProxy(up Upstream, strip bool, prefix string) (http.Handler, *health.Checker, error) {
+func (t *Table) buildProxy(up Upstream, strip bool, prefix string) (*proxy.Proxy, *health.Checker, error) {
 	target, err := proxy.ParseUpstreamURL(up.URL)
 	if err != nil {
 		return nil, nil, err
@@ -225,6 +263,10 @@ func (t *Table) buildProxy(up Upstream, strip bool, prefix string) (http.Handler
 	tunnelDial := t.tunnelDial
 	t.mu.RUnlock()
 
+	tlsCfg, err := proxy.BuildTLSClientConfig(up.TLSCAFile, up.TLSClientCertFile, up.TLSClientKeyFile, up.InsecureSkipVerify)
+	if err != nil {
+		return nil, nil, err
+	}
 	cfg := proxy.Config{
 		Target:                target,
 		ConnectTimeout:        parseDur(up.ConnectTimeout, 5*time.Second),
@@ -236,6 +278,9 @@ func (t *Table) buildProxy(up Upstream, strip bool, prefix string) (http.Handler
 		FlushInterval:         parseDur(up.FlushInterval, -1),
 		SetHeaders:            proxy.ParseSetHeaders(up.SetHeaders),
 		ErrorHandler:          errHandler,
+		Protocol:              up.Protocol,
+		AllowHTTP1:            up.AllowHTTP1,
+		TLSClientConfig:       tlsCfg,
 	}
 	if connectorID, upstreamID, ok := proxy.TunnelParts(target); ok {
 		if tunnelDial == nil {
@@ -254,14 +299,14 @@ func (t *Table) buildProxy(up Upstream, strip bool, prefix string) (http.Handler
 	var hc *health.Checker
 	if up.HealthEnabled && !strings.EqualFold(target.Scheme, "tunnel") {
 		hc = health.New(health.Config{
-			Enabled:  true,
-			URL:      target,
-			Path:     up.HealthPath,
-			Interval: parseDur(up.HealthInterval, 10*time.Second),
-			Timeout:  parseDur(up.HealthTimeout, 3*time.Second),
-			Dial:     proxy.DialFunc(target, cfg.ConnectTimeout),
+			Enabled:      true,
+			URL:          target,
+			Path:         up.HealthPath,
+			Interval:     parseDur(up.HealthInterval, 10*time.Second),
+			Timeout:      parseDur(up.HealthTimeout, 3*time.Second),
+			Dial:         proxy.DialFunc(target, cfg.ConnectTimeout),
+			SuccessCodes: up.HealthSuccessCodes,
 		})
-		hc.Start(t.ctx)
 	}
 	return rp, hc, nil
 }

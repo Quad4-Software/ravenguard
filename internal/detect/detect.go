@@ -546,7 +546,7 @@ func headerHasTokenFold(s, token string) bool {
 		}
 		if end-start == tn {
 			match := true
-			for j := 0; j < tn; j++ {
+			for j := range tn {
 				c := s[start+j]
 				want := token[j]
 				if c == want {

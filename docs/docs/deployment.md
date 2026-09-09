@@ -203,6 +203,13 @@ docker compose up --build
 
 Mount config and blocklists. Set RG_CHALLENGE_SECRET and QFEEDS_API_TOKEN when needed. Point upstream.url at the app service. The sample stack exposes 8080, optional 80/443 for edge ACME, and TCP/UDP 8443 for manual TLS or QUIC. The certs-data volume is ACME renewal memory.
 
+The compose file includes a `ravenguard-init` service that creates `/data/admin` and `/data/certs` and chowns them to UID/GID 65532. Named volumes are root-owned by default, so without this step the nonroot container crash-loops with `mkdir /data/admin: permission denied`. If you run the container directly or use an external orchestrator, run an equivalent init step before the first start:
+
+```sh
+mkdir -p /data/admin /data/certs
+chown -R 65532:65532 /data
+```
+
 The compose file runs as UID 65532, enables Landlock and in-process seccomp-bpf via [sandbox] (default best_effort), drops all capabilities, sets no-new-privileges, mounts a read-only root with /tmp tmpfs, and applies [deploy/seccomp-ravenguard.json](https://github.com/Quad4-Software/ravenguard/blob/main/deploy/seccomp-ravenguard.json) so the container seccomp profile allows landlock_* and seccomp.
 
 Override with RG_SANDBOX_MODE=try or enforce as needed. Hosts without Landlock still start under try / best_effort.

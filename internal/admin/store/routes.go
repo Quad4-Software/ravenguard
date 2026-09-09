@@ -25,13 +25,14 @@ type RouteRow struct {
 	AccessPolicyID  *string   `json:"access_policy_id,omitempty"`
 	OpenAPISchemaID *string   `json:"openapi_schema_id,omitempty"`
 	ProxyID         string    `json:"proxy_id,omitempty"`
+	SkipChallenge   bool      `json:"skip_challenge"`
 	CreatedAt       time.Time `json:"created_at"`
 	UpdatedAt       time.Time `json:"updated_at"`
 }
 
 func (s *Store) ListRoutes() ([]RouteRow, error) {
 	rows, err := s.db.Query(`SELECT id, name, enabled, hosts_json, path_prefix, upstream_id,
-		strip_prefix, priority, access_policy_id, COALESCE(proxy_id,''), openapi_schema_id, created_at, updated_at
+		strip_prefix, priority, access_policy_id, COALESCE(proxy_id,''), openapi_schema_id, skip_challenge, created_at, updated_at
 		FROM routes ORDER BY priority DESC, name ASC, id ASC`)
 	if err != nil {
 		return nil, err
@@ -50,7 +51,7 @@ func (s *Store) ListRoutes() ([]RouteRow, error) {
 
 func (s *Store) GetRoute(id string) (RouteRow, error) {
 	row := s.db.QueryRow(`SELECT id, name, enabled, hosts_json, path_prefix, upstream_id,
-		strip_prefix, priority, access_policy_id, COALESCE(proxy_id,''), openapi_schema_id, created_at, updated_at
+		strip_prefix, priority, access_policy_id, COALESCE(proxy_id,''), openapi_schema_id, skip_challenge, created_at, updated_at
 		FROM routes WHERE id = ?`, id)
 	rt, err := scanRoute(row)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -92,11 +93,11 @@ func (s *Store) CreateRoute(rt RouteRow) (RouteRow, error) {
 	now := nowUTC()
 	_, err = s.db.Exec(`INSERT INTO routes(
 		id, name, enabled, hosts_json, path_prefix, upstream_id,
-		strip_prefix, priority, access_policy_id, proxy_id, openapi_schema_id, created_at, updated_at
-	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		strip_prefix, priority, access_policy_id, proxy_id, openapi_schema_id, skip_challenge, created_at, updated_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		id, rt.Name, boolInt(rt.Enabled), string(hosts), rt.PathPrefix, rt.UpstreamID,
 		boolInt(rt.StripPrefix), rt.Priority, nullStringPtr(rt.AccessPolicyID), strings.TrimSpace(rt.ProxyID),
-		nullStringPtr(rt.OpenAPISchemaID), now, now,
+		nullStringPtr(rt.OpenAPISchemaID), boolInt(rt.SkipChallenge), now, now,
 	)
 	if err != nil {
 		return RouteRow{}, err
@@ -135,11 +136,11 @@ func (s *Store) UpdateRoute(id string, rt RouteRow) (RouteRow, error) {
 	}
 	res, err := s.db.Exec(`UPDATE routes SET
 		name = ?, enabled = ?, hosts_json = ?, path_prefix = ?, upstream_id = ?,
-		strip_prefix = ?, priority = ?, access_policy_id = ?, proxy_id = ?, openapi_schema_id = ?, updated_at = ?
+		strip_prefix = ?, priority = ?, access_policy_id = ?, proxy_id = ?, openapi_schema_id = ?, skip_challenge = ?, updated_at = ?
 		WHERE id = ?`,
 		rt.Name, boolInt(rt.Enabled), string(hosts), rt.PathPrefix, rt.UpstreamID,
 		boolInt(rt.StripPrefix), rt.Priority, nullStringPtr(rt.AccessPolicyID), strings.TrimSpace(rt.ProxyID),
-		nullStringPtr(rt.OpenAPISchemaID), nowUTC(), id,
+		nullStringPtr(rt.OpenAPISchemaID), boolInt(rt.SkipChallenge), nowUTC(), id,
 	)
 	if err != nil {
 		return RouteRow{}, err
@@ -185,19 +186,20 @@ type routeScanner interface {
 func scanRoute(row routeScanner) (RouteRow, error) {
 	var rt RouteRow
 	var hosts string
-	var enabled, strip int
+	var enabled, strip, skipChallenge int
 	var policy sql.NullString
 	var schema sql.NullString
 	var created, updated string
 	err := row.Scan(
 		&rt.ID, &rt.Name, &enabled, &hosts, &rt.PathPrefix, &rt.UpstreamID,
-		&strip, &rt.Priority, &policy, &rt.ProxyID, &schema, &created, &updated,
+		&strip, &rt.Priority, &policy, &rt.ProxyID, &schema, &skipChallenge, &created, &updated,
 	)
 	if err != nil {
 		return RouteRow{}, err
 	}
 	rt.Enabled = enabled != 0
 	rt.StripPrefix = strip != 0
+	rt.SkipChallenge = skipChallenge != 0
 	rt.Hosts = nil
 	if hosts != "" && hosts != "null" {
 		_ = json.Unmarshal([]byte(hosts), &rt.Hosts)

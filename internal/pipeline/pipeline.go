@@ -443,6 +443,23 @@ func (h *Handler) config() config.Config {
 	return h.cfg
 }
 
+func (h *Handler) skipChallenge(r *http.Request) bool {
+	cfg := h.config()
+	for _, p := range cfg.Challenge.SkipPathPrefixes {
+		if p != "" && strings.HasPrefix(r.URL.Path, p) {
+			return true
+		}
+	}
+	h.mu.RLock()
+	routes := h.routes
+	h.mu.RUnlock()
+	if routes == nil {
+		return false
+	}
+	m, ok := routes.Lookup(r)
+	return ok && m.Route.SkipChallenge
+}
+
 func (h *Handler) mountTestRoutes() {
 	prefix := h.cfg.Challenge.PathPrefix
 	base := prefix + "/test"
@@ -698,7 +715,7 @@ func (h *Handler) guard(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, "rate limited", http.StatusTooManyRequests)
 				return
 			}
-			if cfg.RateLimit.ChallengeOver && cfg.Challenge.Enabled && h.chal != nil {
+			if cfg.RateLimit.ChallengeOver && cfg.Challenge.Enabled && h.chal != nil && !h.skipChallenge(r) {
 				h.serveChallenge(w, r, ray, bindID, challenge.RiskElevated)
 				return
 			}
@@ -709,7 +726,7 @@ func (h *Handler) guard(w http.ResponseWriter, r *http.Request) {
 
 	if detect.IsWebSocketUpgrade(r) {
 		// WebSocket handshakes cannot render a JS challenge; require a clearance cookie.
-		if !allowed && cfg.Challenge.Enabled && h.chal != nil && !h.chal.HasClearance(r, bindID) {
+		if !allowed && cfg.Challenge.Enabled && h.chal != nil && !h.skipChallenge(r) && !h.chal.HasClearance(r, bindID) {
 			h.recordEvent(r, ray, bindID, ipStr, host, ua, requestlog.ActionChallenge, "clearance required", 0, nil)
 			http.Error(w, "clearance required", http.StatusForbidden)
 			return
@@ -801,7 +818,7 @@ func (h *Handler) guard(w http.ResponseWriter, r *http.Request) {
 		detectScore = mlExtra
 	}
 
-	if !allowed && !isGitSmartHTTP && cfg.Challenge.Enabled && h.chal != nil {
+	if !allowed && !isGitSmartHTTP && cfg.Challenge.Enabled && h.chal != nil && !h.skipChallenge(r) {
 		if h.chal.HasClearance(r, bindID) {
 			if !h.checkAccess(w, r, ray, bindID, clientIP, false) {
 				return

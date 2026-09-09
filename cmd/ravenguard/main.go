@@ -201,12 +201,13 @@ func runEdge(cfg config.Config, proxyOnly bool, configPath string, sentryRep *rg
 	var hc *health.Checker
 	if cfg.Upstream.Health.Enabled {
 		hc = health.New(health.Config{
-			Enabled:  true,
-			URL:      target,
-			Path:     cfg.Upstream.Health.Path,
-			Interval: cfg.Upstream.Health.Interval.Duration,
-			Timeout:  cfg.Upstream.Health.Timeout.Duration,
-			Dial:     proxy.DialFunc(target, cfg.Upstream.ConnectTimeout.Duration),
+			Enabled:      true,
+			URL:          target,
+			Path:         cfg.Upstream.Health.Path,
+			Interval:     cfg.Upstream.Health.Interval.Duration,
+			Timeout:      cfg.Upstream.Health.Timeout.Duration,
+			Dial:         proxy.DialFunc(target, cfg.Upstream.ConnectTimeout.Duration),
+			SuccessCodes: cfg.Upstream.Health.SuccessCodes,
 		})
 		hc.Start(ctx)
 	}
@@ -254,6 +255,11 @@ func runEdge(cfg config.Config, proxyOnly bool, configPath string, sentryRep *rg
 		os.Exit(1)
 	}
 
+	upTLS, err := proxy.BuildTLSClientConfig(cfg.Upstream.TLSCAFile, cfg.Upstream.TLSClientCertFile, cfg.Upstream.TLSClientKeyFile, cfg.Upstream.InsecureSkipVerify)
+	if err != nil {
+		slog.Error("upstream tls", "err", err)
+		os.Exit(1)
+	}
 	flush := cfg.Upstream.FlushInterval.Duration
 	up := proxy.New(proxy.Config{
 		Target:                target,
@@ -265,6 +271,9 @@ func runEdge(cfg config.Config, proxyOnly bool, configPath string, sentryRep *rg
 		MaxConnsPerHost:       cfg.Upstream.MaxConnsPerHost,
 		FlushInterval:         flush,
 		SetHeaders:            proxy.ParseSetHeaders(cfg.Upstream.SetHeaders),
+		Protocol:              cfg.Upstream.Protocol,
+		AllowHTTP1:            cfg.Upstream.AllowHTTP1,
+		TLSClientConfig:       upTLS,
 		ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
 			ray := r.Header.Get("X-RavenGuard-Ray")
 			if ray == "" {
@@ -577,8 +586,12 @@ func runEdge(cfg config.Config, proxyOnly bool, configPath string, sentryRep *rg
 				IdleConnTimeout: u.IdleConnTimeout, MaxIdleConns: u.MaxIdleConns,
 				MaxIdleConnsPerHost: u.MaxIdleConnsPerHost, MaxConnsPerHost: u.MaxConnsPerHost,
 				FlushInterval: u.FlushInterval, SetHeaders: u.SetHeaders,
+				Protocol: u.Protocol, AllowHTTP1: u.AllowHTTP1,
+				TLSCAFile: u.TLSCAFile, TLSClientCertFile: u.TLSClientCertFile,
+				TLSClientKeyFile: u.TLSClientKeyFile, InsecureSkipVerify: u.InsecureSkipVerify,
 				HealthEnabled: u.HealthEnabled, HealthPath: u.HealthPath,
 				HealthInterval: u.HealthInterval, HealthTimeout: u.HealthTimeout,
+				HealthSuccessCodes: u.HealthSuccessCodes,
 			})
 		}
 		rr := make([]router.Route, 0, len(rts))
@@ -597,6 +610,7 @@ func runEdge(cfg config.Config, proxyOnly bool, configPath string, sentryRep *rg
 				PathPrefix: rt.PathPrefix, UpstreamID: rt.UpstreamID,
 				StripPrefix: rt.StripPrefix, Priority: rt.Priority,
 				AccessPolicyID: policyID, OpenAPISchemaID: schemaID,
+				SkipChallenge: rt.SkipChallenge,
 			})
 			hosts = append(hosts, rt.Hosts...)
 		}
@@ -987,6 +1001,7 @@ func runEdge(cfg config.Config, proxyOnly bool, configPath string, sentryRep *rg
 		ProxyProtocol:    cfg.Trust.ProxyProtocol,
 		MaxHeaderBytes:   maxHeader,
 		DisableMultipath: sbCfg.NeedsClassicTCP(),
+		AllowHTTP1:       cfg.Listen.AllowHTTP1,
 	})
 
 	slog.Info("ravenguard starting", "upstream", cfg.Upstream.URL, "trust_mode", cfg.Trust.Mode, "tls_mode", cfg.TLS.Mode, "admin", cfg.Admin.Enabled)

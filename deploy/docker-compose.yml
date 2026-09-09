@@ -1,4 +1,19 @@
 services:
+  ravenguard-init:
+    # Named volumes are root-owned by default. Bootstrap them for the nonroot UID.
+    image: busybox:musl
+    user: "0:0"
+    volumes:
+      - admin-data:/data/admin
+      - certs-data:/data/certs
+    command:
+      - sh
+      - -c
+      - |
+        mkdir -p /data/admin /data/certs
+        chown -R 65532:65532 /data
+    restart: on-failure
+
   ravenguard:
     # Prefer a published image: IMAGE=ghcr.io/quad4-software/ravenguard:edge
     image: ${IMAGE:-ravenguard:local}
@@ -50,7 +65,10 @@ services:
       - no-new-privileges:true
       - seccomp=seccomp-ravenguard.json
     depends_on:
-      - app
+      app:
+        condition: service_started
+      ravenguard-init:
+        condition: service_completed_successfully
     restart: unless-stopped
 
   app:

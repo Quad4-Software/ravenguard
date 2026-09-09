@@ -25,10 +25,17 @@ type UpstreamRow struct {
 	MaxConnsPerHost     int       `json:"max_conns_per_host,omitempty"`
 	FlushInterval       string    `json:"flush_interval,omitempty"`
 	SetHeaders          []string  `json:"set_headers,omitempty"`
+	Protocol            string    `json:"protocol,omitempty"`
+	AllowHTTP1          bool      `json:"allow_http1,omitempty"`
+	TLSCAFile           string    `json:"tls_ca_file,omitempty"`
+	TLSClientCertFile   string    `json:"tls_client_cert_file,omitempty"`
+	TLSClientKeyFile    string    `json:"tls_client_key_file,omitempty"`
+	InsecureSkipVerify  bool      `json:"insecure_skip_verify,omitempty"`
 	HealthEnabled       bool      `json:"health_enabled"`
 	HealthPath          string    `json:"health_path,omitempty"`
 	HealthInterval      string    `json:"health_interval,omitempty"`
 	HealthTimeout       string    `json:"health_timeout,omitempty"`
+	HealthSuccessCodes  []int     `json:"health_success_codes,omitempty"`
 	CreatedAt           time.Time `json:"created_at"`
 	UpdatedAt           time.Time `json:"updated_at"`
 }
@@ -36,7 +43,8 @@ type UpstreamRow struct {
 func (s *Store) ListUpstreams() ([]UpstreamRow, error) {
 	rows, err := s.db.Query(`SELECT id, name, url, connect_timeout, response_header_timeout, idle_conn_timeout,
 		max_idle_conns, max_idle_conns_per_host, max_conns_per_host, flush_interval, set_headers,
-		health_enabled, health_path, health_interval, health_timeout, created_at, updated_at
+		protocol, allow_http1, tls_ca_file, tls_client_cert_file, tls_client_key_file, insecure_skip_verify,
+		health_enabled, health_path, health_interval, health_timeout, health_success_codes, created_at, updated_at
 		FROM upstreams ORDER BY name ASC, id ASC`)
 	if err != nil {
 		return nil, err
@@ -56,7 +64,8 @@ func (s *Store) ListUpstreams() ([]UpstreamRow, error) {
 func (s *Store) GetUpstream(id string) (UpstreamRow, error) {
 	row := s.db.QueryRow(`SELECT id, name, url, connect_timeout, response_header_timeout, idle_conn_timeout,
 		max_idle_conns, max_idle_conns_per_host, max_conns_per_host, flush_interval, set_headers,
-		health_enabled, health_path, health_interval, health_timeout, created_at, updated_at
+		protocol, allow_http1, tls_ca_file, tls_client_cert_file, tls_client_key_file, insecure_skip_verify,
+		health_enabled, health_path, health_interval, health_timeout, health_success_codes, created_at, updated_at
 		FROM upstreams WHERE id = ?`, id)
 	u, err := scanUpstream(row)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -83,15 +92,21 @@ func (s *Store) CreateUpstream(u UpstreamRow) (UpstreamRow, error) {
 	if err != nil {
 		return UpstreamRow{}, err
 	}
+	successCodes, err := json.Marshal(u.HealthSuccessCodes)
+	if err != nil {
+		return UpstreamRow{}, err
+	}
 	now := nowUTC()
 	_, err = s.db.Exec(`INSERT INTO upstreams(
 		id, name, url, connect_timeout, response_header_timeout, idle_conn_timeout,
 		max_idle_conns, max_idle_conns_per_host, max_conns_per_host, flush_interval, set_headers,
-		health_enabled, health_path, health_interval, health_timeout, created_at, updated_at
-	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		protocol, allow_http1, tls_ca_file, tls_client_cert_file, tls_client_key_file, insecure_skip_verify,
+		health_enabled, health_path, health_interval, health_timeout, health_success_codes, created_at, updated_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		id, u.Name, u.URL, u.ConnectTimeout, u.ResponseHeader, u.IdleConnTimeout,
 		u.MaxIdleConns, u.MaxIdleConnsPerHost, u.MaxConnsPerHost, u.FlushInterval, string(headers),
-		boolInt(u.HealthEnabled), u.HealthPath, u.HealthInterval, u.HealthTimeout, now, now,
+		u.Protocol, boolInt(u.AllowHTTP1), u.TLSCAFile, u.TLSClientCertFile, u.TLSClientKeyFile, boolInt(u.InsecureSkipVerify),
+		boolInt(u.HealthEnabled), u.HealthPath, u.HealthInterval, u.HealthTimeout, string(successCodes), now, now,
 	)
 	if err != nil {
 		return UpstreamRow{}, err
@@ -116,14 +131,20 @@ func (s *Store) UpdateUpstream(id string, u UpstreamRow) (UpstreamRow, error) {
 	if err != nil {
 		return UpstreamRow{}, err
 	}
+	successCodes, err := json.Marshal(u.HealthSuccessCodes)
+	if err != nil {
+		return UpstreamRow{}, err
+	}
 	res, err := s.db.Exec(`UPDATE upstreams SET
 		name = ?, url = ?, connect_timeout = ?, response_header_timeout = ?, idle_conn_timeout = ?,
 		max_idle_conns = ?, max_idle_conns_per_host = ?, max_conns_per_host = ?, flush_interval = ?, set_headers = ?,
-		health_enabled = ?, health_path = ?, health_interval = ?, health_timeout = ?, updated_at = ?
+		protocol = ?, allow_http1 = ?, tls_ca_file = ?, tls_client_cert_file = ?, tls_client_key_file = ?, insecure_skip_verify = ?,
+		health_enabled = ?, health_path = ?, health_interval = ?, health_timeout = ?, health_success_codes = ?, updated_at = ?
 		WHERE id = ?`,
 		u.Name, u.URL, u.ConnectTimeout, u.ResponseHeader, u.IdleConnTimeout,
 		u.MaxIdleConns, u.MaxIdleConnsPerHost, u.MaxConnsPerHost, u.FlushInterval, string(headers),
-		boolInt(u.HealthEnabled), u.HealthPath, u.HealthInterval, u.HealthTimeout, nowUTC(), id,
+		u.Protocol, boolInt(u.AllowHTTP1), u.TLSCAFile, u.TLSClientCertFile, u.TLSClientKeyFile, boolInt(u.InsecureSkipVerify),
+		boolInt(u.HealthEnabled), u.HealthPath, u.HealthInterval, u.HealthTimeout, string(successCodes), nowUTC(), id,
 	)
 	if err != nil {
 		return UpstreamRow{}, err
@@ -167,23 +188,31 @@ type upstreamScanner interface {
 func scanUpstream(row upstreamScanner) (UpstreamRow, error) {
 	var u UpstreamRow
 	var headers string
-	var healthEnabled int
+	var healthEnabled, allowHTTP1, insecureSkipVerify int
+	var successCodes string
 	var created, updated string
 	err := row.Scan(
 		&u.ID, &u.Name, &u.URL, &u.ConnectTimeout, &u.ResponseHeader, &u.IdleConnTimeout,
 		&u.MaxIdleConns, &u.MaxIdleConnsPerHost, &u.MaxConnsPerHost, &u.FlushInterval, &headers,
-		&healthEnabled, &u.HealthPath, &u.HealthInterval, &u.HealthTimeout, &created, &updated,
+		&u.Protocol, &allowHTTP1, &u.TLSCAFile, &u.TLSClientCertFile, &u.TLSClientKeyFile, &insecureSkipVerify,
+		&healthEnabled, &u.HealthPath, &u.HealthInterval, &u.HealthTimeout, &successCodes, &created, &updated,
 	)
 	if err != nil {
 		return UpstreamRow{}, err
 	}
 	u.HealthEnabled = healthEnabled != 0
+	u.AllowHTTP1 = allowHTTP1 != 0
+	u.InsecureSkipVerify = insecureSkipVerify != 0
 	u.SetHeaders = nil
 	if headers != "" && headers != "null" {
 		_ = json.Unmarshal([]byte(headers), &u.SetHeaders)
 	}
 	if u.SetHeaders == nil {
 		u.SetHeaders = []string{}
+	}
+	u.HealthSuccessCodes = nil
+	if successCodes != "" && successCodes != "null" {
+		_ = json.Unmarshal([]byte(successCodes), &u.HealthSuccessCodes)
 	}
 	u.CreatedAt, _ = parseTime(created)
 	u.UpdatedAt, _ = parseTime(updated)
@@ -202,6 +231,9 @@ func normalizeUpstream(u UpstreamRow) UpstreamRow {
 	}
 	if u.HealthTimeout == "" {
 		u.HealthTimeout = "3s"
+	}
+	if u.Protocol == "" {
+		u.Protocol = "h2"
 	}
 	return u
 }

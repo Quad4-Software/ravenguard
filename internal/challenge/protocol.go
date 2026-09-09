@@ -205,8 +205,10 @@ func (m *Manager) selectEffort(risk RiskLevel) (algo string, diff int, params ma
 	}
 	switch risk {
 	case RiskHigh:
-		d := min(diff+4, 28)
-		return AlgoPBKDF2SHA256, d, map[string]int{"iterations": 50000}
+		if diff >= 24 {
+			return AlgoPBKDF2SHA256, 28, map[string]int{"iterations": 50000}
+		}
+		return AlgoPBKDF2SHA256, diff + 4, map[string]int{"iterations": 50000}
 	case RiskElevated:
 		return AlgoPBKDF2SHA256, diff, map[string]int{"iterations": 10000}
 	default:

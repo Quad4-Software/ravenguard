@@ -125,9 +125,12 @@ enabled = false
 path = "/healthz"
 interval = "10s"
 timeout = "3s"
+# success_codes = [200, 403]  # defaults to any 2xx
 ```
 
 ws:// and wss:// are scheme aliases for the same TCP origin as http:// and https://. WebSocket traffic is an HTTP upgrade on that connection. When [challenge] is enabled, upgrades require an existing clearance cookie from a prior page load (browsers cannot run the JS puzzle during a handshake). Forward WebSocket upgrades from your reverse proxy to RavenGuard.
+
+`success_codes` overrides the default 2xx-only health check. This is useful for origins like Prosody that return 403 on `/` while serving real paths. Env: `RG_UPSTREAM_HEALTH_SUCCESS_CODES` (comma-separated).
 
 Env: RG_UPSTREAM_URL, RG_UPSTREAM_HEALTH_ENABLED, RG_UPSTREAM_HEALTH_PATH.
 
@@ -273,6 +276,7 @@ cookie_name = "rg_clear"
 cookie_ttl = "24h"
 secret = "rg-dev-secret-replace-me!!"
 path_prefix = "/_rg"
+# skip_path_prefixes = ["/xmpp-websocket", "/http-bind"]
 
 [challenge.captcha]
 enabled = false
@@ -321,6 +325,8 @@ lang = "en"
 ```
 
 mode = "attack" forces the visible interactive gate for every challenged request. In detect / always, low and elevated risk use the invisible auto-PoW gate. High risk and failed invisible attempts escalate to interactive. When captcha is enabled the interactive gate is always issued so captcha cannot be skipped via API-only PoW.
+
+`skip_path_prefixes` disables challenge checks for matching paths. Use it for WebSocket/API/XMPP endpoints that cannot render the JS challenge and do not have a clearance cookie. You can also set `skip_challenge` per route in the admin API.
 
 | Stealth key | Default | Meaning |
 |-------------|---------|---------|

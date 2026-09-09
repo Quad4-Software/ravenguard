@@ -131,9 +131,10 @@ type SandboxSeccompConfig struct {
 }
 
 type ListenConfig struct {
-	HTTP  string `toml:"http" json:"http"`
-	HTTPS string `toml:"https" json:"https"`
-	QUIC  string `toml:"quic" json:"quic"`
+	HTTP       string `toml:"http" json:"http"`
+	HTTPS      string `toml:"https" json:"https"`
+	QUIC       string `toml:"quic" json:"quic"`
+	AllowHTTP1 bool   `toml:"allow_http1" json:"allow_http1"`
 }
 
 type TLSConfig struct {
@@ -176,14 +177,21 @@ type UpstreamConfig struct {
 	MaxConnsPerHost     int                  `toml:"max_conns_per_host"`
 	FlushInterval       Duration             `toml:"flush_interval"`
 	SetHeaders          []string             `toml:"set_headers"`
+	Protocol            string               `toml:"protocol"`
+	AllowHTTP1          bool                 `toml:"allow_http1"`
+	TLSCAFile           string               `toml:"tls_ca_file"`
+	TLSClientCertFile   string               `toml:"tls_client_cert_file"`
+	TLSClientKeyFile    string               `toml:"tls_client_key_file"`
+	InsecureSkipVerify  bool                 `toml:"insecure_skip_verify"`
 	Health              UpstreamHealthConfig `toml:"health"`
 }
 
 type UpstreamHealthConfig struct {
-	Enabled  bool     `toml:"enabled"`
-	Path     string   `toml:"path"`
-	Interval Duration `toml:"interval"`
-	Timeout  Duration `toml:"timeout"`
+	Enabled      bool     `toml:"enabled"`
+	Path         string   `toml:"path"`
+	Interval     Duration `toml:"interval"`
+	Timeout      Duration `toml:"timeout"`
+	SuccessCodes []int    `toml:"success_codes"`
 }
 
 type TrustConfig struct {
@@ -343,12 +351,13 @@ type ChallengeConfig struct {
 	// Algorithm is sha256, pbkdf2, argon2id, or adaptive (default).
 	Algorithm string `toml:"algorithm"`
 	// EnvProbe is on (default) or off. off skips automation refusal for e2e harnesses.
-	EnvProbe   string        `toml:"env_probe"`
-	CookieName string        `toml:"cookie_name"`
-	CookieTTL  Duration      `toml:"cookie_ttl"`
-	Secret     string        `toml:"secret"`
-	PathPrefix string        `toml:"path_prefix"`
-	Captcha    CaptchaConfig `toml:"captcha"`
+	EnvProbe         string        `toml:"env_probe"`
+	CookieName       string        `toml:"cookie_name"`
+	CookieTTL        Duration      `toml:"cookie_ttl"`
+	Secret           string        `toml:"secret"`
+	PathPrefix       string        `toml:"path_prefix"`
+	SkipPathPrefixes []string      `toml:"skip_path_prefixes"`
+	Captcha          CaptchaConfig `toml:"captcha"`
 }
 
 type CaptchaConfig struct {
@@ -483,8 +492,9 @@ func Default() Config {
 			IdleConnTimeout:     Duration{90 * time.Second},
 			MaxIdleConns:        1024,
 			MaxIdleConnsPerHost: 256,
-			MaxConnsPerHost:     0,
+			MaxConnsPerHost:     256,
 			FlushInterval:       Duration{-1},
+			Protocol:            "h2",
 			Health: UpstreamHealthConfig{
 				Path:     "/healthz",
 				Interval: Duration{10 * time.Second},
@@ -809,6 +819,9 @@ func applyEnv(c *Config) {
 	setStr(&c.Challenge.Mode, "RG_CHALLENGE_MODE")
 	setStr(&c.Challenge.EnvProbe, "RG_CHALLENGE_ENV_PROBE")
 	setStr(&c.Challenge.PathPrefix, "RG_CHALLENGE_PATH_PREFIX")
+	if v := os.Getenv("RG_CHALLENGE_SKIP_PATH_PREFIXES"); v != "" {
+		c.Challenge.SkipPathPrefixes = parseStringSlice(v)
+	}
 	setStr(&c.Challenge.Algorithm, "RG_CHALLENGE_ALGORITHM")
 	setInt(&c.Challenge.Difficulty, "RG_CHALLENGE_DIFFICULTY")
 	setBool(&c.Challenge.Enabled, "RG_CHALLENGE_ENABLED")
@@ -839,6 +852,16 @@ func applyEnv(c *Config) {
 	}
 	setBool(&c.Upstream.Health.Enabled, "RG_UPSTREAM_HEALTH_ENABLED")
 	setStr(&c.Upstream.Health.Path, "RG_UPSTREAM_HEALTH_PATH")
+	if v := os.Getenv("RG_UPSTREAM_HEALTH_SUCCESS_CODES"); v != "" {
+		c.Upstream.Health.SuccessCodes = parseIntSlice(v)
+	}
+	setStr(&c.Upstream.Protocol, "RG_UPSTREAM_PROTOCOL")
+	setBool(&c.Upstream.AllowHTTP1, "RG_UPSTREAM_ALLOW_HTTP1")
+	setStr(&c.Upstream.TLSCAFile, "RG_UPSTREAM_TLS_CA_FILE")
+	setStr(&c.Upstream.TLSClientCertFile, "RG_UPSTREAM_TLS_CLIENT_CERT_FILE")
+	setStr(&c.Upstream.TLSClientKeyFile, "RG_UPSTREAM_TLS_CLIENT_KEY_FILE")
+	setBool(&c.Upstream.InsecureSkipVerify, "RG_UPSTREAM_INSECURE_SKIP_VERIFY")
+	setBool(&c.Listen.AllowHTTP1, "RG_LISTEN_ALLOW_HTTP1")
 	setBool(&c.Sentry.Enabled, "RG_SENTRY_ENABLED")
 	setStr(&c.Sentry.DSN, "RG_SENTRY_DSN")
 	if c.Sentry.DSN == "" {
@@ -1150,7 +1173,7 @@ func validateUpstreamURL(raw string) error {
 		return fmt.Errorf("upstream.url: %w", err)
 	}
 	switch strings.ToLower(u.Scheme) {
-	case "http", "https", "ws", "wss":
+	case "http", "https", "ws", "wss", "h3", "http3", "quic":
 		if u.Host == "" {
 			return fmt.Errorf("upstream.url must include a host")
 		}
@@ -1491,6 +1514,42 @@ func validateSandboxMode(field, value string) error {
 	default:
 		return fmt.Errorf("%s must be off, try, best_effort, or enforce", field)
 	}
+}
+
+func parseStringSlice(s string) []string {
+	if s == "" {
+		return nil
+	}
+	parts := strings.Split(s, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		out = append(out, p)
+	}
+	return out
+}
+
+func parseIntSlice(s string) []int {
+	if s == "" {
+		return nil
+	}
+	parts := strings.Split(s, ",")
+	out := make([]int, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		n, err := strconv.Atoi(p)
+		if err != nil {
+			continue
+		}
+		out = append(out, n)
+	}
+	return out
 }
 
 func envOr(key, fallback string) string {

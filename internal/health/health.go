@@ -9,25 +9,28 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"slices"
 	"sync/atomic"
 	"time"
 )
 
 type Checker struct {
-	probeURL string
-	interval time.Duration
-	client   *http.Client
-	healthy  atomic.Bool
-	stop     chan struct{}
+	probeURL     string
+	interval     time.Duration
+	client       *http.Client
+	healthy      atomic.Bool
+	successCodes []int
+	stop         chan struct{}
 }
 
 type Config struct {
-	Enabled  bool
-	URL      *url.URL
-	Path     string
-	Interval time.Duration
-	Timeout  time.Duration
-	Dial     func(ctx context.Context, network, addr string) (net.Conn, error)
+	Enabled      bool
+	URL          *url.URL
+	Path         string
+	Interval     time.Duration
+	Timeout      time.Duration
+	Dial         func(ctx context.Context, network, addr string) (net.Conn, error)
+	SuccessCodes []int
 }
 
 func New(cfg Config) *Checker {
@@ -58,8 +61,9 @@ func New(cfg Config) *Checker {
 		probe = u.String()
 	}
 	c := &Checker{
-		probeURL: probe,
-		interval: cfg.Interval,
+		probeURL:     probe,
+		interval:     cfg.Interval,
+		successCodes: cfg.SuccessCodes,
 		client: &http.Client{
 			Timeout:   cfg.Timeout,
 			Transport: transport,
@@ -113,9 +117,16 @@ func (c *Checker) probe(ctx context.Context) {
 		return
 	}
 	_ = resp.Body.Close()
-	ok := resp.StatusCode >= 200 && resp.StatusCode < 300
+	ok := c.healthyStatus(resp.StatusCode)
 	c.healthy.Store(ok)
 	if !ok {
 		slog.Warn("upstream unhealthy", "status", resp.StatusCode)
 	}
+}
+
+func (c *Checker) healthyStatus(code int) bool {
+	if len(c.successCodes) == 0 {
+		return code >= 200 && code < 300
+	}
+	return slices.Contains(c.successCodes, code)
 }

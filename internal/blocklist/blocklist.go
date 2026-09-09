@@ -292,8 +292,6 @@ func parseIPOrCIDR(s string) (net.IPNet, error) {
 func normalizeHost(h string) string {
 	h = strings.TrimSpace(h)
 	h = strings.ToLower(h)
-	h = strings.TrimPrefix(h, "*.")
-	h = strings.Trim(h, ".")
 	h = strings.Map(func(r rune) rune {
 		if unicode.IsSpace(r) {
 			return -1
@@ -307,6 +305,13 @@ func normalizeHost(h string) string {
 		if net.ParseIP(h) == nil {
 			h = h[:i]
 		}
+	}
+	for {
+		h = strings.Trim(h, ".")
+		if !strings.HasPrefix(h, "*.") {
+			break
+		}
+		h = h[2:]
 	}
 	return h
 }

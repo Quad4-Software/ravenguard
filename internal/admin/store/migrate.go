@@ -196,6 +196,14 @@ var migrations = []string{
 	)`,
 	`CREATE INDEX IF NOT EXISTS idx_threat_entries_rev ON threat_entries(revision)`,
 	`CREATE INDEX IF NOT EXISTS idx_threat_entries_ttl ON threat_entries(ttl_deadline)`,
+	`ALTER TABLE upstreams ADD COLUMN health_success_codes TEXT NOT NULL DEFAULT '[]'`,
+	`ALTER TABLE routes ADD COLUMN skip_challenge INTEGER NOT NULL DEFAULT 0`,
+	`ALTER TABLE upstreams ADD COLUMN protocol TEXT NOT NULL DEFAULT 'h2'`,
+	`ALTER TABLE upstreams ADD COLUMN allow_http1 INTEGER NOT NULL DEFAULT 0`,
+	`ALTER TABLE upstreams ADD COLUMN tls_ca_file TEXT NOT NULL DEFAULT ''`,
+	`ALTER TABLE upstreams ADD COLUMN tls_client_cert_file TEXT NOT NULL DEFAULT ''`,
+	`ALTER TABLE upstreams ADD COLUMN tls_client_key_file TEXT NOT NULL DEFAULT ''`,
+	`ALTER TABLE upstreams ADD COLUMN insecure_skip_verify INTEGER NOT NULL DEFAULT 0`,
 }
 
 func migrate(db *sql.DB) error {
