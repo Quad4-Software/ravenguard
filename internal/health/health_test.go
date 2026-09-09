@@ -70,3 +70,39 @@ func TestCheckerDefaultsAndUnixScheme(t *testing.T) {
 		t.Fatal("nil unix checker")
 	}
 }
+
+func TestCheckerSuccessCodes(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+	}))
+	t.Cleanup(srv.Close)
+
+	u, _ := url.Parse(srv.URL)
+	c := health.New(health.Config{
+		URL:          u,
+		Path:         "/",
+		Interval:     time.Hour,
+		Timeout:      time.Second,
+		SuccessCodes: []int{200, 403},
+	})
+	c.Start(context.Background())
+	t.Cleanup(c.Stop)
+	time.Sleep(20 * time.Millisecond)
+	if !c.Healthy() {
+		t.Fatal("expected 403 to be treated as healthy")
+	}
+
+	c2 := health.New(health.Config{
+		URL:          u,
+		Path:         "/",
+		Interval:     time.Hour,
+		Timeout:      time.Second,
+		SuccessCodes: []int{200},
+	})
+	c2.Start(context.Background())
+	t.Cleanup(c2.Stop)
+	time.Sleep(20 * time.Millisecond)
+	if c2.Healthy() {
+		t.Fatal("expected 403 to be treated as unhealthy")
+	}
+}

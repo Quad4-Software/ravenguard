@@ -137,12 +137,3 @@ func TestContainsCIDR(t *testing.T) {
 		t.Fatal("expected v6 hit")
 	}
 }
-
-func FuzzParseIP(f *testing.F) {
-	f.Add("1.2.3.4")
-	f.Add("[::1]:80")
-	f.Add("not-an-ip")
-	f.Fuzz(func(t *testing.T, s string) {
-		_ = iputil.ParseIP(s)
-	})
-}

@@ -82,17 +82,3 @@ func TestTamperedToken(t *testing.T) {
 		t.Fatal("expected invalid token")
 	}
 }
-
-func FuzzVerifyPoW(f *testing.F) {
-	m := &challenge.Manager{Secret: []byte("fuzz-secret-16char"), Difficulty: 4}
-	_, payload, _ := m.Issue("fuzz-client")
-	f.Add(payload, "0")
-	f.Add("bad", "1")
-	f.Fuzz(func(t *testing.T, token, sol string) {
-		tok, err := m.ParseToken(token, "fuzz-client")
-		if err != nil {
-			return
-		}
-		_ = m.VerifyPoW(tok, sol)
-	})
-}

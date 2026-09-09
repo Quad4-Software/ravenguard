@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/Quad4-Software/ravenguard/internal/sandbox"
@@ -139,7 +140,14 @@ func TestApplyTryDoesNotFail(t *testing.T) {
 		return
 	}
 	cmd := exec.Command(os.Args[0], "-test.run=^TestApplyTryDoesNotFail$", "-test.v")
-	cmd.Env = append(os.Environ(), "RG_SANDBOX_SELFTEST=1")
+	env := make([]string, 0, len(os.Environ()))
+	for _, e := range os.Environ() {
+		if strings.HasPrefix(e, "GOCOVERDIR=") || strings.HasPrefix(e, "GOTMPDIR=") || strings.HasPrefix(e, "TMPDIR=") {
+			continue
+		}
+		env = append(env, e)
+	}
+	cmd.Env = append(env, "GOCOVERDIR=/tmp", "GOTMPDIR=/tmp", "TMPDIR=/tmp", "RG_SANDBOX_SELFTEST=1")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("subprocess apply failed: %v\n%s", err, out)

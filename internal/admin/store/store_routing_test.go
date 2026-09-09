@@ -243,6 +243,73 @@ func TestUpstreamRouteAccessAndAudit(t *testing.T) {
 	}
 }
 
+func TestRouteAndUpstreamChallengeHealthFlags(t *testing.T) {
+	st := openStore(t)
+
+	up, err := st.CreateUpstream(store.UpstreamRow{
+		Name:               "prosody",
+		URL:                "http://127.0.0.1:5280",
+		HealthEnabled:      true,
+		HealthSuccessCodes: []int{200, 403},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slicesEqual(up.HealthSuccessCodes, []int{200, 403}) {
+		t.Fatalf("upstream health success codes not persisted: %v", up.HealthSuccessCodes)
+	}
+	up2, err := st.UpdateUpstream(up.ID, store.UpstreamRow{
+		Name:               "prosody",
+		URL:                "http://127.0.0.1:5280",
+		HealthSuccessCodes: []int{200, 401, 403},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slicesEqual(up2.HealthSuccessCodes, []int{200, 401, 403}) {
+		t.Fatalf("updated health success codes not persisted: %v", up2.HealthSuccessCodes)
+	}
+
+	rt, err := st.CreateRoute(store.RouteRow{
+		Name:          "ws",
+		Enabled:       true,
+		PathPrefix:    "/xmpp-websocket",
+		UpstreamID:    up.ID,
+		SkipChallenge: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !rt.SkipChallenge {
+		t.Fatalf("route skip_challenge not persisted")
+	}
+	rt2, err := st.UpdateRoute(rt.ID, store.RouteRow{
+		Name:          "ws2",
+		Enabled:       true,
+		PathPrefix:    "/xmpp-websocket",
+		UpstreamID:    up.ID,
+		SkipChallenge: false,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rt2.SkipChallenge {
+		t.Fatalf("route skip_challenge not cleared on update")
+	}
+}
+
+func slicesEqual(a, b []int) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
 func TestExtendSessionWithoutRotate(t *testing.T) {
 	st := openStore(t)
 	hash, _ := auth.HashPassword("bootstrap-pass-1")

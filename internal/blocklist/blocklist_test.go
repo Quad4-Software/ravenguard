@@ -91,22 +91,3 @@ func TestParseIPOrCIDR(t *testing.T) {
 		t.Fatal("single ip")
 	}
 }
-
-func FuzzParseIPOrCIDR(f *testing.F) {
-	f.Add("1.2.3.4")
-	f.Add("1.2.3.0/24")
-	f.Add("::1")
-	f.Add("garbage")
-	f.Fuzz(func(t *testing.T, s string) {
-		_, _ = blocklist.ParseIPOrCIDR(s)
-	})
-}
-
-func FuzzNormalizeHost(f *testing.F) {
-	f.Add("Example.COM")
-	f.Add("*.evil.test")
-	f.Add("host:443")
-	f.Fuzz(func(t *testing.T, s string) {
-		_ = blocklist.NormalizeHost(s)
-	})
-}

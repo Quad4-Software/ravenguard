@@ -24,12 +24,12 @@ func TestShouldRollback(t *testing.T) {
 
 func TestTrainOverlay(t *testing.T) {
 	samples := make([]adapt.LabeledSample, 0, 10)
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		var f [ml.FeatureDim]float32
 		f[0] = 1
 		samples = append(samples, adapt.LabeledSample{Features: f, Label: 1})
 	}
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		var f [ml.FeatureDim]float32
 		f[1] = 1
 		samples = append(samples, adapt.LabeledSample{Features: f, Label: 0})
