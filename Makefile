@@ -77,19 +77,31 @@ cover:
 bench:
 	$(GO) test ./... -run='^$$' -bench=. -benchmem -count=1
 
+FUZZTIME ?= 20s
+
 fuzz:
-	$(GO) test ./internal/iputil -fuzz=FuzzParseIP -fuzztime=20s
-	$(GO) test ./internal/blocklist -fuzz=FuzzParseIPOrCIDR -fuzztime=20s
-	$(GO) test ./internal/blocklist -fuzz=FuzzNormalizeHost -fuzztime=20s
-	$(GO) test ./internal/challenge -fuzz=FuzzVerifyPoW -fuzztime=20s
-	$(GO) test ./internal/detect -fuzz=FuzzIsScannerUA -fuzztime=20s
-	$(GO) test ./internal/qfeeds -fuzz=FuzzParseFeed -fuzztime=20s
-	$(GO) test ./internal/faststr -fuzz=FuzzMatcherContains -fuzztime=20s
-	$(GO) test ./internal/requestlog -fuzz=FuzzLoggerRecord -fuzztime=20s
-	$(GO) test ./internal/bodybuf -fuzz=FuzzCapture -fuzztime=20s
+	$(GO) test ./internal/iputil -fuzz=FuzzParseIP -fuzztime=$(FUZZTIME)
+	$(GO) test ./internal/blocklist -fuzz=FuzzParseIPOrCIDR -fuzztime=$(FUZZTIME)
+	$(GO) test ./internal/blocklist -fuzz=FuzzNormalizeHost -fuzztime=$(FUZZTIME)
+	$(GO) test ./internal/challenge -fuzz=FuzzVerifyPoW -fuzztime=$(FUZZTIME)
+	$(GO) test ./internal/detect -fuzz=FuzzIsScannerUA -fuzztime=$(FUZZTIME)
+	$(GO) test ./internal/qfeeds -fuzz=FuzzParseFeed -fuzztime=$(FUZZTIME)
+	$(GO) test ./internal/faststr -fuzz=FuzzMatcherContains -fuzztime=$(FUZZTIME)
+	$(GO) test ./internal/requestlog -fuzz=FuzzLoggerRecord -fuzztime=$(FUZZTIME)
+	$(GO) test ./internal/bodybuf -fuzz=FuzzCapture -fuzztime=$(FUZZTIME)
+	$(GO) test ./internal/health -fuzz=FuzzCheckerHealthyStatus -fuzztime=$(FUZZTIME)
+	$(GO) test ./internal/router -fuzz=FuzzMatchPrefix -fuzztime=$(FUZZTIME)
 
 race:
 	$(GO) test -race ./internal/pipeline ./internal/protect ./internal/ratelimit ./internal/requestlog ./internal/challenge ./internal/router ./internal/detect ./internal/blocklist ./internal/bodybuf ./internal/faststr ./internal/schemagate -count=1
+
+# Mutation testing (mutago). Run on core internal packages; skip UI/admin SPA.
+# Install: go install github.com/quality-gates/mutago/v2/cmd/mutago@latest
+MUTATION_PKGS ?= ./internal/health ./internal/router ./internal/proxy ./internal/pipeline ./internal/challenge
+MUTATION_MIN_MSI ?= 0.0
+MUTATION_MIN_COVERED_MSI ?= 0.0
+mutate:
+	mutago --no-diffs --quiet --coverage --min-msi $(MUTATION_MIN_MSI) --min-covered-msi $(MUTATION_MIN_COVERED_MSI) $(MUTATION_PKGS)
 
 # Install lint, security, and formatting tools into GOPATH/bin.
 tools:
