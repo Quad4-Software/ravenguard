@@ -107,10 +107,12 @@ func (l *Limiter) AllowN(ip, path string, cost int) bool {
 		s.ents[ip] = b
 	}
 
+	// The per-client bucket is always charged so an attacker rotating unique
+	// paths cannot evade the limiter. Per-path mode adds a path bucket on top.
+	clientOK := refillAllow(&b.tokens, &b.last, now, cfg.rate, cfg.burstF, need)
 	if !cfg.perPath {
-		ok = refillAllow(&b.tokens, &b.last, now, cfg.rate, cfg.burstF, need)
 		s.mu.Unlock()
-		return ok
+		return clientOK
 	}
 
 	if path == "" {
@@ -126,9 +128,9 @@ func (l *Limiter) AllowN(ip, path string, cost int) bool {
 		e.last = now
 		b.paths[path] = e
 	}
-	ok = refillAllow(&e.tokens, &e.last, now, cfg.rate, cfg.burstF, need)
+	pathOK := refillAllow(&e.tokens, &e.last, now, cfg.rate, cfg.burstF, need)
 	s.mu.Unlock()
-	return ok
+	return clientOK && pathOK
 }
 
 func refillAllow(tokens *float64, last *time.Time, now time.Time, rate, burst, need float64) bool {

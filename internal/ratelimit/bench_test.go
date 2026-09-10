@@ -41,16 +41,22 @@ func BenchmarkAllowParallel(b *testing.B) {
 	})
 }
 
-func TestAllowPerPathIndependent(t *testing.T) {
-	l := ratelimit.New(10, 1, time.Minute, true)
+func TestPerPathEnforcesClientBudget(t *testing.T) {
+	// Per-path buckets add path-level fairness, but the client aggregate is the
+	// backstop. A bot that rotates unique paths (cache-miss probes) must still
+	// exhaust its client budget.
+	l := ratelimit.New(2, 2, time.Minute, true)
 	if !l.Allow("1.1.1.1", "/a") {
 		t.Fatal("a")
 	}
-	if l.Allow("1.1.1.1", "/a") {
-		t.Fatal("a deny")
-	}
 	if !l.Allow("1.1.1.1", "/b") {
 		t.Fatal("b")
+	}
+	if l.Allow("1.1.1.1", "/c") {
+		t.Fatal("expected deny from client budget exhaustion")
+	}
+	if l.Allow("1.1.1.1", "/a") {
+		t.Fatal("expected deny on a previously visited path too")
 	}
 }
 
