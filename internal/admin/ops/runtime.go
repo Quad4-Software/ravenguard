@@ -462,12 +462,20 @@ type MLSafe struct {
 }
 
 type RateLimitSafe struct {
-	Enabled       bool   `json:"enabled"`
-	Requests      int    `json:"requests"`
-	Window        string `json:"window"`
-	Burst         int    `json:"burst"`
-	PerPath       bool   `json:"per_path"`
-	ChallengeOver bool   `json:"challenge_over"`
+	Enabled        bool   `json:"enabled"`
+	Requests       int    `json:"requests"`
+	Window         string `json:"window"`
+	Burst          int    `json:"burst"`
+	PerPath        bool   `json:"per_path"`
+	ChallengeOver  bool   `json:"challenge_over"`
+	SubnetV4Prefix int    `json:"subnet_v4_prefix"`
+	SubnetV6Prefix int    `json:"subnet_v6_prefix"`
+	SubnetRequests int    `json:"subnet_requests"`
+	SubnetBurst    int    `json:"subnet_burst"`
+	SubnetWindow   string `json:"subnet_window"`
+	GlobalRequests int    `json:"global_requests"`
+	GlobalBurst    int    `json:"global_burst"`
+	GlobalWindow   string `json:"global_window"`
 }
 
 type ProtectSafe struct {
@@ -479,6 +487,7 @@ type ProtectSafe struct {
 	MaxConcurrentClient int    `json:"max_concurrent_per_client"`
 	BanAfterStrikes     int    `json:"ban_after_strikes"`
 	BanTTL              string `json:"ban_ttl"`
+	BanEscalation       int    `json:"ban_escalation"`
 	AttackBlock         bool   `json:"attack_block"`
 	AttackScore         int    `json:"attack_score"`
 	WriteMethodCost     int    `json:"write_method_cost"`
@@ -501,6 +510,10 @@ type DetectSafe struct {
 	High404Threshold         int              `json:"high_404_threshold"`
 	High404Window            string           `json:"high_404_window"`
 	High404Action            string           `json:"high_404_action"`
+	PenaltyThreshold         int              `json:"penalty_threshold"`
+	PenaltyWindow            string           `json:"penalty_window"`
+	PenaltyAction            string           `json:"penalty_action"`
+	CacheMissTTL             string           `json:"cache_miss_ttl"`
 	BehaviorWindow           string           `json:"behavior_window"`
 	BehaviorBurstLimit       int              `json:"behavior_burst_limit"`
 	BehaviorBurstScore       int              `json:"behavior_burst_score"`
@@ -614,13 +627,19 @@ func (r *Runtime) ConfigView() ConfigView {
 				Enabled: cfg.RateLimit.Enabled, Requests: cfg.RateLimit.Requests,
 				Window: cfg.RateLimit.Window.String(), Burst: cfg.RateLimit.Burst,
 				PerPath: cfg.RateLimit.PerPath, ChallengeOver: cfg.RateLimit.ChallengeOver,
+				SubnetV4Prefix: cfg.RateLimit.SubnetV4Prefix, SubnetV6Prefix: cfg.RateLimit.SubnetV6Prefix,
+				SubnetRequests: cfg.RateLimit.SubnetRequests, SubnetBurst: cfg.RateLimit.SubnetBurst,
+				SubnetWindow:   cfg.RateLimit.SubnetWindow.String(),
+				GlobalRequests: cfg.RateLimit.GlobalRequests, GlobalBurst: cfg.RateLimit.GlobalBurst,
+				GlobalWindow: cfg.RateLimit.GlobalWindow.String(),
 			},
 			Protect: ProtectSafe{
 				Enabled: cfg.Protect.Enabled, MaxBodyBytes: cfg.Protect.MaxBodyBytes,
 				MaxHeaderBytes: cfg.Protect.MaxHeaderBytes, MaxURLBytes: cfg.Protect.MaxURLBytes,
 				MaxConcurrentGlobal: cfg.Protect.MaxConcurrentGlobal, MaxConcurrentClient: cfg.Protect.MaxConcurrentClient,
 				BanAfterStrikes: cfg.Protect.BanAfterStrikes, BanTTL: cfg.Protect.BanTTL.String(),
-				AttackBlock: cfg.Protect.AttackBlock, AttackScore: cfg.Protect.AttackScore,
+				BanEscalation: cfg.Protect.BanEscalation,
+				AttackBlock:   cfg.Protect.AttackBlock, AttackScore: cfg.Protect.AttackScore,
 				WriteMethodCost: cfg.Protect.WriteMethodCost,
 			},
 			Detect: DetectSafe{
@@ -631,7 +650,10 @@ func (r *Runtime) ConfigView() ConfigView {
 				MissingAcceptLangScore: cfg.Detect.MissingAcceptLangScore, MissingSecFetchScore: cfg.Detect.MissingSecFetchScore,
 				SecCHUAMismatchScore: cfg.Detect.SecCHUAMismatchScore, StarAcceptBrowserScore: cfg.Detect.StarAcceptBrowserScore,
 				High404Threshold: cfg.Detect.High404Threshold, High404Window: cfg.Detect.High404Window.String(),
-				High404Action: cfg.Detect.High404Action, BehaviorWindow: cfg.Detect.BehaviorWindow.String(),
+				High404Action:    cfg.Detect.High404Action,
+				PenaltyThreshold: cfg.Detect.PenaltyThreshold, PenaltyWindow: cfg.Detect.PenaltyWindow.String(),
+				PenaltyAction: cfg.Detect.PenaltyAction, CacheMissTTL: cfg.Detect.CacheMissTTL.String(),
+				BehaviorWindow:     cfg.Detect.BehaviorWindow.String(),
 				BehaviorBurstLimit: cfg.Detect.BehaviorBurstLimit, BehaviorBurstScore: cfg.Detect.BehaviorBurstScore,
 				BehaviorPathFanout: cfg.Detect.BehaviorPathFanout, BehaviorPathFanoutScore: cfg.Detect.BehaviorPathFanoutScore,
 				BehaviorStrikeLimit: cfg.Detect.BehaviorStrikeLimit, BehaviorStrikeScore: cfg.Detect.BehaviorStrikeScore,
@@ -789,6 +811,30 @@ func (r *Runtime) ApplySafeConfig(safe SafeConfig) error {
 	}
 	cfg.RateLimit.PerPath = safe.RateLimit.PerPath
 	cfg.RateLimit.ChallengeOver = safe.RateLimit.ChallengeOver
+	if safe.RateLimit.SubnetV4Prefix > 0 {
+		cfg.RateLimit.SubnetV4Prefix = safe.RateLimit.SubnetV4Prefix
+	}
+	if safe.RateLimit.SubnetV6Prefix > 0 {
+		cfg.RateLimit.SubnetV6Prefix = safe.RateLimit.SubnetV6Prefix
+	}
+	if safe.RateLimit.SubnetRequests > 0 {
+		cfg.RateLimit.SubnetRequests = safe.RateLimit.SubnetRequests
+	}
+	if safe.RateLimit.SubnetBurst > 0 {
+		cfg.RateLimit.SubnetBurst = safe.RateLimit.SubnetBurst
+	}
+	if d, err := time.ParseDuration(safe.RateLimit.SubnetWindow); err == nil && d > 0 {
+		cfg.RateLimit.SubnetWindow = config.Duration{Duration: d}
+	}
+	if safe.RateLimit.GlobalRequests > 0 {
+		cfg.RateLimit.GlobalRequests = safe.RateLimit.GlobalRequests
+	}
+	if safe.RateLimit.GlobalBurst > 0 {
+		cfg.RateLimit.GlobalBurst = safe.RateLimit.GlobalBurst
+	}
+	if d, err := time.ParseDuration(safe.RateLimit.GlobalWindow); err == nil && d > 0 {
+		cfg.RateLimit.GlobalWindow = config.Duration{Duration: d}
+	}
 
 	cfg.Protect.Enabled = safe.Protect.Enabled
 	if safe.Protect.MaxBodyBytes > 0 {
@@ -811,6 +857,9 @@ func (r *Runtime) ApplySafeConfig(safe SafeConfig) error {
 	}
 	if d, err := time.ParseDuration(safe.Protect.BanTTL); err == nil && d > 0 {
 		cfg.Protect.BanTTL = config.Duration{Duration: d}
+	}
+	if safe.Protect.BanEscalation > 0 {
+		cfg.Protect.BanEscalation = safe.Protect.BanEscalation
 	}
 	cfg.Protect.AttackBlock = safe.Protect.AttackBlock
 	if safe.Protect.AttackScore > 0 {
@@ -871,6 +920,7 @@ func (r *Runtime) ApplySafeConfig(safe SafeConfig) error {
 			MaxConcurrentClient: cfg.Protect.MaxConcurrentClient,
 			BanAfterStrikes:     cfg.Protect.BanAfterStrikes,
 			BanTTL:              cfg.Protect.BanTTL.Duration,
+			BanEscalation:       cfg.Protect.BanEscalation,
 			AttackBlock:         cfg.Protect.AttackBlock,
 			AttackScore:         cfg.Protect.AttackScore,
 			WriteMethodCost:     cfg.Protect.WriteMethodCost,
@@ -1038,6 +1088,18 @@ func applyDetectSafe(cfg *config.Config, safe DetectSafe) {
 	}
 	if safe.High404Action != "" {
 		cfg.Detect.High404Action = safe.High404Action
+	}
+	if safe.PenaltyThreshold > 0 {
+		cfg.Detect.PenaltyThreshold = safe.PenaltyThreshold
+	}
+	if d, err := time.ParseDuration(safe.PenaltyWindow); err == nil && d > 0 {
+		cfg.Detect.PenaltyWindow = config.Duration{Duration: d}
+	}
+	if safe.PenaltyAction != "" {
+		cfg.Detect.PenaltyAction = safe.PenaltyAction
+	}
+	if d, err := time.ParseDuration(safe.CacheMissTTL); err == nil && d > 0 {
+		cfg.Detect.CacheMissTTL = config.Duration{Duration: d}
 	}
 	if d, err := time.ParseDuration(safe.BehaviorWindow); err == nil && d > 0 {
 		cfg.Detect.BehaviorWindow = config.Duration{Duration: d}

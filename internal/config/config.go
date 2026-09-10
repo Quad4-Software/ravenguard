@@ -237,12 +237,20 @@ type QFeedsConfig struct {
 }
 
 type RateLimitConfig struct {
-	Enabled       bool     `toml:"enabled"`
-	Requests      int      `toml:"requests"`
-	Window        Duration `toml:"window"`
-	Burst         int      `toml:"burst"`
-	PerPath       bool     `toml:"per_path"`
-	ChallengeOver bool     `toml:"challenge_over"`
+	Enabled        bool     `toml:"enabled"`
+	Requests       int      `toml:"requests"`
+	Window         Duration `toml:"window"`
+	Burst          int      `toml:"burst"`
+	PerPath        bool     `toml:"per_path"`
+	ChallengeOver  bool     `toml:"challenge_over"`
+	SubnetV4Prefix int      `toml:"subnet_v4_prefix"`
+	SubnetV6Prefix int      `toml:"subnet_v6_prefix"`
+	SubnetRequests int      `toml:"subnet_requests"`
+	SubnetBurst    int      `toml:"subnet_burst"`
+	SubnetWindow   Duration `toml:"subnet_window"`
+	GlobalRequests int      `toml:"global_requests"`
+	GlobalBurst    int      `toml:"global_burst"`
+	GlobalWindow   Duration `toml:"global_window"`
 }
 
 type ProtectConfig struct {
@@ -254,6 +262,7 @@ type ProtectConfig struct {
 	MaxConcurrentClient int      `toml:"max_concurrent_per_client"`
 	BanAfterStrikes     int      `toml:"ban_after_strikes"`
 	BanTTL              Duration `toml:"ban_ttl"`
+	BanEscalation       int      `toml:"ban_escalation"`
 	AttackBlock         bool     `toml:"attack_block"`
 	AttackScore         int      `toml:"attack_score"`
 	WriteMethodCost     int      `toml:"write_method_cost"`
@@ -317,6 +326,10 @@ type DetectConfig struct {
 	High404Threshold         int                `toml:"high_404_threshold"`
 	High404Window            Duration           `toml:"high_404_window"`
 	High404Action            string             `toml:"high_404_action"`
+	PenaltyThreshold         int                `toml:"penalty_threshold"`
+	PenaltyWindow            Duration           `toml:"penalty_window"`
+	PenaltyAction            string             `toml:"penalty_action"`
+	CacheMissTTL             Duration           `toml:"cache_miss_ttl"`
 	BehaviorWindow           Duration           `toml:"behavior_window"`
 	BehaviorBurstLimit       int                `toml:"behavior_burst_limit"`
 	BehaviorBurstScore       int                `toml:"behavior_burst_score"`
@@ -521,6 +534,9 @@ func Default() Config {
 		},
 		RateLimit: RateLimitConfig{
 			Enabled: true, Requests: 120, Window: Duration{time.Minute}, Burst: 60, ChallengeOver: true,
+			SubnetV4Prefix: 24, SubnetV6Prefix: 64, SubnetRequests: 1000, SubnetBurst: 200,
+			SubnetWindow: Duration{time.Minute}, GlobalRequests: 5000, GlobalBurst: 1000,
+			GlobalWindow: Duration{time.Minute},
 		},
 		Protect: ProtectConfig{
 			Enabled:             true,
@@ -531,6 +547,7 @@ func Default() Config {
 			MaxConcurrentClient: 32,
 			BanAfterStrikes:     5,
 			BanTTL:              Duration{10 * time.Minute},
+			BanEscalation:       0,
 			AttackBlock:         true,
 			AttackScore:         90,
 			WriteMethodCost:     3,
@@ -571,6 +588,8 @@ func Default() Config {
 			MissingAcceptLangScore: 15, MissingSecFetchScore: 20,
 			SecCHUAMismatchScore: 25, StarAcceptBrowserScore: 15,
 			High404Threshold: 20, High404Window: Duration{time.Minute}, High404Action: "challenge",
+			PenaltyThreshold: 100, PenaltyWindow: Duration{time.Minute}, PenaltyAction: "challenge",
+			CacheMissTTL:       Duration{5 * time.Second},
 			BehaviorWindow:     Duration{time.Minute},
 			BehaviorBurstLimit: 60, BehaviorBurstScore: 35,
 			BehaviorPathFanout: 40, BehaviorPathFanoutScore: 30,
@@ -1023,6 +1042,42 @@ func normalize(c *Config) {
 	if c.Detect.High404Action == "" {
 		c.Detect.High404Action = "challenge"
 	}
+	if c.Detect.PenaltyAction == "" {
+		c.Detect.PenaltyAction = "challenge"
+	}
+	if c.Detect.PenaltyThreshold <= 0 {
+		c.Detect.PenaltyThreshold = 100
+	}
+	if c.Detect.PenaltyWindow.Duration <= 0 {
+		c.Detect.PenaltyWindow = Duration{time.Minute}
+	}
+	if c.Detect.CacheMissTTL.Duration <= 0 {
+		c.Detect.CacheMissTTL = Duration{5 * time.Second}
+	}
+	if c.RateLimit.SubnetV4Prefix <= 0 {
+		c.RateLimit.SubnetV4Prefix = 24
+	}
+	if c.RateLimit.SubnetV6Prefix <= 0 {
+		c.RateLimit.SubnetV6Prefix = 64
+	}
+	if c.RateLimit.SubnetRequests <= 0 {
+		c.RateLimit.SubnetRequests = 1000
+	}
+	if c.RateLimit.SubnetBurst <= 0 {
+		c.RateLimit.SubnetBurst = 200
+	}
+	if c.RateLimit.SubnetWindow.Duration <= 0 {
+		c.RateLimit.SubnetWindow = Duration{time.Minute}
+	}
+	if c.RateLimit.GlobalRequests <= 0 {
+		c.RateLimit.GlobalRequests = 5000
+	}
+	if c.RateLimit.GlobalBurst <= 0 {
+		c.RateLimit.GlobalBurst = 1000
+	}
+	if c.RateLimit.GlobalWindow.Duration <= 0 {
+		c.RateLimit.GlobalWindow = Duration{time.Minute}
+	}
 	if c.Upstream.Health.Path == "" {
 		c.Upstream.Health.Path = "/healthz"
 	}
@@ -1406,6 +1461,31 @@ func (c Config) Validate() error {
 		case "challenge", "block", "off", "":
 		default:
 			return fmt.Errorf("detect.high_404_action must be challenge, block, or off")
+		}
+		switch strings.ToLower(c.Detect.PenaltyAction) {
+		case "challenge", "block", "off", "":
+		default:
+			return fmt.Errorf("detect.penalty_action must be challenge, block, or off")
+		}
+	}
+	if c.RateLimit.Enabled {
+		if c.RateLimit.SubnetRequests < 0 || c.RateLimit.SubnetBurst < 0 {
+			return fmt.Errorf("ratelimit.subnet_requests and subnet_burst must be >= 0")
+		}
+		if c.RateLimit.SubnetRequests > 0 && c.RateLimit.SubnetWindow.Duration <= 0 {
+			return fmt.Errorf("ratelimit.subnet_window must be > 0 when subnet_requests is set")
+		}
+		if c.RateLimit.GlobalRequests < 0 || c.RateLimit.GlobalBurst < 0 {
+			return fmt.Errorf("ratelimit.global_requests and global_burst must be >= 0")
+		}
+		if c.RateLimit.GlobalRequests > 0 && c.RateLimit.GlobalWindow.Duration <= 0 {
+			return fmt.Errorf("ratelimit.global_window must be > 0 when global_requests is set")
+		}
+		if c.RateLimit.SubnetV4Prefix < 0 || c.RateLimit.SubnetV4Prefix > 32 {
+			return fmt.Errorf("ratelimit.subnet_v4_prefix must be between 0 and 32")
+		}
+		if c.RateLimit.SubnetV6Prefix < 0 || c.RateLimit.SubnetV6Prefix > 128 {
+			return fmt.Errorf("ratelimit.subnet_v6_prefix must be between 0 and 128")
 		}
 	}
 	switch strings.ToLower(c.Logging.Level) {
