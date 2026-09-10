@@ -1,0 +1,83 @@
+{{define "requests"}}{{template "layout" .}}{{end}}
+
+{{define "requests-content"}}{{template "shell" .}}{{end}}
+
+{{define "requests-fragment"}}
+<main id="main" class="shell-main">
+  {{template "requests-main" .}}
+</main>
+{{end}}
+
+{{define "requests-main"}}
+{{$base := .BasePath}}
+{{$detail := index .Data "detail"}}
+<section class="page-head">
+  <div>
+    <h1 class="page-title">Requests</h1>
+    <p class="page-sub">Recent WAF events and ray lookup.</p>
+  </div>
+</section>
+
+{{if $detail}}
+<section class="section">
+  <div class="section-head">
+    <h2 class="page-sub">Ray {{index .Data "ray"}}</h2>
+  </div>
+  <pre class="mono">{{json $detail}}</pre>
+</section>
+{{end}}
+
+<section class="section">
+  <h2 class="page-sub">Lookup</h2>
+  <form method="post" action="{{$base}}/requests" hx-post="{{$base}}/requests" hx-target="#main" hx-swap="outerHTML" class="field-row">
+    <input type="hidden" name="action" value="lookup">
+    <div class="field"><label>Ray</label><input name="ray" required></div>
+    <div class="field"><label>Proxy</label>
+      <select name="proxy_id">
+        <option value="">Any</option>
+        {{range $p := index .Data "proxies"}}
+          <option value="{{$p.id}}">{{$p.name}}</option>
+        {{end}}
+      </select>
+    </div>
+    <button class="btn btn-primary" type="submit">Lookup</button>
+  </form>
+</section>
+
+<section class="section">
+  <h2 class="page-sub">Recent</h2>
+  <form method="get" action="{{$base}}/requests" hx-get="{{$base}}/requests" hx-target="#main" hx-swap="outerHTML" class="field-row">
+    <div class="field"><label>Limit</label><input name="limit" type="number" value="{{index .Data "limit"}}"></div>
+    <div class="field"><label>Proxy</label>
+      <select name="proxy_id">
+        <option value="">Any</option>
+        {{range $p := index .Data "proxies"}}
+          <option value="{{$p.id}}" {{if eq (index $.Data "proxy_id") $p.id}}selected{{end}}>{{$p.name}}</option>
+        {{end}}
+      </select>
+    </div>
+    <button class="btn" type="submit">Refresh</button>
+  </form>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Time</th><th>Ray</th><th>Method</th><th>Host</th><th>Path</th><th>Action</th><th>Score</th><th></th></tr></thead>
+      <tbody>
+      {{range $e := index .Data "requests"}}
+        <tr>
+          <td class="mono">{{$e.created_at}}</td>
+          <td class="mono">{{$e.ray}}</td>
+          <td class="mono">{{$e.method}}</td>
+          <td class="mono">{{$e.host}}</td>
+          <td class="mono cell-wrap">{{$e.path}}</td>
+          <td class="mono"><span class="badge">{{$e.action}}</span></td>
+          <td class="mono">{{$e.score}}</td>
+          <td class="actions"><a class="btn btn-sm" href="{{$base}}/requests/{{$e.ray}}">View</a></td>
+        </tr>
+      {{else}}
+        <tr><td colspan="8" class="muted">No events</td></tr>
+      {{end}}
+      </tbody>
+    </table>
+  </div>
+</section>
+{{end}}

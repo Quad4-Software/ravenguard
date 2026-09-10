@@ -1,0 +1,31 @@
+{{define "layout"}}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="csrf-token" content="{{.CSRF}}">
+  <link rel="icon" href="{{.BasePath}}/assets/favicon.ico">
+  <title>{{if .PageTitle}}{{.PageTitle}} - {{end}}RavenGuard Admin</title>
+  <link rel="stylesheet" href="{{.BasePath}}/assets/css/fonts.css">
+  <link rel="stylesheet" href="{{.BasePath}}/assets/css/app.css">
+  <link rel="stylesheet" href="{{.BasePath}}/assets/css/admin-htmx.css">
+  <script src="{{.BasePath}}/assets/js/htmx-4.0.0.min.js"></script>
+  <script>
+    htmx.config.implicitInheritance = true;
+    htmx.config.noSwap = [204, 304, '4xx', '5xx'];
+    document.addEventListener('htmx:configRequest', function (evt) {
+      const meta = document.querySelector('meta[name="csrf-token"]');
+      if (meta && meta.content && evt.detail.verb !== 'get') {
+        evt.detail.headers['X-CSRF-Token'] = meta.content;
+      }
+    });
+  </script>
+</head>
+<body hx-boost="true" hx-select="#main" hx-target="#main" hx-swap="outerHTML show:top">
+  {{include (printf "%s-content" .TemplateName) .}}
+  <div class="toast-stack" id="toast-stack" role="status" aria-live="polite" aria-relevant="additions"></div>
+</body>
+</html>
+{{end}}

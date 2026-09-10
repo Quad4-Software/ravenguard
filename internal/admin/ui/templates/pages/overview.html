@@ -1,0 +1,167 @@
+{{define "overview"}}{{template "layout" .}}{{end}}
+
+{{define "overview-content"}}{{template "shell" .}}{{end}}
+
+{{define "overview-fragment"}}
+<main id="main" class="shell-main" hx-get="{{.BasePath}}/" hx-trigger="every 5s" hx-select="#main" hx-target="#main" hx-swap="outerHTML show:top" hx-vals='js:{"_t": new Date().getTime()}'>
+  {{template "overview-main" .}}
+</main>
+{{end}}
+
+{{define "overview-main"}}
+{{$status := index .Data "status"}}
+{{$samples := index .Data "samples"}}
+{{$base := .BasePath}}
+{{$canWrite := canWriteCfg .Role}}
+<div class="page-head">
+  <div>
+    <h1 class="page-title">Overview</h1>
+    <p class="page-sub">Process load, traffic, and guard coverage</p>
+  </div>
+</div>
+
+{{if .Error}}
+  <p class="alert alert-error">{{.Error}}</p>
+{{end}}
+
+<div id="overview-content">
+  {{if $status}}
+    <div class="section">
+      <div class="hero">
+        <div class="hero-cell">
+          {{$up := index $status "upstream_healthy"}}
+          {{$health := "unknown"}}
+          {{$tone := "warn"}}
+          {{if eq $up true}}{{$health = "healthy"}}{{$tone = "ok"}}{{else if eq $up false}}{{$health = "down"}}{{$tone = "bad"}}{{end}}
+          <span class="dot {{$tone}} {{if eq $tone "ok"}}pulse{{end}}"></span>
+          <div>
+            <div class="hero-k">Upstream</div>
+            <div class="hero-v {{$tone}}">{{$health}}</div>
+          </div>
+        </div>
+        <div class="hero-cell">
+          <div>
+            <div class="hero-k">Uptime</div>
+            <div class="hero-v mono">{{formatUptime (index $status "uptime_seconds")}}</div>
+          </div>
+        </div>
+        <div class="hero-cell">
+          <span class="dot ok pulse"></span>
+          <div>
+            <div class="hero-k">Live</div>
+            <div class="hero-v live-meta">5s</div>
+          </div>
+        </div>
+      </div>
+      <p class="page-sub hero-links">
+        <a href="{{$base}}/certs">Certificates</a> &middot;
+        <a href="{{$base}}/logs">Live logs</a> &middot;
+        <a href="{{$base}}/routes">Routes</a>
+      </p>
+    </div>
+
+    {{$proc := index $status "process"}}
+    <div class="section">
+      <div class="section-title">Process load</div>
+      <div class="process-grid">
+        <div class="process-cell">
+          {{gaugeSVG (index $proc "cpu_percent") "CPU" (formatPct (index $proc "cpu_percent")) (statusTone (index $proc "cpu_percent")) 120}}
+        </div>
+        <div class="process-cell">
+          {{$heapPct := 0.0}}
+          {{if and (index $proc "heap_sys_bytes") (gt (index $proc "heap_sys_bytes") 0)}}{{$heapPct = div (mul (index $proc "heap_alloc_bytes") 100) (index $proc "heap_sys_bytes")}}{{end}}
+          {{gaugeSVG $heapPct "Heap" (formatBytes (index $proc "heap_alloc_bytes")) (statusTone $heapPct) 120}}
+          <p class="process-note">{{formatPct $heapPct}} of sys {{formatBytes (index $proc "heap_sys_bytes")}}</p>
+        </div>
+        <div class="process-cell process-stat">
+          <div class="metric-label">RSS</div>
+          <div class="metric-value mono">{{formatBytes (index $proc "rss_bytes")}}</div>
+          <p class="process-note">Go sys {{formatBytes (index $proc "sys_bytes")}}</p>
+        </div>
+        <div class="process-cell process-stat">
+          <div class="metric-label">Goroutines</div>
+          <div class="metric-value mono">{{formatNum (index $proc "goroutines")}}</div>
+          <p class="process-note">GOMAXPROCS {{index $proc "gomaxprocs"}} &middot; {{index $proc "num_cpu"}} CPU</p>
+          <p class="process-note">GC {{formatNum (index $proc "num_gc")}} &middot; pause {{formatNs (index $proc "gc_pause_ns")}}</p>
+        </div>
+      </div>
+      <div class="chart-grid">
+        {{sparklineSVG (sampleSeries $samples "cpu_percent") 300 80 "var(--ok)"}}
+        {{sparklineSVG (sampleSeries $samples "rss_bytes") 300 80 "var(--warn)"}}
+        {{sparklineSVG (sampleSeries $samples "heap_alloc_bytes") 300 80 "var(--ok)"}}
+        {{sparklineSVG (sampleSeries $samples "goroutines") 300 80 "var(--ok)"}}
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Traffic &middot; last {{len $samples}} samples</div>
+      <div class="metric-grid">
+        <div class="metric">
+          <div class="metric-label">In flight</div>
+          <div class="metric-value mono">{{formatNum (index $status "concurrency_global")}}</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Busy clients</div>
+          <div class="metric-value mono">{{formatNum (index $status "concurrency_clients")}}</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Active bans</div>
+          <div class="metric-value mono">{{formatNum (index $status "ban_count")}}</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Rate buckets</div>
+          <div class="metric-value mono">{{formatNum (index $status "ratelimit_buckets")}}</div>
+        </div>
+      </div>
+      <div class="chart-grid traffic-charts">
+        {{sparklineSVG (sampleSeries $samples "concurrency_global") 300 72 "var(--ok)"}}
+        {{sparklineSVG (sampleSeries $samples "concurrency_clients") 300 72 "var(--ok)"}}
+        {{sparklineSVG (sampleSeries $samples "ban_count") 300 72 "var(--warn)"}}
+        {{sparklineSVG (sampleSeries $samples "ratelimit_buckets") 300 72 "var(--ok)"}}
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Coverage</div>
+      <div class="meter-list">
+        {{$bl := index $status "blocklists"}}
+        {{$qf := index $status "qfeeds"}}
+        {{$max := max (max (max (max 1 (index $bl "ip_count")) (index $bl "dns_count")) (index $bl "ua_count")) (max (index $qf "ip_count") (index $qf "domain_count"))}}
+        {{barMeter "IP blocklist" (index $bl "ip_count") $max (formatNum (index $bl "ip_count"))}}
+        {{barMeter "DNS blocklist" (index $bl "dns_count") $max (formatNum (index $bl "dns_count"))}}
+        {{barMeter "UA blocklist" (index $bl "ua_count") $max (formatNum (index $bl "ua_count"))}}
+        {{barMeter "Q-Feeds IPs" (index $qf "ip_count") $max (formatNum (index $qf "ip_count"))}}
+        {{barMeter "Q-Feeds domains" (index $qf "domain_count") $max (formatNum (index $qf "domain_count"))}}
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Modules</div>
+      <div class="module-row">
+        {{$mods := list "protect" "ratelimit" "detect" "challenge" "qfeeds"}}
+        {{$modLabels := dict "protect" "Protect" "ratelimit" "Rate limit" "detect" "Detect" "challenge" "Challenge" "qfeeds" "Q-Feeds"}}
+        {{$modHrefs := dict "protect" "/config" "ratelimit" "/config" "detect" "/config" "challenge" "/config" "qfeeds" "/qfeeds"}}
+        {{range $mod := $mods}}
+          {{$enabled := index $status (printf "%s_enabled" $mod)}}
+          {{$state := "off"}}
+          {{if $enabled}}{{$state = "on"}}{{if and (eq $mod "qfeeds") (index $status "qfeeds_failed")}}{{$state = "degraded"}}{{end}}{{end}}
+          {{$mtone := "ok"}}{{if eq $state "off"}}{{$mtone = "line"}}{{else if eq $state "degraded"}}{{$mtone = "bad"}}{{end}}
+          <div class="module {{$state}}">
+            <span class="dot {{if eq $state "on"}}ok{{else if eq $state "degraded"}}bad{{else}}muted{{end}}"></span>
+            <a class="module-label" href="{{$base}}{{index $modHrefs $mod}}">{{index $modLabels $mod}}</a>
+            <span class="module-state">{{$state}}</span>
+            <form method="post" action="{{$base}}/" hx-post="{{$base}}/" hx-target="#main" hx-swap="outerHTML" class="switch" style="display:inline-flex">
+              <input type="hidden" name="module" value="{{$mod}}">
+              <input type="hidden" name="enabled" value="{{if $enabled}}false{{else}}true{{end}}">
+              <input type="checkbox" {{if $enabled}}checked{{end}} {{if not $canWrite}}disabled{{end}} onchange="this.form.requestSubmit()">
+              <span class="switch-track" aria-hidden="true"></span>
+            </form>
+          </div>
+        {{end}}
+      </div>
+    </div>
+  {{else}}
+    <p class="alert alert-loading">Loading status&hellip;</p>
+  {{end}}
+</div>
+{{end}}

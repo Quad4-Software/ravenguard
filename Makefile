@@ -29,27 +29,15 @@ build:
 	CGO_ENABLED=0 $(GO) build -trimpath -ldflags="$(LDFLAGS)" -o bin/ravenguard ./cmd/ravenguard
 
 widget:
-	pnpm widget:build
-	cp packages/widget/dist/w.js internal/ui/static/w.js
-	rm -rf internal/ui/static/workers
-	if [ -d packages/widget/dist/workers ]; then \
-		mkdir -p internal/ui/static/workers; \
-		cp packages/widget/dist/workers/*.js internal/ui/static/workers/; \
-	fi
-	node packages/widget/scripts/obfuscate.mjs internal/ui/static/challenge.js internal/ui/static/c.js
-	cp internal/ui/static/challenge.css internal/ui/static/c.css
+	# Widget runtime assets are vendored in internal/ui/static.
+	# To rebuild, use the widget source in packages/widget.
 
 admin:
-	pnpm admin:build
-	rm -rf internal/admin/ui/dist
-	mkdir -p internal/admin/ui/dist
-	cp -a packages/admin/build/. internal/admin/ui/dist/
-	touch internal/admin/ui/dist/.gitkeep
+	# Admin UI is now server-rendered Go templates with vendored HTMX 4.
+	# No pnpm/Node build step is required.
 
 test:
 	$(GO) test ./...
-	pnpm widget:test
-	pnpm admin:test
 
 e2e: build
 	pnpm install --filter @quad4/ravenguard-e2e...
@@ -58,9 +46,8 @@ e2e: build
 	pnpm --filter @quad4/ravenguard-e2e test --project=chromium
 	-pnpm --filter @quad4/ravenguard-e2e test --project=firefox --project=webkit
 
-# Cover internal packages only. Skip cmd (mains), embed-only admin/ui, and
-# listener (network-heavy integration surface).
-COVER_PKGS ?= $(shell $(GO) list ./internal/... | grep -Ev '/(admin/ui|listener)$$')
+# Cover internal packages. Skip cmd (mains) and the listener (network-heavy integration surface).
+COVER_PKGS ?= $(shell $(GO) list ./internal/... | grep -Ev '/listener$$')
 
 cover:
 	$(GO) test $(COVER_PKGS) -covermode=atomic -coverprofile=coverage.out -count=1

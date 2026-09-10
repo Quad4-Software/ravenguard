@@ -1,0 +1,15 @@
+{{define "error"}}{{template "layout" .}}{{end}}
+
+{{define "error-content"}}
+<main id="main" class="login-wrap" hx-boost="false">
+  <div class="login-main">
+    <p class="code-label">Error</p>
+    <h1 class="login-brand">RavenGuard</h1>
+    <p class="login-sub">Something went wrong loading this page.</p>
+    {{if .Error}}
+      <p class="alert alert-error" role="alert">{{.Error}}</p>
+    {{end}}
+    <p class="page-sub"><a href="{{.BasePath}}/" class="btn btn-primary">Back to overview</a></p>
+  </div>
+</main>
+{{end}}

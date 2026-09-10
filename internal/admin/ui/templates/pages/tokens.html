@@ -1,0 +1,86 @@
+{{define "tokens"}}{{template "layout" .}}{{end}}
+
+{{define "tokens-content"}}{{template "shell" .}}{{end}}
+
+{{define "tokens-fragment"}}
+<main id="main" class="shell-main">
+  {{template "tokens-main" .}}
+</main>
+{{end}}
+
+{{define "tokens-main"}}
+{{$base := .BasePath}}
+<section class="page-head">
+  <div>
+    <h1 class="page-title">Tokens</h1>
+    <p class="page-sub">Create and revoke API tokens.</p>
+  </div>
+</section>
+
+{{if .Data.notice}}<p class="alert alert-loading">{{.Data.notice}}</p>{{end}}
+
+{{with index .Data "created"}}
+<section class="section">
+  <p class="alert alert-loading">Token created. Copy the secret now; it is shown only once.</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Token</th><th>Secret</th></tr></thead>
+      <tbody>
+        <tr>
+          <td class="mono">{{.token}}</td>
+          <td class="mono cell-wrap">{{.secret}}</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+{{end}}
+
+<section class="section">
+  <h2 class="page-sub">Create token</h2>
+  <form method="post" action="{{$base}}/tokens" hx-post="{{$base}}/tokens" hx-target="#main" hx-swap="outerHTML">
+    <input type="hidden" name="action" value="create">
+    <div class="field-row">
+      <div class="field"><label>Name</label><input name="name" required></div>
+      <div class="field"><label>Role</label>
+        <select name="role">
+          <option value="viewer">viewer</option>
+          <option value="operator">operator</option>
+          <option value="admin">admin</option>
+          <option value="owner">owner</option>
+        </select>
+      </div>
+      <div class="field"><label>Expires in</label><input name="expires_in" placeholder="24h"></div>
+      <button class="btn btn-primary">Create</button>
+    </div>
+  </form>
+</section>
+
+<section class="section">
+  <h2 class="page-sub">Existing tokens</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>ID</th><th>Name</th><th>Role</th><th>Expires</th><th></th></tr></thead>
+      <tbody>
+      {{range $t := index .Data "tokens"}}
+        <tr>
+          <td class="mono">{{$t.id}}</td>
+          <td class="mono">{{$t.name}}</td>
+          <td class="mono">{{$t.role}}</td>
+          <td class="mono">{{$t.expires_at}}</td>
+          <td class="actions">
+            <form method="post" action="{{$base}}/tokens" hx-post="{{$base}}/tokens" hx-target="#main" hx-swap="outerHTML">
+              <input type="hidden" name="action" value="revoke">
+              <input type="hidden" name="id" value="{{$t.id}}">
+              <button class="btn btn-sm btn-danger">Revoke</button>
+            </form>
+          </td>
+        </tr>
+      {{else}}
+        <tr><td colspan="5" class="muted">No tokens</td></tr>
+      {{end}}
+      </tbody>
+    </table>
+  </div>
+</section>
+{{end}}

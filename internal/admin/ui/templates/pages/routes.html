@@ -1,0 +1,113 @@
+{{define "routes"}}{{template "layout" .}}{{end}}
+
+{{define "routes-content"}}{{template "shell" .}}{{end}}
+
+{{define "routes-fragment"}}
+<main id="main" class="shell-main">
+  {{template "routes-main" .}}
+</main>
+{{end}}
+
+{{define "routes-main"}}
+{{$base := .BasePath}}
+{{$rt := index .Data "editing"}}
+<section class="page-head">
+  <div>
+    <h1 class="page-title">Routes</h1>
+    <p class="page-sub">Route rules to upstreams.</p>
+  </div>
+</section>
+
+{{if .Data.notice}}<p class="alert alert-loading">{{.Data.notice}}</p>{{end}}
+
+<section class="section">
+  <h2 class="page-sub">{{if $rt}}Edit route{{else}}New route{{end}}</h2>
+  <form method="post" action="{{$base}}/routes" hx-post="{{$base}}/routes" hx-target="#main" hx-swap="outerHTML">
+    <input type="hidden" name="action" value="{{if $rt}}edit{{else}}create{{end}}">
+    {{if $rt}}<input type="hidden" name="id" value="{{$rt.id}}">{{end}}
+    <div class="field-row">
+      <div class="field"><label>Name</label><input name="name" value="{{if $rt}}{{$rt.name}}{{end}}" required></div>
+      <div class="field"><label>Path prefix</label><input name="path_prefix" value="{{if $rt}}{{$rt.path_prefix}}{{end}}" required></div>
+      <div class="field"><label>Priority</label><input name="priority" type="number" value="{{if $rt}}{{$rt.priority}}{{end}}"></div>
+    </div>
+    <div class="field">
+      <label>Hosts (one per line or comma)</label>
+      <textarea name="hosts" rows="4" class="mono">{{if $rt}}{{range $h := $rt.hosts}}{{$h}}
+{{end}}{{end}}</textarea>
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>Upstream</label>
+        <select name="upstream_id">
+          {{range $u := index .Data "upstreams"}}
+            <option value="{{$u.id}}" {{if and $rt (eq $rt.upstream_id $u.id)}}selected{{end}}>{{$u.name}}</option>
+          {{end}}
+        </select>
+      </div>
+      <div class="field">
+        <label>Access policy</label>
+        <select name="access_policy_id">
+          <option value="">None</option>
+          {{range $a := index .Data "access"}}
+            <option value="{{$a.id}}" {{if and $rt (eq $rt.access_policy_id $a.id)}}selected{{end}}>{{$a.name}}</option>
+          {{end}}
+        </select>
+      </div>
+      <div class="field">
+        <label>API schema</label>
+        <select name="openapi_schema_id">
+          <option value="">None</option>
+          {{range $s := index .Data "schemas"}}
+            <option value="{{$s.id}}" {{if and $rt (eq $rt.openapi_schema_id $s.id)}}selected{{end}}>{{$s.name}}</option>
+          {{end}}
+        </select>
+      </div>
+      <div class="field">
+        <label>Proxy</label>
+        <select name="proxy_id">
+          <option value="">None</option>
+          {{range $p := index .Data "proxies"}}
+            <option value="{{$p.id}}" {{if and $rt (eq $rt.proxy_id $p.id)}}selected{{end}}>{{$p.name}}</option>
+          {{end}}
+        </select>
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label><input type="checkbox" name="enabled" value="true" {{if $rt}}{{$rt.enabled}}checked{{else}}checked{{end}}> Enabled</label></div>
+      <div class="field"><label><input type="checkbox" name="strip_prefix" value="true" {{if $rt}}{{$rt.strip_prefix}}checked{{end}}> Strip prefix</label></div>
+      <div class="field"><label><input type="checkbox" name="skip_challenge" value="true" {{if $rt}}{{$rt.skip_challenge}}checked{{end}}> Skip challenge</label></div>
+    </div>
+    <button class="btn btn-primary">{{if $rt}}Update{{else}}Create{{end}}</button>
+  </form>
+</section>
+
+<section class="section">
+  <h2 class="page-sub">Routes</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Name</th><th>Hosts</th><th>Prefix</th><th>Upstream</th><th>Enabled</th><th></th></tr></thead>
+      <tbody>
+      {{range $r := index .Data "routes"}}
+        <tr>
+          <td>{{$r.name}}</td>
+          <td class="mono">{{$r.hosts}}</td>
+          <td class="mono">{{$r.path_prefix}}</td>
+          <td class="mono">{{$r.upstream_id}}</td>
+          <td class="mono">{{$r.enabled}}</td>
+          <td class="actions">
+            <a class="btn btn-sm" href="{{$base}}/routes/{{$r.id}}">Edit</a>
+            <form method="post" action="{{$base}}/routes" hx-post="{{$base}}/routes" hx-target="#main" hx-swap="outerHTML" style="display:inline;">
+              <input type="hidden" name="action" value="delete">
+              <input type="hidden" name="id" value="{{$r.id}}">
+              <button class="btn btn-sm btn-danger">Delete</button>
+            </form>
+          </td>
+        </tr>
+      {{else}}
+        <tr><td colspan="6" class="muted">No routes</td></tr>
+      {{end}}
+      </tbody>
+    </table>
+  </div>
+</section>
+{{end}}

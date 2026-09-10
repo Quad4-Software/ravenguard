@@ -1,0 +1,132 @@
+{{define "migrations"}}{{template "layout" .}}{{end}}
+
+{{define "migrations-content"}}{{template "shell" .}}{{end}}
+
+{{define "migrations-fragment"}}
+<main id="main" class="shell-main">
+  {{template "migrations-main" .}}
+</main>
+{{end}}
+
+{{define "migrations-main"}}
+{{$base := .BasePath}}
+{{$active := index .Data "active"}}
+<section class="page-head">
+  <div>
+    <h1 class="page-title">Move services</h1>
+    <p class="page-sub">Migrate routes between proxies.</p>
+  </div>
+</section>
+
+{{if .Data.notice}}<p class="alert alert-loading">{{.Data.notice}}</p>{{end}}
+
+{{if $active}}
+<section class="section">
+  <div class="section-head">
+    <h2 class="page-sub">{{$active.id}} ({{$active.phase}})</h2>
+    <div class="actions-row">
+      <form method="post" action="{{$base}}/migrations" hx-post="{{$base}}/migrations" hx-target="#main" hx-swap="outerHTML" style="display:inline;">
+        <input type="hidden" name="action" value="prep">
+        <input type="hidden" name="id" value="{{$active.id}}">
+        <button class="btn">Prep</button>
+      </form>
+      <form method="post" action="{{$base}}/migrations" hx-post="{{$base}}/migrations" hx-target="#main" hx-swap="outerHTML" style="display:inline;">
+        <input type="hidden" name="action" value="complete">
+        <input type="hidden" name="id" value="{{$active.id}}">
+        <button class="btn btn-primary">Complete</button>
+      </form>
+      <form method="post" action="{{$base}}/migrations" hx-post="{{$base}}/migrations" hx-target="#main" hx-swap="outerHTML" style="display:inline;">
+        <input type="hidden" name="action" value="abort">
+        <input type="hidden" name="id" value="{{$active.id}}">
+        <button class="btn btn-danger">Abort</button>
+      </form>
+    </div>
+  </div>
+  <p class="muted">{{$active.detail}}</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Host</th><th>From</th><th>To</th><th>Suggested A</th><th>Suggested AAAA</th><th>Note</th></tr></thead>
+      <tbody>
+      {{range $d := index $active "dns_checklist"}}
+        <tr>
+          <td class="mono">{{$d.host}}</td>
+          <td class="mono">{{$d.from_ipv4}} {{$d.from_ipv6}}</td>
+          <td class="mono">{{$d.to_ipv4}} {{$d.to_ipv6}}</td>
+          <td class="mono">{{$d.suggested_a}}</td>
+          <td class="mono">{{$d.suggested_aaaa}}</td>
+          <td class="mono">{{$d.note}}</td>
+        </tr>
+      {{else}}
+        <tr><td colspan="6" class="muted">No checklist</td></tr>
+      {{end}}
+      </tbody>
+    </table>
+  </div>
+</section>
+{{end}}
+
+<section class="section">
+  <h2 class="page-sub">New migration</h2>
+  <form method="post" action="{{$base}}/migrations" hx-post="{{$base}}/migrations" hx-target="#main" hx-swap="outerHTML">
+    <input type="hidden" name="action" value="create">
+    <div class="field-row">
+      <div class="field"><label>From proxy</label>
+        <select name="from_proxy_id">
+          {{range $p := index .Data "proxies"}}
+            <option value="{{$p.id}}">{{$p.name}}</option>
+          {{end}}
+        </select>
+      </div>
+      <div class="field"><label>To proxy</label>
+        <select name="to_proxy_id">
+          {{range $p := index .Data "proxies"}}
+            <option value="{{$p.id}}">{{$p.name}}</option>
+          {{end}}
+        </select>
+      </div>
+    </div>
+    <div class="field">
+      <label>Routes</label>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th></th><th>Name</th><th>Prefix</th><th>Proxy</th></tr></thead>
+          <tbody>
+          {{range $r := index .Data "routes"}}
+            <tr>
+              <td><input type="checkbox" name="route_ids" value="{{$r.id}}"></td>
+              <td>{{$r.name}}</td>
+              <td class="mono">{{$r.path_prefix}}</td>
+              <td class="mono">{{$r.proxy_id}}</td>
+            </tr>
+          {{end}}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <button class="btn btn-primary">Create migration</button>
+  </form>
+</section>
+
+<section class="section">
+  <h2 class="page-sub">Migrations</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>ID</th><th>From</th><th>To</th><th>Phase</th><th>Routes</th><th></th></tr></thead>
+      <tbody>
+      {{range $m := index .Data "migrations"}}
+        <tr>
+          <td class="mono">{{$m.id}}</td>
+          <td class="mono">{{$m.from_proxy_id}}</td>
+          <td class="mono">{{$m.to_proxy_id}}</td>
+          <td class="mono">{{$m.phase}}</td>
+          <td class="mono">{{len $m.route_ids}}</td>
+          <td class="actions"><a class="btn btn-sm" href="{{$base}}/migrations/{{$m.id}}">Open</a></td>
+        </tr>
+      {{else}}
+        <tr><td colspan="6" class="muted">No migrations</td></tr>
+      {{end}}
+      </tbody>
+    </table>
+  </div>
+</section>
+{{end}}

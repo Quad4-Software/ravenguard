@@ -1,0 +1,104 @@
+{{define "access"}}{{template "layout" .}}{{end}}
+
+{{define "access-content"}}{{template "shell" .}}{{end}}
+
+{{define "access-fragment"}}
+<main id="main" class="shell-main">
+  {{template "access-main" .}}
+</main>
+{{end}}
+
+{{define "access-main"}}
+{{$base := .BasePath}}
+{{$pol := index .Data "editing"}}
+{{$rules := index .Data "rules"}}
+<section class="page-head">
+  <div>
+    <h1 class="page-title">Access</h1>
+    <p class="page-sub">Access policies and rules.</p>
+  </div>
+</section>
+
+{{if .Data.notice}}<p class="alert alert-loading">{{.Data.notice}}</p>{{end}}
+
+<section class="section">
+  <h2 class="page-sub">{{if $pol}}Edit policy{{else}}New policy{{end}}</h2>
+  <form method="post" action="{{$base}}/access" hx-post="{{$base}}/access" hx-target="#main" hx-swap="outerHTML">
+    <input type="hidden" name="action" value="{{if $pol}}edit{{else}}create{{end}}">
+    {{if $pol}}<input type="hidden" name="id" value="{{$pol.id}}">{{end}}
+    <div class="field-row">
+      <div class="field"><label>Name</label><input name="name" value="{{if $pol}}{{$pol.name}}{{end}}" required></div>
+      <div class="field"><label>Mode</label>
+        <select name="mode">
+          <option value="enforce" {{if and $pol (eq $pol.mode "enforce")}}selected{{end}}>enforce</option>
+          <option value="challenge" {{if and $pol (eq $pol.mode "challenge")}}selected{{end}}>challenge</option>
+          <option value="silent" {{if and $pol (eq $pol.mode "silent")}}selected{{end}}>silent</option>
+        </select>
+      </div>
+      <div class="field"><label>Cookie TTL</label><input name="cookie_ttl" value="{{if $pol}}{{$pol.cookie_ttl}}{{else}}24h{{end}}" placeholder="24h"></div>
+    </div>
+    <input type="hidden" name="rule_count" value="{{len $rules}}">
+    {{range $i, $rule := $rules}}
+    <div class="field-row" style="align-items:stretch;">
+      <div class="field">
+        <label>Type</label>
+        <select name="rule_type_{{$i}}">
+          <option value="password" {{if eq $rule.type "password"}}selected{{end}}>password</option>
+          <option value="pin" {{if eq $rule.type "pin"}}selected{{end}}>pin</option>
+          <option value="ip_allowlist" {{if eq $rule.type "ip_allowlist"}}selected{{end}}>ip_allowlist</option>
+          <option value="header" {{if eq $rule.type "header"}}selected{{end}}>header</option>
+          <option value="user_agent" {{if eq $rule.type "user_agent"}}selected{{end}}>user_agent</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Secret</label>
+        <input name="rule_secret_{{$i}}" type="password" value="{{$rule.secret}}" placeholder="{{if $rule.secret_hash}}unchanged{{else}}new{{end}}">
+        <input type="hidden" name="rule_secret_hash_{{$i}}" value="{{$rule.secret_hash}}">
+      </div>
+      <div class="field">
+        <label>CIDRs</label>
+        <textarea name="rule_cidrs_{{$i}}" rows="2" class="mono">{{$rule.cidrs}}</textarea>
+      </div>
+      <div class="field" style="min-width:16rem;">
+        <label>Header</label>
+        <input name="rule_header_name_{{$i}}" value="{{$rule.header_name}}" placeholder="name">
+        <input name="rule_header_value_{{$i}}" value="{{$rule.header_value}}" placeholder="value">
+      </div>
+      <div class="field">
+        <label>User agents</label>
+        <textarea name="rule_user_agents_{{$i}}" rows="2" class="mono">{{$rule.user_agents}}</textarea>
+      </div>
+    </div>
+    {{end}}
+    <button class="btn btn-primary">{{if $pol}}Update{{else}}Create{{end}}</button>
+  </form>
+</section>
+
+<section class="section">
+  <h2 class="page-sub">Policies</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Name</th><th>Mode</th><th>Rules</th><th></th></tr></thead>
+      <tbody>
+      {{range $p := index .Data "policies"}}
+        <tr>
+          <td>{{$p.name}}</td>
+          <td class="mono">{{$p.mode}}</td>
+          <td class="mono">{{len $p.rules}}</td>
+          <td class="actions">
+            <a class="btn btn-sm" href="{{$base}}/access/{{$p.id}}">Edit</a>
+            <form method="post" action="{{$base}}/access" hx-post="{{$base}}/access" hx-target="#main" hx-swap="outerHTML" style="display:inline;">
+              <input type="hidden" name="action" value="delete">
+              <input type="hidden" name="id" value="{{$p.id}}">
+              <button class="btn btn-sm btn-danger">Delete</button>
+            </form>
+          </td>
+        </tr>
+      {{else}}
+        <tr><td colspan="4" class="muted">No policies</td></tr>
+      {{end}}
+      </tbody>
+    </table>
+  </div>
+</section>
+{{end}}

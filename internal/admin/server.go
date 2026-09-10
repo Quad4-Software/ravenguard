@@ -179,8 +179,19 @@ func New(opts Options) (*Server, error) {
 		LocalTarget:      opts.LocalTarget,
 	}
 
+	apiMux := http.NewServeMux()
+	apiSrv.Mount(apiMux, opts.Config.BasePath)
+
+	uiSrv, err := ui.New(apiMux, opts.Config.BasePath)
+	if err != nil {
+		_ = st.Close()
+		return nil, fmt.Errorf("admin ui: %w", err)
+	}
+
 	mux := http.NewServeMux()
-	apiSrv.Mount(mux, opts.Config.BasePath)
+	base := strings.TrimSuffix(opts.Config.BasePath, "/")
+	mux.Handle(base+"/api/v1/", apiMux)
+	uiSrv.Mount(mux)
 	if opts.MountAgentConnect && opts.AgentRegistry != nil && opts.HubKeys != nil {
 		hub := &agentprotocol.Hub{
 			Keys:     *opts.HubKeys,
@@ -205,7 +216,6 @@ func New(opts Options) (*Server, error) {
 			}
 		}()
 	}
-	mux.Handle("/", ui.Handler(opts.Config.BasePath))
 
 	var tlsCfg *tls.Config
 	if opts.Config.HTTPS != "" {

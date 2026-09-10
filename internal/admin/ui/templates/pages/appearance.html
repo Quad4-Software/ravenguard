@@ -1,0 +1,130 @@
+{{define "appearance"}}{{template "layout" .}}{{end}}
+
+{{define "appearance-content"}}{{template "shell" .}}{{end}}
+
+{{define "appearance-fragment"}}
+<main id="main" class="shell-main">
+  {{template "appearance-main" .}}
+</main>
+{{end}}
+
+{{define "appearance-main"}}
+{{$base := .BasePath}}
+{{$ui := index .Data "ui"}}
+{{$stealth := index .Data "stealth"}}
+<section class="page-head">
+  <div>
+    <h1 class="page-title">Appearance</h1>
+    <p class="page-sub">Branding, colors, fonts, and challenge text.</p>
+  </div>
+</section>
+
+{{if .Data.notice}}<p class="alert alert-loading">{{.Data.notice}}</p>{{end}}
+
+<section class="section">
+  <div class="section-head">
+    <h2 class="page-sub">Assets</h2>
+  </div>
+  <div class="field-row">
+    <form method="post" action="{{$base}}/appearance" enctype="multipart/form-data" hx-encoding="multipart/form-data" hx-post="{{$base}}/appearance" hx-target="#main" hx-swap="outerHTML" class="field-row">
+      <input type="hidden" name="action" value="upload">
+      <input type="hidden" name="kind" value="logo">
+      <div class="field"><label>Logo</label><input type="file" name="file" accept="image/png,image/jpeg,image/webp,image/svg+xml"></div>
+      <button class="btn">Upload logo</button>
+    </form>
+    <form method="post" action="{{$base}}/appearance" enctype="multipart/form-data" hx-encoding="multipart/form-data" hx-post="{{$base}}/appearance" hx-target="#main" hx-swap="outerHTML" class="field-row">
+      <input type="hidden" name="action" value="upload">
+      <input type="hidden" name="kind" value="favicon">
+      <div class="field"><label>Favicon</label><input type="file" name="file" accept="image/png,image/jpeg,image/webp,image/x-icon,image/svg+xml"></div>
+      <button class="btn">Upload favicon</button>
+    </form>
+  </div>
+</section>
+
+<section class="section">
+  <h2 class="page-sub">Branding</h2>
+  <form method="post" action="{{$base}}/appearance" hx-post="{{$base}}/appearance" hx-target="#main" hx-swap="outerHTML">
+    <input type="hidden" name="action" value="save">
+    <div class="field-row">
+      <div class="field"><label>Brand</label><input name="ui.brand" value="{{$ui.brand}}"></div>
+      <div class="field"><label>Status text</label><input name="ui.status_text" value="{{$ui.status_text}}"></div>
+      <div class="field"><label>Logo URL</label><input name="ui.logo_url" value="{{$ui.logo_url}}"></div>
+      <div class="field"><label>Favicon URL</label><input name="ui.favicon_url" value="{{$ui.favicon_url}}"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Theme color</label><input name="ui.theme_color" value="{{$ui.theme_color}}"></div>
+      <div class="field"><label>Background</label><input name="ui.background" value="{{$ui.background}}"></div>
+      <div class="field"><label>Foreground</label><input name="ui.foreground" value="{{$ui.foreground}}"></div>
+      <div class="field"><label>Accent</label><input name="ui.accent" value="{{$ui.accent}}"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Font sans</label><input name="ui.font_sans" value="{{$ui.font_sans}}"></div>
+      <div class="field"><label>Font mono</label><input name="ui.font_mono" value="{{$ui.font_mono}}"></div>
+      <div class="field"><label><input type="checkbox" name="stealth.hide_brand_mark" value="true" {{if $stealth.hide_brand_mark}}checked{{end}}> Hide brand mark</label></div>
+      <input type="hidden" name="stealth.ray_header" value="{{$stealth.ray_header}}">
+    </div>
+    <div class="field">
+      <label>Custom CSS</label>
+      <textarea name="ui.custom_css" rows="8" class="mono">{{index $ui "custom_css_raw"}}</textarea>
+    </div>
+
+    <h3 class="page-sub">Page text</h3>
+    <div class="field-row">
+      <div class="field"><label>Challenge title</label><input name="ui.challenge_title" value="{{$ui.challenge_title}}"></div>
+      <div class="field"><label>Challenge subtitle</label><input name="ui.challenge_subtitle" value="{{$ui.challenge_subtitle}}"></div>
+      <div class="field"><label>Block title</label><input name="ui.block_title" value="{{$ui.block_title}}"></div>
+      <div class="field"><label>Rate limit title</label><input name="ui.rate_limit_title" value="{{$ui.rate_limit_title}}"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Upstream title</label><input name="ui.upstream_title" value="{{$ui.upstream_title}}"></div>
+      <div class="field"><label>Error title</label><input name="ui.error_title" value="{{$ui.error_title}}"></div>
+      <div class="field"><label>Footer text</label><input name="ui.footer_text" value="{{$ui.footer_text}}"></div>
+      <div class="field"><label>Contact</label><input name="ui.contact" value="{{$ui.contact}}"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Description</label><input name="ui.description" value="{{$ui.description}}"></div>
+      <div class="field"><label>Lang</label><input name="ui.lang" value="{{$ui.lang}}"></div>
+      <div class="field"><label>Robots</label><input name="ui.robots" value="{{$ui.robots}}"></div>
+      <div class="field"><label>Ray label</label><input name="ui.ray_label" value="{{$ui.ray_label}}"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Privacy notice URL</label><input name="ui.privacy_notice_url" value="{{$ui.privacy_notice_url}}"></div>
+      <div class="field"><label>OG image</label><input name="ui.og_image" value="{{$ui.og_image}}"></div>
+    </div>
+    <button class="btn btn-primary">Save appearance</button>
+  </form>
+</section>
+
+<section class="section">
+  <div class="section-head">
+    <h2 class="page-sub">Preview</h2>
+    <div class="actions-row">
+      <form method="post" action="{{$base}}/appearance" hx-post="{{$base}}/appearance" hx-target="#main" hx-swap="outerHTML" style="display:inline;">
+        <input type="hidden" name="action" value="preview">
+        <input type="hidden" name="page" value="challenge">
+        <button class="btn btn-sm">Challenge</button>
+      </form>
+      <form method="post" action="{{$base}}/appearance" hx-post="{{$base}}/appearance" hx-target="#main" hx-swap="outerHTML" style="display:inline;">
+        <input type="hidden" name="action" value="preview">
+        <input type="hidden" name="page" value="block">
+        <button class="btn btn-sm">Block</button>
+      </form>
+      <form method="post" action="{{$base}}/appearance" hx-post="{{$base}}/appearance" hx-target="#main" hx-swap="outerHTML" style="display:inline;">
+        <input type="hidden" name="action" value="preview">
+        <input type="hidden" name="page" value="ratelimit">
+        <button class="btn btn-sm">Rate limit</button>
+      </form>
+      <form method="post" action="{{$base}}/appearance" hx-post="{{$base}}/appearance" hx-target="#main" hx-swap="outerHTML" style="display:inline;">
+        <input type="hidden" name="action" value="preview">
+        <input type="hidden" name="page" value="access">
+        <button class="btn btn-sm">Access</button>
+      </form>
+    </div>
+  </div>
+  {{if .Data.preview}}
+  <iframe class="mono" style="width:100%;min-height:480px;border:1px solid var(--border);" srcdoc="{{index .Data "preview"}}"></iframe>
+  {{else}}
+  <p class="muted">Preview appears here.</p>
+  {{end}}
+</section>
+{{end}}

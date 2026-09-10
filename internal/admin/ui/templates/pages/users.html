@@ -1,0 +1,111 @@
+{{define "users"}}{{template "layout" .}}{{end}}
+
+{{define "users-content"}}{{template "shell" .}}{{end}}
+
+{{define "users-fragment"}}
+<main id="main" class="shell-main">
+  {{template "users-main" .}}
+</main>
+{{end}}
+
+{{define "users-main"}}
+{{$base := .BasePath}}
+{{$users := index .Data "users"}}
+{{$canManageAll := canManageOwners .Role}}
+<div class="page-head">
+  <div>
+    <h1 class="page-title">Users</h1>
+    <p class="page-sub">Admin console accounts and roles</p>
+  </div>
+</div>
+
+{{if .Error}}
+  <p class="alert alert-error">{{.Error}}</p>
+{{end}}
+
+{{if canManageUsers .Role}}
+<fieldset>
+  <legend>Add user</legend>
+  <form method="post" action="{{$base}}/users" hx-post="{{$base}}/users" hx-target="#main" hx-swap="outerHTML" class="field-row">
+    <input type="hidden" name="action" value="create">
+    <div class="field">
+      <label for="new-username">Username</label>
+      <input id="new-username" name="username" type="text" required />
+    </div>
+    <div class="field">
+      <label for="new-password">Password</label>
+      <input id="new-password" name="password" type="password" required />
+    </div>
+    <div class="field">
+      <label for="new-role">Role</label>
+      <select id="new-role" name="role">
+        <option value="viewer">viewer</option>
+        <option value="admin">admin</option>
+        {{if $canManageAll}}<option value="owner">owner</option>{{end}}
+      </select>
+    </div>
+    <div class="field-btn">
+      <button type="submit" class="btn btn-primary">Create user</button>
+    </div>
+  </form>
+</fieldset>
+{{end}}
+
+{{if $users}}
+<table>
+  <thead>
+    <tr>
+      <th>Username</th>
+      <th>Role</th>
+      <th>Status</th>
+      <th class="actions">Actions</th>
+    </tr>
+  </thead>
+  <tbody>
+    {{range $u := $users}}
+      {{$canEdit := or (ne (index $u "role") "owner") $canManageAll}}
+      <tr>
+        <td>{{index $u "username"}}</td>
+        <td>
+          {{if $canEdit}}
+            <form method="post" action="{{$base}}/users" hx-post="{{$base}}/users" hx-target="#main" hx-swap="outerHTML" style="display:inline">
+              <input type="hidden" name="action" value="role">
+              <input type="hidden" name="id" value="{{index $u "id"}}">
+              <select name="role" onchange="this.form.requestSubmit()">
+                <option value="viewer" {{if eq (index $u "role") "viewer"}}selected{{end}}>viewer</option>
+                <option value="admin" {{if eq (index $u "role") "admin"}}selected{{end}}>admin</option>
+                <option value="owner" {{if eq (index $u "role") "owner"}}selected{{end}} {{if not $canManageAll}}disabled{{end}}>owner</option>
+              </select>
+            </form>
+          {{else}}
+            <span class="badge badge-{{index $u "role"}}">{{index $u "role"}}</span>
+          {{end}}
+        </td>
+        <td>
+          <span class="muted">{{if index $u "disabled"}}disabled{{else}}active{{end}}</span>
+        </td>
+        <td class="actions">
+          {{if $canEdit}}
+            <div class="actions-row">
+              <form method="post" action="{{$base}}/users" hx-post="{{$base}}/users" hx-target="#main" hx-swap="outerHTML" style="display:inline">
+                <input type="hidden" name="action" value="toggle">
+                <input type="hidden" name="id" value="{{index $u "id"}}">
+                <input type="hidden" name="disabled" value="{{if index $u "disabled"}}false{{else}}true{{end}}">
+                <button type="submit" class="btn btn-sm">{{if index $u "disabled"}}Enable{{else}}Disable{{end}}</button>
+              </form>
+              <form method="post" action="{{$base}}/users" hx-post="{{$base}}/users" hx-target="#main" hx-swap="outerHTML" style="display:inline">
+                <input type="hidden" name="action" value="delete">
+                <input type="hidden" name="id" value="{{index $u "id"}}">
+                <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Delete user {{index $u "username"}}?')">Delete</button>
+              </form>
+            </div>
+          {{end}}
+        </td>
+      </tr>
+    {{else}}
+      <tr class="empty-row"><td colspan="4">No users</td></tr>
+    {{end}}
+  </tbody>
+</table>
+{{end}}
+{{end}}

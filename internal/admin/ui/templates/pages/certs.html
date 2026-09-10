@@ -1,0 +1,103 @@
+{{define "certs"}}{{template "layout" .}}{{end}}
+
+{{define "certs-content"}}{{template "shell" .}}{{end}}
+
+{{define "certs-fragment"}}
+<main id="main" class="shell-main">
+  {{template "certs-main" .}}
+</main>
+{{end}}
+
+{{define "certs-main"}}
+{{$base := .BasePath}}
+{{$detail := index .Data "detail"}}
+<section class="page-head">
+  <div>
+    <h1 class="page-title">Certificates</h1>
+    <p class="page-sub">TLS certificates for admin and routes.</p>
+  </div>
+</section>
+
+{{if .Data.notice}}<p class="alert alert-loading">{{.Data.notice}}</p>{{end}}
+
+{{if $detail}}
+<section class="section">
+  <h2 class="page-sub">{{$detail.hostname}}</h2>
+  <pre class="mono">{{json $detail}}</pre>
+  <div class="actions-row">
+    <form method="post" action="{{$base}}/certs" hx-post="{{$base}}/certs" hx-target="#main" hx-swap="outerHTML" style="display:inline;">
+      <input type="hidden" name="action" value="renew">
+      <input type="hidden" name="host" value="{{$detail.hostname}}">
+      <button class="btn">Renew</button>
+    </form>
+    <form method="post" action="{{$base}}/certs" hx-post="{{$base}}/certs" hx-target="#main" hx-swap="outerHTML" style="display:inline;">
+      <input type="hidden" name="action" value="delete">
+      <input type="hidden" name="host" value="{{$detail.hostname}}">
+      <button class="btn btn-danger">Delete</button>
+    </form>
+  </div>
+</section>
+{{end}}
+
+<section class="section">
+  <h2 class="page-sub">Generate self-signed</h2>
+  <form method="post" action="{{$base}}/certs" hx-post="{{$base}}/certs" hx-target="#main" hx-swap="outerHTML">
+    <input type="hidden" name="action" value="generate">
+    <div class="field-row">
+      <div class="field"><label>Host</label><input name="host" required></div>
+      <div class="field"><label>Validity (days)</label><input name="validity" type="number" value="365"></div>
+      <div class="field"><label>DNS names (comma)</label><input name="dns_names" placeholder="example.com,*.example.com"></div>
+      <button class="btn btn-primary">Generate</button>
+    </div>
+  </form>
+</section>
+
+<section class="section">
+  <h2 class="page-sub">Upload PEM</h2>
+  <form method="post" action="{{$base}}/certs" hx-post="{{$base}}/certs" hx-target="#main" hx-swap="outerHTML">
+    <input type="hidden" name="action" value="upload">
+    <div class="field-row">
+      <div class="field"><label>Host</label><input name="host" required></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Certificate PEM</label><textarea name="cert_pem" rows="8" class="mono"></textarea></div>
+      <div class="field"><label>Key PEM</label><textarea name="key_pem" rows="8" class="mono"></textarea></div>
+    </div>
+    <button class="btn btn-primary">Upload</button>
+  </form>
+</section>
+
+<section class="section">
+  <h2 class="page-sub">ACME manage</h2>
+  <form method="post" action="{{$base}}/certs" hx-post="{{$base}}/certs" hx-target="#main" hx-swap="outerHTML">
+    <input type="hidden" name="action" value="manage">
+    <div class="field-row">
+      <div class="field"><label>Hosts (comma or line)</label><input name="hosts" required></div>
+      <button class="btn btn-primary">Request</button>
+    </div>
+  </form>
+</section>
+
+<section class="section">
+  <h2 class="page-sub">Certificates</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Host</th><th>Not after</th><th>Source</th><th></th></tr></thead>
+      <tbody>
+      {{range $c := index .Data "certs"}}
+        <tr>
+          <td class="mono">{{$c.hostname}}</td>
+          <td class="mono">{{$c.not_after}}</td>
+          <td class="mono">{{$c.source}}</td>
+          <td class="actions">
+            <a class="btn btn-sm" href="{{$base}}/certs/{{$c.hostname}}">Detail</a>
+          </td>
+        </tr>
+      {{else}}
+        <tr><td colspan="4" class="muted">No certificates</td></tr>
+      {{end}}
+      </tbody>
+    </table>
+  </div>
+</section>
+{{end}}

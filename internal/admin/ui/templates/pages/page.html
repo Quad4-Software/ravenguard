@@ -1,0 +1,13 @@
+{{define "page"}}{{template "layout" .}}{{end}}
+
+{{define "page-content"}}{{template "shell" .}}{{end}}
+
+{{define "page-main"}}
+<div class="page-head">
+  <div>
+    <h1 class="page-title">RavenGuard</h1>
+    <p class="page-sub">This page is not yet migrated.</p>
+  </div>
+</div>
+<p class="alert alert-loading">The <code>{{.PagePath}}</code> view is under construction.</p>
+{{end}}

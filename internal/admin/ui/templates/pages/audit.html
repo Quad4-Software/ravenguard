@@ -1,0 +1,77 @@
+{{define "audit"}}{{template "layout" .}}{{end}}
+
+{{define "audit-content"}}{{template "shell" .}}{{end}}
+
+{{define "audit-fragment"}}
+<main id="main" class="shell-main">
+  {{template "audit-main" .}}
+</main>
+{{end}}
+
+{{define "audit-main"}}
+{{$base := .BasePath}}
+{{$next := index .Data "next"}}
+<section class="page-head">
+  <div>
+    <h1 class="page-title">Audit</h1>
+    <p class="page-sub">System audit events.</p>
+  </div>
+</section>
+
+<section class="section">
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>ID</th><th>Time</th><th>Actor</th><th>Action</th><th>Target</th><th>Detail</th><th>IP</th></tr></thead>
+      <tbody id="audit-body">
+      {{range $e := index .Data "events"}}
+        <tr>
+          <td class="mono">{{$e.id}}</td>
+          <td class="mono">{{$e.created_at}}</td>
+          <td class="mono">{{$e.actor_name}}</td>
+          <td class="mono">{{$e.action}}</td>
+          <td class="mono">{{$e.target}}</td>
+          <td class="mono cell-wrap">{{$e.detail}}</td>
+          <td class="mono">{{$e.ip}}</td>
+        </tr>
+      {{else}}
+        <tr><td colspan="7" class="muted">No events</td></tr>
+      {{end}}
+      </tbody>
+    </table>
+  </div>
+  <div id="audit-more" class="field-row" style="margin-top:1rem;">
+    {{if $next}}
+      <form id="audit-form" hx-get="{{$base}}/audit?cursor={{$next}}&limit={{index .Data "limit"}}" hx-target="#audit-body" hx-swap="beforeend">
+        <button class="btn">Load more</button>
+      </form>
+    {{else}}
+      <span class="muted">No more events</span>
+    {{end}}
+  </div>
+</section>
+{{end}}
+
+{{define "audit-rows-fragment"}}
+{{$base := .BasePath}}
+{{$next := index .Data "next"}}
+{{range $e := index .Data "events"}}
+  <tr>
+    <td class="mono">{{$e.id}}</td>
+    <td class="mono">{{$e.created_at}}</td>
+    <td class="mono">{{$e.actor_name}}</td>
+    <td class="mono">{{$e.action}}</td>
+    <td class="mono">{{$e.target}}</td>
+    <td class="mono cell-wrap">{{$e.detail}}</td>
+    <td class="mono">{{$e.ip}}</td>
+  </tr>
+{{end}}
+<div id="audit-more" class="field-row" style="margin-top:1rem;" hx-swap-oob="outerHTML">
+  {{if $next}}
+    <form id="audit-form" hx-get="{{$base}}/audit?cursor={{$next}}&limit={{index .Data "limit"}}" hx-target="#audit-body" hx-swap="beforeend">
+      <button class="btn">Load more</button>
+    </form>
+  {{else}}
+    <span class="muted">No more events</span>
+  {{end}}
+</div>
+{{end}}

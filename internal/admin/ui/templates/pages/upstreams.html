@@ -1,0 +1,101 @@
+{{define "upstreams"}}{{template "layout" .}}{{end}}
+
+{{define "upstreams-content"}}{{template "shell" .}}{{end}}
+
+{{define "upstreams-fragment"}}
+<main id="main" class="shell-main">
+  {{template "upstreams-main" .}}
+</main>
+{{end}}
+
+{{define "upstreams-main"}}
+{{$base := .BasePath}}
+{{$up := index .Data "editing"}}
+<section class="page-head">
+  <div>
+    <h1 class="page-title">Upstreams</h1>
+    <p class="page-sub">Backend upstream targets.</p>
+  </div>
+</section>
+
+{{if .Data.notice}}<p class="alert alert-loading">{{.Data.notice}}</p>{{end}}
+
+<section class="section">
+  <h2 class="page-sub">{{if $up}}Edit upstream{{else}}New upstream{{end}}</h2>
+  <form method="post" action="{{$base}}/upstreams" hx-post="{{$base}}/upstreams" hx-target="#main" hx-swap="outerHTML">
+    <input type="hidden" name="action" value="{{if $up}}edit{{else}}create{{end}}">
+    {{if $up}}<input type="hidden" name="id" value="{{$up.id}}">{{end}}
+    <div class="field-row">
+      <div class="field"><label>Name</label><input name="name" value="{{if $up}}{{$up.name}}{{end}}" required></div>
+      <div class="field"><label>URL</label><input name="url" value="{{if $up}}{{$up.url}}{{end}}" required></div>
+      <div class="field"><label>Protocol</label><input name="protocol" value="{{if $up}}{{$up.protocol}}{{end}}" placeholder="http"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Connect timeout</label><input name="connect_timeout" value="{{if $up}}{{$up.connect_timeout}}{{end}}" placeholder="250ms"></div>
+      <div class="field"><label>Response header timeout</label><input name="response_header_timeout" value="{{if $up}}{{$up.response_header_timeout}}{{end}}" placeholder="30s"></div>
+      <div class="field"><label>Idle conn timeout</label><input name="idle_conn_timeout" value="{{if $up}}{{$up.idle_conn_timeout}}{{end}}" placeholder="90s"></div>
+      <div class="field"><label>Flush interval</label><input name="flush_interval" value="{{if $up}}{{$up.flush_interval}}{{end}}" placeholder="1s"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Max idle conns</label><input name="max_idle_conns" type="number" value="{{if $up}}{{$up.max_idle_conns}}{{end}}"></div>
+      <div class="field"><label>Max idle per host</label><input name="max_idle_conns_per_host" type="number" value="{{if $up}}{{$up.max_idle_conns_per_host}}{{end}}"></div>
+      <div class="field"><label>Max conns per host</label><input name="max_conns_per_host" type="number" value="{{if $up}}{{$up.max_conns_per_host}}{{end}}"></div>
+      <div class="field"><label><input type="checkbox" name="allow_http1" value="true" {{if $up}}{{$up.allow_http1}}checked{{end}}> Allow HTTP/1</label></div>
+      <div class="field"><label><input type="checkbox" name="insecure_skip_verify" value="true" {{if $up}}{{$up.insecure_skip_verify}}checked{{end}}> Insecure</label></div>
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>Set headers (one per line)</label>
+        <textarea name="set_headers" rows="5" class="mono">{{if $up}}{{range $h := $up.set_headers}}{{$h}}
+{{end}}{{end}}</textarea>
+      </div>
+      <div class="field">
+        <label>Health success codes (comma or line)</label>
+        <textarea name="health_success_codes" rows="3" class="mono">{{if $up}}{{range $c := $up.health_success_codes}}{{$c}}
+{{end}}{{end}}</textarea>
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label><input type="checkbox" name="health_enabled" value="true" {{if $up}}{{$up.health_enabled}}checked{{end}}> Health enabled</label></div>
+      <div class="field"><label>Health path</label><input name="health_path" value="{{if $up}}{{$up.health_path}}{{end}}"></div>
+      <div class="field"><label>Health interval</label><input name="health_interval" value="{{if $up}}{{$up.health_interval}}{{end}}"></div>
+      <div class="field"><label>Health timeout</label><input name="health_timeout" value="{{if $up}}{{$up.health_timeout}}{{end}}"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>TLS CA file path</label><input name="tls_ca_file" value="{{if $up}}{{$up.tls_ca_file}}{{end}}"></div>
+      <div class="field"><label>TLS client cert file</label><input name="tls_client_cert_file" value="{{if $up}}{{$up.tls_client_cert_file}}{{end}}"></div>
+      <div class="field"><label>TLS client key file</label><input name="tls_client_key_file" value="{{if $up}}{{$up.tls_client_key_file}}{{end}}"></div>
+    </div>
+    <button class="btn btn-primary">{{if $up}}Update{{else}}Create{{end}}</button>
+  </form>
+</section>
+
+<section class="section">
+  <h2 class="page-sub">Upstreams</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Name</th><th>URL</th><th>Protocol</th><th>Healthy</th><th></th></tr></thead>
+      <tbody>
+      {{range $u := index .Data "upstreams"}}
+        <tr>
+          <td>{{$u.name}}</td>
+          <td class="mono">{{$u.url}}</td>
+          <td class="mono">{{$u.protocol}}</td>
+          <td class="mono">{{$u.healthy}}</td>
+          <td class="actions">
+            <a class="btn btn-sm" href="{{$base}}/upstreams/{{$u.id}}">Edit</a>
+            <form method="post" action="{{$base}}/upstreams" hx-post="{{$base}}/upstreams" hx-target="#main" hx-swap="outerHTML" style="display:inline;">
+              <input type="hidden" name="action" value="delete">
+              <input type="hidden" name="id" value="{{$u.id}}">
+              <button class="btn btn-sm btn-danger">Delete</button>
+            </form>
+          </td>
+        </tr>
+      {{else}}
+        <tr><td colspan="5" class="muted">No upstreams</td></tr>
+      {{end}}
+      </tbody>
+    </table>
+  </div>
+</section>
+{{end}}

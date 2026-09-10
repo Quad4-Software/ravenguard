@@ -1,0 +1,56 @@
+{{define "logs"}}{{template "layout" .}}{{end}}
+
+{{define "logs-content"}}{{template "shell" .}}{{end}}
+
+{{define "logs-fragment"}}
+<main id="main" class="shell-main">
+  {{template "logs-main" .}}
+</main>
+{{end}}
+
+{{define "logs-main"}}
+{{$base := .BasePath}}
+<section class="page-head">
+  <div>
+    <h1 class="page-title">Logs</h1>
+    <p class="page-sub">Recent log entries.</p>
+  </div>
+</section>
+
+<section class="section">
+  <form method="get" action="{{$base}}/logs" hx-get="{{$base}}/logs" hx-target="#main" hx-swap="outerHTML" class="field-row">
+    <div class="field"><label>Limit</label><input name="limit" type="number" value="{{index .Data "limit"}}"></div>
+    <div class="field"><label>Level</label>
+      <select name="level">
+        <option value="" {{if eq (index .Data "level") ""}}selected{{end}}>all</option>
+        <option value="debug" {{if eq (index .Data "level") "debug"}}selected{{end}}>debug</option>
+        <option value="info" {{if eq (index .Data "level") "info"}}selected{{end}}>info</option>
+        <option value="warn" {{if eq (index .Data "level") "warn"}}selected{{end}}>warn</option>
+        <option value="error" {{if eq (index .Data "level") "error"}}selected{{end}}>error</option>
+      </select>
+    </div>
+    <div class="field"><label>Filter</label><input name="q" value="{{index .Data "q"}}" placeholder="text"></div>
+    <button class="btn btn-primary" type="submit">Refresh</button>
+  </form>
+</section>
+
+<section class="section">
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Time</th><th>Level</th><th>Message</th><th>Attrs</th></tr></thead>
+      <tbody>
+      {{range $e := index .Data "logs"}}
+        <tr>
+          <td class="mono">{{$e.time}}</td>
+          <td class="mono"><span class="badge">{{$e.level}}</span></td>
+          <td class="cell-wrap">{{$e.message}}</td>
+          <td class="mono cell-wrap">{{json $e.attrs}}</td>
+        </tr>
+      {{else}}
+        <tr><td colspan="4" class="muted">No logs</td></tr>
+      {{end}}
+      </tbody>
+    </table>
+  </div>
+</section>
+{{end}}

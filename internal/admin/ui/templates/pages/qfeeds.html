@@ -1,0 +1,80 @@
+{{define "qfeeds"}}{{template "layout" .}}{{end}}
+
+{{define "qfeeds-content"}}{{template "shell" .}}{{end}}
+
+{{define "qfeeds-fragment"}}
+<main id="main" class="shell-main">
+  {{template "qfeeds-main" .}}
+</main>
+{{end}}
+
+{{define "qfeeds-main"}}
+{{$base := .BasePath}}
+{{$view := index .Data "view"}}
+<section class="page-head">
+  <div>
+    <h1 class="page-title">Q-Feeds</h1>
+    <p class="page-sub">Threat feed configuration and status.</p>
+  </div>
+</section>
+
+{{if .Data.notice}}<p class="alert alert-loading">{{.Data.notice}}</p>{{end}}
+
+<section class="section">
+  <div class="section-head">
+    <h2 class="page-sub">Status</h2>
+    <form method="post" action="{{$base}}/qfeeds" hx-post="{{$base}}/qfeeds" hx-target="#main" hx-swap="outerHTML">
+      <input type="hidden" name="action" value="refresh">
+      <button class="btn">Refresh now</button>
+    </form>
+  </div>
+  <p class="field-row">
+    <span class="muted">Enabled:</span> <span class="badge">{{$view.enabled}}</span>
+    <span class="muted">Next refresh:</span> <span class="badge">{{$view.next_refresh}}</span>
+    <span class="muted">Last count:</span> <span class="badge">{{$view.last_count}}</span>
+  </p>
+  <p class="muted">Last error: {{$view.last_error}}</p>
+</section>
+
+<section class="section">
+  <h2 class="page-sub">Config</h2>
+  <form method="post" action="{{$base}}/qfeeds" hx-post="{{$base}}/qfeeds" hx-target="#main" hx-swap="outerHTML">
+    <input type="hidden" name="action" value="save">
+    <div class="field-row">
+      <div class="field">
+        <label><input type="checkbox" name="enabled" value="true" {{if $view.enabled}}checked{{end}}> Enabled</label>
+      </div>
+      <div class="field">
+        <label>Refresh interval</label>
+        <input name="refresh" value="{{$view.refresh}}" placeholder="1h">
+      </div>
+      <div class="field">
+        <label>On error</label>
+        <select name="on_error">
+          <option value="fail_open" {{if eq $view.on_error "fail_open"}}selected{{end}}>fail_open</option>
+          <option value="fail_closed" {{if eq $view.on_error "fail_closed"}}selected{{end}}>fail_closed</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Limit</label>
+        <input name="limit" type="number" value="{{$view.limit}}">
+      </div>
+      <div class="field">
+        <label>Base URL</label>
+        <input name="base_url" value="{{$view.base_url}}">
+      </div>
+      <div class="field">
+        <label>API token</label>
+        <input name="api_token" value="{{$view.api_token}}" type="password" placeholder="(unchanged)" autocomplete="off">
+      </div>
+    </div>
+    <div class="field">
+      <label>Feeds (one per line)</label>
+      <textarea name="feeds" rows="8" class="mono">
+      {{range $f := $view.feeds}}{{$f}}
+{{end}}</textarea>
+    </div>
+    <button class="btn btn-primary">Save Q-Feeds</button>
+  </form>
+</section>
+{{end}}

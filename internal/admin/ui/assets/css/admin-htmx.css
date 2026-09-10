@@ -1,0 +1,202 @@
+/* Supplementary styles for the HTMX admin UI.
+ * These complement the vendored app.css and cover new components.
+ */
+
+.hero,
+.process-grid,
+.metric-grid,
+.meter-list,
+.module-row,
+.chart-grid {
+  display: grid;
+  gap: 1rem;
+}
+
+.hero {
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+}
+
+.hero-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem;
+  background: var(--bg-raised);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.hero-k {
+  font-size: 12px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.hero-v {
+  font-size: 18px;
+  font-family: var(--font-mono);
+}
+
+.hero-v.ok { color: var(--ok); }
+.hero-v.warn { color: var(--warn); }
+.hero-v.bad { color: var(--bad); }
+
+.hero-links {
+  margin-top: 0.5rem;
+}
+
+.process-grid {
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+}
+
+.process-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 1rem;
+  background: var(--bg-raised);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.process-stat {
+  align-items: flex-start;
+}
+
+.process-note {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 0;
+}
+
+.chart-grid {
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  margin-top: 1rem;
+}
+
+.sparkline,
+.gauge {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.metric-grid {
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+}
+
+.metric {
+  padding: 1rem;
+  background: var(--bg-raised);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.metric-label {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.metric-value {
+  font-size: 18px;
+  font-family: var(--font-mono);
+  margin-top: 0.25rem;
+}
+
+.meter-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.meter {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.meter-head {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.meter-track {
+  height: 6px;
+  background: var(--line);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.meter-bar {
+  height: 100%;
+  background: var(--ok);
+  transition: width var(--dur) ease;
+}
+
+.module-row {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.module {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  background: var(--bg-raised);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.module.on .module-state { color: var(--ok); }
+.module.degraded .module-state { color: var(--warn); }
+.module.off .module-state { color: var(--muted); }
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--muted);
+  display: inline-block;
+}
+
+.dot.ok { background: var(--ok); }
+.dot.warn { background: var(--warn); }
+.dot.bad { background: var(--bad); }
+.dot.muted { background: var(--muted); }
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.dot.pulse {
+  animation: pulse 1.5s infinite;
+}
+
+.actions-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.empty-row td {
+  text-align: center;
+  color: var(--muted);
+  padding: 1rem;
+}
+
+.page-sub {
+  color: var(--muted);
+  margin: 0.25rem 0 0;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.mono {
+  font-family: var(--font-mono);
+}

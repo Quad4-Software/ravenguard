@@ -1,0 +1,15 @@
+{{define "shell"}}
+<div class="shell" id="shell">
+  <header class="shell-top">
+    <button type="button" class="shell-menu-btn" aria-label="Open menu" aria-expanded="false" aria-controls="admin-nav" onclick="document.getElementById('shell').classList.toggle('nav-open')">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
+    <div class="shell-top-brand"><div class="brand-name">RavenGuard</div></div>
+  </header>
+  <button type="button" class="shell-backdrop" aria-label="Close menu" onclick="document.getElementById('shell').classList.remove('nav-open')"></button>
+  {{template "nav" .}}
+  <main id="main" class="shell-main">
+    {{include (printf "%s-main" .TemplateName) .}}
+  </main>
+</div>
+{{end}}

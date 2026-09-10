@@ -1,0 +1,35 @@
+{{define "nav"}}
+<aside id="admin-nav" class="shell-nav">
+  <div class="brand">
+    <div class="brand-name">RavenGuard</div>
+    <div class="brand-sub">Admin Console</div>
+  </div>
+  <nav class="nav-scroll" aria-label="Admin">
+    <ul class="nav-list">
+      {{$path := .PagePath}}
+      {{$base := .BasePath}}
+      {{$role := .Role}}
+      {{range $link := navLinks}}
+        {{if navVisible $link $role}}
+          {{$href := navHref $base $link.Path}}
+          <li class="nav-item">
+            <a class="nav-link{{if navActive $path $href}} active{{end}}" href="{{$href}}">
+              <svg class="nav-link-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><circle cx="12" cy="12" r="9"/></svg>
+              {{$link.Label}}
+            </a>
+          </li>
+        {{end}}
+      {{end}}
+    </ul>
+  </nav>
+  <div class="nav-foot">
+    <a class="user-row nav-link{{if navActive .PagePath (navHref .BasePath "/settings")}} active{{end}}" href="{{.BasePath}}/settings">
+      <span class="username mono">{{.User.Username}}</span>
+      <span class="badge badge-{{.User.Role}}">{{.User.Role}}</span>
+    </a>
+    <form method="post" action="{{.BasePath}}/logout" hx-boost="false" class="nav-signout">
+      <button type="submit" class="btn btn-ghost btn-sm">Sign out</button>
+    </form>
+  </div>
+</aside>
+{{end}}

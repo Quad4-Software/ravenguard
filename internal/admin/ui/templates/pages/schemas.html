@@ -1,0 +1,72 @@
+{{define "schemas"}}{{template "layout" .}}{{end}}
+
+{{define "schemas-content"}}{{template "shell" .}}{{end}}
+
+{{define "schemas-fragment"}}
+<main id="main" class="shell-main">
+  {{template "schemas-main" .}}
+</main>
+{{end}}
+
+{{define "schemas-main"}}
+{{$base := .BasePath}}
+{{$s := index .Data "editing"}}
+<section class="page-head">
+  <div>
+    <h1 class="page-title">API schemas</h1>
+    <p class="page-sub">OpenAPI schemas and validation modes.</p>
+  </div>
+</section>
+
+{{if .Data.notice}}<p class="alert alert-loading">{{.Data.notice}}</p>{{end}}
+
+<section class="section">
+  <h2 class="page-sub">{{if $s}}Edit schema{{else}}New schema{{end}}</h2>
+  <form method="post" action="{{$base}}/schemas" hx-post="{{$base}}/schemas" hx-target="#main" hx-swap="outerHTML">
+    <input type="hidden" name="action" value="{{if $s}}edit{{else}}create{{end}}">
+    {{if $s}}<input type="hidden" name="id" value="{{$s.id}}">{{end}}
+    <div class="field-row">
+      <div class="field"><label>Name</label><input name="name" value="{{if $s}}{{$s.name}}{{end}}" required></div>
+      <div class="field"><label>Mode</label>
+        <select name="mode">
+          <option value="enforce" {{if and $s (eq $s.mode "enforce")}}selected{{end}}>enforce</option>
+          <option value="monitor" {{if and $s (eq $s.mode "monitor")}}selected{{end}}>monitor</option>
+        </select>
+      </div>
+    </div>
+    <div class="field">
+      <label>Spec text</label>
+      <textarea name="spec_text" rows="18" class="mono">{{if $s}}{{$s.spec_text}}{{end}}</textarea>
+    </div>
+    <button class="btn btn-primary">{{if $s}}Update{{else}}Create{{end}}</button>
+  </form>
+</section>
+
+<section class="section">
+  <h2 class="page-sub">Schemas</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Name</th><th>Mode</th><th>Updated</th><th></th></tr></thead>
+      <tbody>
+      {{range $s := index .Data "schemas"}}
+        <tr>
+          <td>{{$s.name}}</td>
+          <td class="mono">{{$s.mode}}</td>
+          <td class="mono">{{$s.updated_at}}</td>
+          <td class="actions">
+            <a class="btn btn-sm" href="{{$base}}/schemas/{{$s.id}}">Edit</a>
+            <form method="post" action="{{$base}}/schemas" hx-post="{{$base}}/schemas" hx-target="#main" hx-swap="outerHTML" style="display:inline;">
+              <input type="hidden" name="action" value="delete">
+              <input type="hidden" name="id" value="{{$s.id}}">
+              <button class="btn btn-sm btn-danger">Delete</button>
+            </form>
+          </td>
+        </tr>
+      {{else}}
+        <tr><td colspan="4" class="muted">No schemas</td></tr>
+      {{end}}
+      </tbody>
+    </table>
+  </div>
+</section>
+{{end}}

@@ -1,0 +1,106 @@
+{{define "proxies"}}{{template "layout" .}}{{end}}
+
+{{define "proxies-content"}}{{template "shell" .}}{{end}}
+
+{{define "proxies-fragment"}}
+<main id="main" class="shell-main">
+  {{template "proxies-main" .}}
+</main>
+{{end}}
+
+{{define "proxies-main"}}
+{{$base := .BasePath}}
+{{$enroll := index .Data "enroll"}}
+{{$status := index .Data "status"}}
+<section class="page-head">
+  <div>
+    <h1 class="page-title">Proxies</h1>
+    <p class="page-sub">Fleet edge proxies and enrollment.</p>
+  </div>
+</section>
+
+{{if .Data.notice}}<p class="alert alert-loading">{{.Data.notice}}</p>{{end}}
+
+{{if $enroll}}
+<section class="section">
+  <p class="alert alert-loading">Save this enrollment token. It is shown only once.</p>
+  <pre class="mono">hub_url: {{$enroll.hub_url}}
+hub_pubkey: {{$enroll.hub_pubkey}}
+proxy_id: {{$enroll.proxy.id}}
+token: {{$enroll.enrollment_token}}</pre>
+</section>
+{{end}}
+
+{{if $status}}
+<section class="section">
+  <h2 class="page-sub">Status for {{index .Data "status_for"}}</h2>
+  <pre class="mono">{{json $status}}</pre>
+</section>
+{{end}}
+
+<section class="section">
+  <h2 class="page-sub">Hub</h2>
+  <p class="mono">Hub URL: {{index .Data "hub_url"}}</p>
+  <p class="mono cell-wrap">Hub public key: {{index .Data "hub_pubkey"}}</p>
+</section>
+
+<section class="section">
+  <h2 class="page-sub">Create proxy</h2>
+  <form method="post" action="{{$base}}/proxies" hx-post="{{$base}}/proxies" hx-target="#main" hx-swap="outerHTML">
+    <input type="hidden" name="action" value="create">
+    <div class="field-row">
+      <div class="field"><label>Name</label><input name="name" required></div>
+      <div class="field"><label>Tags</label><input name="tags" placeholder="edge,prod"></div>
+      <div class="field"><label>Public IPv4</label><input name="public_ipv4"></div>
+      <div class="field"><label>Public IPv6</label><input name="public_ipv6"></div>
+      <div class="field"><label><input type="checkbox" name="universal" value="true" checked> Universal</label></div>
+      <button class="btn btn-primary">Create</button>
+    </div>
+  </form>
+</section>
+
+<section class="section">
+  <h2 class="page-sub">Fleet</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Name</th><th>Tags</th><th>IPv4</th><th>IPv6</th><th>Version</th><th>Online</th><th></th></tr></thead>
+      <tbody>
+      {{range $p := index .Data "proxies"}}
+        <tr>
+          <td>{{$p.name}}</td>
+          <td class="mono">{{$p.tags}}</td>
+          <td class="mono">{{$p.public_ipv4}}</td>
+          <td class="mono">{{$p.public_ipv6}}</td>
+          <td class="mono">{{$p.agent_version}}</td>
+          <td class="mono">{{$p.online}}</td>
+          <td class="actions">
+            <form method="post" action="{{$base}}/proxies" hx-post="{{$base}}/proxies" hx-target="#main" hx-swap="outerHTML" style="display:inline;">
+              <input type="hidden" name="action" value="status">
+              <input type="hidden" name="id" value="{{$p.id}}">
+              <button class="btn btn-sm">Status</button>
+            </form>
+            <form method="post" action="{{$base}}/proxies" hx-post="{{$base}}/proxies" hx-target="#main" hx-swap="outerHTML" style="display:inline;">
+              <input type="hidden" name="action" value="push">
+              <input type="hidden" name="id" value="{{$p.id}}">
+              <button class="btn btn-sm">Push</button>
+            </form>
+            <form method="post" action="{{$base}}/proxies" hx-post="{{$base}}/proxies" hx-target="#main" hx-swap="outerHTML" style="display:inline;">
+              <input type="hidden" name="action" value="rotate">
+              <input type="hidden" name="id" value="{{$p.id}}">
+              <button class="btn btn-sm">Rotate token</button>
+            </form>
+            <form method="post" action="{{$base}}/proxies" hx-post="{{$base}}/proxies" hx-target="#main" hx-swap="outerHTML" style="display:inline;">
+              <input type="hidden" name="action" value="delete">
+              <input type="hidden" name="id" value="{{$p.id}}">
+              <button class="btn btn-sm btn-danger">Delete</button>
+            </form>
+          </td>
+        </tr>
+      {{else}}
+        <tr><td colspan="7" class="muted">No proxies</td></tr>
+      {{end}}
+      </tbody>
+    </table>
+  </div>
+</section>
+{{end}}

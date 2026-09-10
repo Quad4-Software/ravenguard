@@ -1,0 +1,100 @@
+{{define "bans"}}{{template "layout" .}}{{end}}
+
+{{define "bans-content"}}{{template "shell" .}}{{end}}
+
+{{define "bans-fragment"}}
+<main id="main" class="shell-main">
+  {{template "bans-main" .}}
+</main>
+{{end}}
+
+{{define "bans-main"}}
+{{$base := .BasePath}}
+<section class="page-head">
+  <div>
+    <h1 class="page-title">Bans</h1>
+    <p class="page-sub">Banned keys and recent shared indicators.</p>
+  </div>
+</section>
+
+{{if .Data.notice}}<p class="alert alert-loading">{{.Data.notice}}</p>{{end}}
+
+<section class="section">
+  <h2 class="page-sub">Ban a key</h2>
+  <form method="post" action="{{$base}}/bans" hx-post="{{$base}}/bans" hx-target="#main" hx-swap="outerHTML">
+    <input type="hidden" name="action" value="ban">
+    <div class="field-row">
+      <div class="field">
+        <label>Key</label>
+        <input name="key" placeholder="ipv4:203.0.113.1" required>
+      </div>
+      <button class="btn btn-primary">Ban</button>
+    </div>
+  </form>
+</section>
+
+<section class="section">
+  <h2 class="page-sub">Active bans</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Key</th><th></th></tr></thead>
+      <tbody>
+      {{range $b := index .Data "bans"}}
+        <tr>
+          <td class="mono">{{$b}}</td>
+          <td class="actions">
+            <form method="post" action="{{$base}}/bans" hx-post="{{$base}}/bans" hx-target="#main" hx-swap="outerHTML">
+              <input type="hidden" name="action" value="unban">
+              <input type="hidden" name="key" value="{{$b}}">
+              <button class="btn btn-sm btn-danger">Remove</button>
+            </form>
+          </td>
+        </tr>
+      {{else}}
+        <tr><td colspan="2" class="muted">No bans</td></tr>
+      {{end}}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="section">
+  <div class="section-head">
+    <h2 class="page-sub">Threat indicators</h2>
+    <form method="post" action="{{$base}}/bans" hx-post="{{$base}}/bans" hx-target="#main" hx-swap="outerHTML">
+      <input type="hidden" name="action" value="share">
+      <div class="field-row">
+        <div class="field"><label>Type</label>
+          <select name="kind">
+            <option value="ipv4">ipv4</option>
+            <option value="ipv6">ipv6</option>
+            <option value="dns">dns</option>
+            <option value="ja4">ja4</option>
+            <option value="user_agent">user_agent</option>
+          </select>
+        </div>
+        <div class="field"><label>Key</label><input name="key"></div>
+        <div class="field"><label>Reason</label><input name="reason"></div>
+        <button class="btn">Share indicator</button>
+      </div>
+    </form>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Key</th><th>Type</th><th>Source</th><th>TTL</th></tr></thead>
+      <tbody>
+      {{range $t := index .Data "threat"}}
+        <tr>
+          <td class="mono">{{$t.key}}</td>
+          <td class="mono">{{$t.key_type}}</td>
+          <td class="mono">{{$t.source}}</td>
+          <td class="mono">{{$t.ttl}}</td>
+        </tr>
+      {{else}}
+        <tr><td colspan="4" class="muted">No indicators</td></tr>
+      {{end}}
+      </tbody>
+    </table>
+  </div>
+</section>
+{{end}}

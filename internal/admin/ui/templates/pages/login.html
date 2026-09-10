@@ -1,0 +1,28 @@
+{{define "login"}}{{template "layout" .}}{{end}}
+
+{{define "login-content"}}
+<main id="main" class="login-wrap" hx-boost="false">
+  <div class="login-main">
+    <img class="login-logo" src="{{.BasePath}}/assets/raven.png" width="72" height="72" alt="" />
+    <p class="code-label">Admin</p>
+    <h1 class="login-brand">RavenGuard</h1>
+    <p class="login-sub">Sign in to the control plane</p>
+
+    {{if .Error}}
+      <p class="alert alert-error" role="alert">{{.Error}}</p>
+    {{end}}
+
+    <form method="post" action="{{.BasePath}}/login" class="login-form">
+      <div class="field">
+        <label for="username">Username</label>
+        <input id="username" name="username" type="text" autocomplete="username" required />
+      </div>
+      <div class="field">
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password" autocomplete="current-password" required />
+      </div>
+      <button type="submit" class="btn btn-primary">Sign in</button>
+    </form>
+  </div>
+</main>
+{{end}}
