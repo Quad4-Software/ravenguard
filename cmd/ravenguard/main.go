@@ -154,10 +154,26 @@ func runEdge(cfg config.Config, proxyOnly bool, configPath string, sentryRep *rg
 		pipeline.StartSweeper(ctx, limiter, 5*time.Minute, retention)
 	}
 
+	var subnetLimit, globalLimit *ratelimit.Limiter
+	if cfg.RateLimit.Enabled && cfg.RateLimit.SubnetRequests > 0 {
+		subnetLimit = ratelimit.New(cfg.RateLimit.SubnetRequests, cfg.RateLimit.SubnetBurst, cfg.RateLimit.SubnetWindow.Duration, false)
+		pipeline.StartSweeper(ctx, subnetLimit, 5*time.Minute, retention)
+	}
+	if cfg.RateLimit.Enabled && cfg.RateLimit.GlobalRequests > 0 {
+		globalLimit = ratelimit.New(cfg.RateLimit.GlobalRequests, cfg.RateLimit.GlobalBurst, cfg.RateLimit.GlobalWindow.Duration, false)
+		pipeline.StartSweeper(ctx, globalLimit, 5*time.Minute, retention)
+	}
+
 	var nf *detect.NotFoundTracker
 	if cfg.Detect.Enabled && cfg.Detect.High404Action != "off" {
 		nf = detect.NewNotFoundTracker(cfg.Detect.High404Threshold, cfg.Detect.High404Window.Duration)
 		pipeline.StartNotFoundSweeper(ctx, nf, time.Minute, retention)
+	}
+
+	var pen *detect.PenaltyTracker
+	if cfg.Detect.Enabled && cfg.Detect.PenaltyAction != "off" {
+		pen = detect.NewPenaltyTracker(cfg.Detect.PenaltyThreshold, cfg.Detect.PenaltyWindow.Duration)
+		pipeline.StartPenaltySweeper(ctx, pen, time.Minute, retention)
 	}
 
 	var beh *detect.BehaviorTracker
@@ -191,6 +207,7 @@ func runEdge(cfg config.Config, proxyOnly bool, configPath string, sentryRep *rg
 			MaxConcurrentClient: cfg.Protect.MaxConcurrentClient,
 			BanAfterStrikes:     cfg.Protect.BanAfterStrikes,
 			BanTTL:              cfg.Protect.BanTTL.Duration,
+			BanEscalation:       cfg.Protect.BanEscalation,
 			AttackBlock:         cfg.Protect.AttackBlock,
 			AttackScore:         cfg.Protect.AttackScore,
 			WriteMethodCost:     cfg.Protect.WriteMethodCost,
@@ -337,6 +354,8 @@ func runEdge(cfg config.Config, proxyOnly bool, configPath string, sentryRep *rg
 	}()
 	reqLog := requestlog.New(2000)
 	pipe.SetRequestLog(reqLog)
+	pipe.SetPenaltyTracker(pen)
+	pipe.SetRateLayers(subnetLimit, globalLimit)
 
 	var corazaEng *corazaeng.Engine
 	{

@@ -46,6 +46,8 @@ type Handler struct {
 	allows          *allowlist.Sets
 	feeds           *qfeeds.Cache
 	limiter         *ratelimit.Limiter
+	subnetLimit     *ratelimit.Limiter
+	globalLimit     *ratelimit.Limiter
 	chal            *challenge.Manager
 	pages           *ui.Pages
 	upstream        http.Handler
@@ -57,11 +59,15 @@ type Handler struct {
 	prot            *protect.Guard
 	mux             *http.ServeMux
 	nf              *detect.NotFoundTracker
+	pen             *detect.PenaltyTracker
 	beh             *detect.BehaviorTracker
 	health          *health.Checker
 	detectCfg       detect.Config
 	challengeAlways bool
 	high404Action   uint8
+	penAction       uint8
+	subnetV4        int
+	subnetV6        int
 	writeCost       int
 	forgeRateCost   int
 	redirectHTTP    bool
@@ -87,10 +93,21 @@ type threatReporter interface {
 }
 
 const (
-	high404Challenge uint8 = 0
-	high404Block     uint8 = 1
-	high404Off       uint8 = 2
+	actionChallenge uint8 = 0
+	actionBlock     uint8 = 1
+	actionOff       uint8 = 2
 )
+
+func parseAction(s string) uint8 {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "block":
+		return actionBlock
+	case "off":
+		return actionOff
+	default:
+		return actionChallenge
+	}
+}
 
 var bodyPool = sync.Pool{
 	New: func() any {
@@ -161,13 +178,15 @@ func New(
 	if prot != nil {
 		h.writeCost = prot.WriteCost()
 	}
-	switch strings.ToLower(cfg.Detect.High404Action) {
-	case "block":
-		h.high404Action = high404Block
-	case "off":
-		h.high404Action = high404Off
-	default:
-		h.high404Action = high404Challenge
+	h.high404Action = parseAction(cfg.Detect.High404Action)
+	h.penAction = parseAction(cfg.Detect.PenaltyAction)
+	h.subnetV4 = cfg.RateLimit.SubnetV4Prefix
+	if h.subnetV4 <= 0 || h.subnetV4 > 32 {
+		h.subnetV4 = 24
+	}
+	h.subnetV6 = cfg.RateLimit.SubnetV6Prefix
+	if h.subnetV6 <= 0 || h.subnetV6 > 128 {
+		h.subnetV6 = 64
 	}
 	testURL := ""
 	if cfg.UI.TestMode {
@@ -223,6 +242,18 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if redirect && r.TLS == nil && r.Method != http.MethodConnect {
 		if !strings.HasPrefix(r.URL.Path, "/.well-known/acme-challenge/") {
+			// Edge redirects are still requests. Rate-limit them so a flood of
+			// plain-HTTP probes cannot exhaust the redirect path.
+			cfg := h.config()
+			if cfg.RateLimit.Enabled && h.limiter != nil {
+				if ip := h.resolveClientIP(r); ip != nil {
+					if !h.limiter.AllowN(h.clientBind(ip.String()), "/_redirect", 1) {
+						w.Header().Set("Retry-After", "60")
+						http.Error(w, "rate limited", http.StatusTooManyRequests)
+						return
+					}
+				}
+			}
 			host := r.Host
 			target := "https://" + host + r.URL.RequestURI()
 			http.Redirect(w, r, target, http.StatusMovedPermanently) // #nosec G710 -- HTTP to HTTPS redirect using request host
@@ -314,6 +345,22 @@ func (h *Handler) SetThreatReporter(r threatReporter) {
 	h.mu.Unlock()
 }
 
+// SetPenaltyTracker attaches the expensive-response penalty box.
+func (h *Handler) SetPenaltyTracker(t *detect.PenaltyTracker) {
+	h.mu.Lock()
+	h.pen = t
+	h.mu.Unlock()
+}
+
+// SetRateLayers attaches aggregate rate limiters (subnet and global) to the
+// handler. They are checked before the per-client limiter.
+func (h *Handler) SetRateLayers(subnet, global *ratelimit.Limiter) {
+	h.mu.Lock()
+	h.subnetLimit = subnet
+	h.globalLimit = global
+	h.mu.Unlock()
+}
+
 func (h *Handler) reportThreatBan(bindID, reason string) {
 	h.mu.RLock()
 	rep := h.threatReport
@@ -362,19 +409,42 @@ func (h *Handler) emitRateLimit(w http.ResponseWriter, r *http.Request, ray, bin
 	h.pages.RenderRateLimit(w, ray)
 }
 
+// denyLimited is the shared rate-limit response path. If strike is true and the
+// protect guard is enabled, the client is given a strike.
+func (h *Handler) denyLimited(w http.ResponseWriter, r *http.Request, ray, bindID, ipStr, host, ua, reason string, cfg config.Config, isStream, strike bool) {
+	if strike && h.prot != nil && h.prot.Enabled() {
+		h.prot.Strike(bindID)
+	}
+	if isStream {
+		h.recordEvent(r, ray, bindID, ipStr, host, ua, requestlog.ActionRateLimit, reason, 0, nil)
+		w.Header().Set("Retry-After", "60")
+		http.Error(w, "rate limited", http.StatusTooManyRequests)
+		return
+	}
+	if cfg.RateLimit.ChallengeOver && cfg.Challenge.Enabled && h.chal != nil && !h.skipChallenge(r) {
+		h.recordEvent(r, ray, bindID, ipStr, host, ua, requestlog.ActionRateLimit, reason, 0, nil)
+		h.serveChallenge(w, r, ray, bindID, challenge.RiskElevated)
+		return
+	}
+	h.recordEvent(r, ray, bindID, ipStr, host, ua, requestlog.ActionRateLimit, reason, 0, nil)
+	h.pages.RenderRateLimit(w, ray)
+}
+
 // ApplyConfig updates live-tunable config fields from the admin plane.
 func (h *Handler) ApplyConfig(cfg config.Config) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.cfg = cfg
 	h.challengeAlways = strings.EqualFold(cfg.Challenge.Mode, "always") || strings.EqualFold(cfg.Challenge.Mode, "attack")
-	switch strings.ToLower(cfg.Detect.High404Action) {
-	case "block":
-		h.high404Action = high404Block
-	case "off":
-		h.high404Action = high404Off
-	default:
-		h.high404Action = high404Challenge
+	h.high404Action = parseAction(cfg.Detect.High404Action)
+	h.penAction = parseAction(cfg.Detect.PenaltyAction)
+	h.subnetV4 = cfg.RateLimit.SubnetV4Prefix
+	if h.subnetV4 <= 0 || h.subnetV4 > 32 {
+		h.subnetV4 = 24
+	}
+	h.subnetV6 = cfg.RateLimit.SubnetV6Prefix
+	if h.subnetV6 <= 0 || h.subnetV6 > 128 {
+		h.subnetV6 = 64
 	}
 	h.detectCfg = detect.Config{
 		MissingUAScore:         cfg.Detect.MissingUAScore,
@@ -415,6 +485,15 @@ func (h *Handler) ApplyConfig(cfg config.Config) {
 			cfg.Challenge.CookieTTL.Duration,
 			cfg.Challenge.Algorithm,
 		)
+	}
+	if h.limiter != nil {
+		h.limiter.Update(cfg.RateLimit.Requests, cfg.RateLimit.Burst, cfg.RateLimit.Window.Duration, cfg.RateLimit.PerPath)
+	}
+	if h.subnetLimit != nil {
+		h.subnetLimit.Update(cfg.RateLimit.SubnetRequests, cfg.RateLimit.SubnetBurst, cfg.RateLimit.SubnetWindow.Duration, false)
+	}
+	if h.globalLimit != nil {
+		h.globalLimit.Update(cfg.RateLimit.GlobalRequests, cfg.RateLimit.GlobalBurst, cfg.RateLimit.GlobalWindow.Duration, false)
 	}
 }
 
@@ -538,6 +617,32 @@ func (h *Handler) requestSecure(r *http.Request) bool {
 		return r.TLS != nil
 	}
 	return iputil.RequestHTTPS(r, cfg.Trust.ProtoHeader)
+}
+
+// globalOver reports whether the site-wide pressure limiter is exhausted.
+func (h *Handler) globalOver() bool {
+	h.mu.RLock()
+	g := h.globalLimit
+	h.mu.RUnlock()
+	return g != nil && !g.Allow("site", "/")
+}
+
+func (h *Handler) subnetKey(ip net.IP) string {
+	if ip == nil {
+		return ""
+	}
+	h.mu.RLock()
+	v4, v6 := h.subnetV4, h.subnetV6
+	h.mu.RUnlock()
+	return h.clientBind(iputil.SubnetKey(ip, v4, v6))
+}
+
+func (h *Handler) missCacheTTL(cfg config.Config) int {
+	d := cfg.Detect.CacheMissTTL.Duration
+	if d <= 0 {
+		return 0
+	}
+	return int(d.Seconds())
 }
 
 func (h *Handler) guard(w http.ResponseWriter, r *http.Request) {
@@ -698,7 +803,7 @@ func (h *Handler) guard(w http.ResponseWriter, r *http.Request) {
 		semNeedChal = needChal
 	}
 
-	if h.limiter != nil && cfg.RateLimit.Enabled {
+	if cfg.RateLimit.Enabled {
 		cost := 1
 		if h.prot != nil && h.prot.Enabled() {
 			cost = protect.MethodCost(r.Method, h.writeCost)
@@ -706,20 +811,23 @@ func (h *Handler) guard(w http.ResponseWriter, r *http.Request) {
 		if detect.ForgePathClass(r.URL.Path) == detect.ForgeHot && h.forgeRateCost > cost {
 			cost = h.forgeRateCost
 		}
-		if !h.limiter.AllowN(bindID, r.URL.Path, cost) {
-			if h.prot != nil && h.prot.Enabled() {
-				h.prot.Strike(bindID)
-			}
-			if isStream {
-				h.recordEvent(r, ray, bindID, ipStr, host, ua, requestlog.ActionRateLimit, "Rate limited", 0, nil)
-				http.Error(w, "rate limited", http.StatusTooManyRequests)
+		h.mu.RLock()
+		globalLimit := h.globalLimit
+		subnetLimit := h.subnetLimit
+		h.mu.RUnlock()
+		if globalLimit != nil && !globalLimit.Allow("site", "/") {
+			h.denyLimited(w, r, ray, bindID, ipStr, host, ua, "Global rate limit", cfg, isStream, false)
+			return
+		}
+		if subnetLimit != nil && clientIP != nil {
+			subnetKey := h.subnetKey(clientIP)
+			if subnetKey != "" && !subnetLimit.AllowN(subnetKey, "/", cost) {
+				h.denyLimited(w, r, ray, bindID, ipStr, host, ua, "Subnet rate limit", cfg, isStream, false)
 				return
 			}
-			if cfg.RateLimit.ChallengeOver && cfg.Challenge.Enabled && h.chal != nil && !h.skipChallenge(r) {
-				h.serveChallenge(w, r, ray, bindID, challenge.RiskElevated)
-				return
-			}
-			h.emitRateLimit(w, r, ray, bindID, ipStr, host, ua)
+		}
+		if h.limiter != nil && !h.limiter.AllowN(bindID, r.URL.Path, cost) {
+			h.denyLimited(w, r, ray, bindID, ipStr, host, ua, "Rate limited", cfg, isStream, true)
 			return
 		}
 	}
@@ -798,13 +906,26 @@ func (h *Handler) guard(w http.ResponseWriter, r *http.Request) {
 		}
 		if h.nf != nil && h.nf.Exceeded(bindID) {
 			switch h.high404Action {
-			case high404Block:
+			case actionBlock:
 				if h.prot != nil && h.prot.Enabled() {
 					h.prot.Strike(bindID)
 				}
 				h.emitBlock(w, r, ray, bindID, ipStr, host, ua, "Too many missing pages", 0, nil)
 				return
-			case high404Off:
+			case actionOff:
+			default:
+				needChallenge = true
+			}
+		}
+		if h.pen != nil && h.pen.Exceeded(bindID) {
+			switch h.penAction {
+			case actionBlock:
+				if h.prot != nil && h.prot.Enabled() {
+					h.prot.Strike(bindID)
+				}
+				h.emitBlock(w, r, ray, bindID, ipStr, host, ua, "Too many expensive responses", 0, nil)
+				return
+			case actionOff:
 			default:
 				needChallenge = true
 			}
@@ -1166,7 +1287,7 @@ func (h *Handler) proxy(w http.ResponseWriter, r *http.Request, ray string, clie
 		up = routes
 	}
 
-	if detect.IsStreamProtocol(r) || h.nf == nil || !cfg.Detect.Enabled {
+	if detect.IsStreamProtocol(r) || (h.nf == nil && h.pen == nil && h.missCacheTTL(cfg) <= 0) || !cfg.Detect.Enabled {
 		up.ServeHTTP(w, r)
 		return
 	}
@@ -1174,18 +1295,29 @@ func (h *Handler) proxy(w http.ResponseWriter, r *http.Request, ray string, clie
 	rw := statusPool.Get().(*statusRecorder)
 	rw.ResponseWriter = w
 	rw.status = 200
+	rw.cacheTTL = h.missCacheTTL(cfg)
 	up.ServeHTTP(rw, r)
-	h.nf.Record(bindID, rw.status)
+	if h.nf != nil {
+		h.nf.Record(bindID, rw.status)
+	}
+	if h.pen != nil {
+		h.pen.Record(bindID, rw.status)
+	}
 	rw.ResponseWriter = nil
+	rw.cacheTTL = 0
 	statusPool.Put(rw)
 }
 
 type statusRecorder struct {
 	http.ResponseWriter
-	status int
+	status   int
+	cacheTTL int
 }
 
 func (s *statusRecorder) WriteHeader(code int) {
+	if s.cacheTTL > 0 && detect.CacheableMissStatus(code) && s.Header().Get("Cache-Control") == "" {
+		s.Header().Set("Cache-Control", "public, max-age="+strconv.Itoa(s.cacheTTL))
+	}
 	s.status = code
 	s.ResponseWriter.WriteHeader(code)
 }
@@ -1295,6 +1427,10 @@ func (h *Handler) handleChallengeV1GET(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if h.globalOver() {
+		http.Error(w, "too many requests", http.StatusTooManyRequests)
+		return
+	}
 	risk, prevGate := h.chal.TakeChallenge(bindID)
 	risk = challenge.FloorRiskForMode(h.cfg.Challenge.Mode, risk)
 	gate := challenge.ResolveGate(h.cfg.Challenge.Mode, risk, prevGate, h.cfg.Challenge.Captcha.Enabled)
@@ -1334,6 +1470,10 @@ func (h *Handler) handleChallengePOST(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "too many requests", http.StatusTooManyRequests)
 			return
 		}
+	}
+	if h.globalOver() {
+		http.Error(w, "too many requests", http.StatusTooManyRequests)
+		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 	var body challengeBody
@@ -1483,6 +1623,13 @@ func StartNotFoundSweeper(ctx context.Context, nf *detect.NotFoundTracker, every
 		return
 	}
 	go runSweeper(ctx, every, func() { nf.Sweep(maxAge) })
+}
+
+func StartPenaltySweeper(ctx context.Context, pen *detect.PenaltyTracker, every, maxAge time.Duration) {
+	if pen == nil || every <= 0 {
+		return
+	}
+	go runSweeper(ctx, every, func() { pen.Sweep(maxAge) })
 }
 
 func StartNonceSweeper(ctx context.Context, chal *challenge.Manager, every time.Duration) {

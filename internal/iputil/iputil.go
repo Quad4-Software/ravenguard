@@ -112,6 +112,26 @@ func SetClientForwardHeadersIP(r *http.Request, ip, proto string) {
 	}
 }
 
+func SubnetKey(ip net.IP, v4, v6 int) string {
+	if ip == nil {
+		return ""
+	}
+	if ip4 := ip.To4(); ip4 != nil {
+		mask := net.CIDRMask(v4, 32)
+		if mask == nil {
+			return ip.String()
+		}
+		n := &net.IPNet{IP: ip4.Mask(mask), Mask: mask}
+		return n.String()
+	}
+	mask := net.CIDRMask(v6, 128)
+	if mask == nil {
+		return ip.String()
+	}
+	n := &net.IPNet{IP: ip.Mask(mask), Mask: mask}
+	return n.String()
+}
+
 func ParseCIDRs(list []string) ([]net.IPNet, error) {
 	out := make([]net.IPNet, 0, len(list))
 	for _, s := range list {

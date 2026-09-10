@@ -51,6 +51,16 @@ window = "1m"
 burst = 60
 per_path = false
 challenge_over = true
+# subnet_requests bounds aggregate requests per source prefix. 0 disables it.
+subnet_requests = 1000
+subnet_burst = 200
+subnet_window = "1m"
+subnet_v4_prefix = 24
+subnet_v6_prefix = 64
+# global_requests is a site-wide pressure valve. 0 disables it.
+global_requests = 5000
+global_burst = 1000
+global_window = "1m"
 
 [protect]
 enabled = true
@@ -61,6 +71,7 @@ max_concurrent_global = 8192
 max_concurrent_per_client = 32
 ban_after_strikes = 5
 ban_ttl = "10m"
+ban_escalation = 0
 attack_block = true
 attack_score = 90
 write_method_cost = 3
@@ -82,6 +93,10 @@ star_accept_browser_score = 15
 high_404_threshold = 20
 high_404_window = "1m"
 high_404_action = "challenge"
+penalty_threshold = 100
+penalty_window = "1m"
+penalty_action = "challenge"
+cache_miss_ttl = "5s"
 behavior_window = "1m"
 behavior_burst_limit = 60
 behavior_burst_score = 35
