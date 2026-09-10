@@ -23,9 +23,14 @@ type Config struct {
 	MaxConcurrentClient int
 	BanAfterStrikes     int
 	BanTTL              time.Duration
-	AttackBlock         bool
-	AttackScore         int
-	WriteMethodCost     int
+	// BanEscalation caps ban-duration doubling for repeat offenders. Each new
+	// ban on a client is ban_ttl << min(prior_bans, BanEscalation). 0 keeps a
+	// flat ban_ttl. This blunts yo-yo attackers that probe the limit, back off
+	// for the window to expire, then resume.
+	BanEscalation   int
+	AttackBlock     bool
+	AttackScore     int
+	WriteMethodCost int
 }
 
 type Guard struct {
@@ -48,6 +53,7 @@ type banEntry struct {
 	bannedUntil time.Time
 	strikes     int
 	windowStart time.Time
+	bans        int // completed bans used to escalate repeat-offender TTL
 }
 
 var banEntryPool = sync.Pool{
@@ -77,6 +83,9 @@ func New(cfg Config) *Guard {
 	}
 	if cfg.BanTTL <= 0 {
 		cfg.BanTTL = 10 * time.Minute
+	}
+	if cfg.BanEscalation < 0 {
+		cfg.BanEscalation = 0
 	}
 	if cfg.WriteMethodCost <= 0 {
 		cfg.WriteMethodCost = 3
@@ -229,11 +238,10 @@ func (g *Guard) Banned(key string) bool {
 	}
 	if e.bannedUntil.IsZero() || now.After(e.bannedUntil) {
 		if !e.bannedUntil.IsZero() && now.After(e.bannedUntil) {
-			delete(s.ents, key)
+			// Keep the entry so repeated bans can escalate. Reset the strike
+			// window so the offender must re-earn a ban, but remember bans.
 			e.bannedUntil = time.Time{}
 			e.strikes = 0
-			e.windowStart = time.Time{}
-			banEntryPool.Put(e)
 		}
 		s.mu.Unlock()
 		return false
@@ -252,25 +260,41 @@ func (g *Guard) Strike(key string) {
 	s.mu.Lock()
 	e, ok := s.ents[key]
 	if !ok || now.Sub(e.windowStart) > cfg.BanTTL {
-		if ok {
+		if !ok {
+			e = banEntryPool.Get().(*banEntry)
+			e.bannedUntil = time.Time{}
+			e.bans = 0
+			s.ents[key] = e
+		} else {
 			e.bannedUntil = time.Time{}
 			e.strikes = 0
-			e.windowStart = time.Time{}
-			banEntryPool.Put(e)
+			// bans is preserved for escalation memory.
 		}
-		e = banEntryPool.Get().(*banEntry)
-		e.strikes = 1
 		e.windowStart = now
-		e.bannedUntil = time.Time{}
-		s.ents[key] = e
-		s.mu.Unlock()
-		return
 	}
 	e.strikes++
 	if e.strikes >= cfg.BanAfterStrikes {
-		e.bannedUntil = now.Add(cfg.BanTTL)
+		e.bans++
+		e.bannedUntil = now.Add(g.banTTLWithEscalation(cfg, e.bans))
 	}
 	s.mu.Unlock()
+}
+
+// banTTLWithEscalation doubles the base ban duration per prior ban, capped by
+// BanEscalation steps.
+func (g *Guard) banTTLWithEscalation(cfg Config, bans int) time.Duration {
+	if cfg.BanEscalation <= 0 || bans <= 1 {
+		return cfg.BanTTL
+	}
+	shift := bans - 1
+	if shift > cfg.BanEscalation {
+		shift = cfg.BanEscalation
+	}
+	// Cap at 1 << 30 to avoid overflow of the time.Duration multiplication.
+	if shift > 30 {
+		shift = 30
+	}
+	return cfg.BanTTL * (1 << shift)
 }
 
 func (g *Guard) BanNow(key string) {
@@ -293,16 +317,20 @@ func (g *Guard) BanUntil(key string, until time.Time) {
 		return
 	}
 	s.mu.Lock()
+	bans := 0
 	if old, ok := s.ents[key]; ok {
+		bans = old.bans
 		old.bannedUntil = time.Time{}
 		old.strikes = 0
 		old.windowStart = time.Time{}
+		old.bans = 0
 		banEntryPool.Put(old)
 	}
 	e := banEntryPool.Get().(*banEntry)
 	e.strikes = cfg.BanAfterStrikes
 	e.windowStart = now
 	e.bannedUntil = until
+	e.bans = bans + 1
 	s.ents[key] = e
 	s.mu.Unlock()
 }
@@ -343,6 +371,7 @@ func (g *Guard) Sweep(maxAge time.Duration) {
 type BanInfo struct {
 	Key         string    `json:"key"`
 	Strikes     int       `json:"strikes"`
+	Bans        int       `json:"bans"`
 	BannedUntil time.Time `json:"banned_until"`
 	WindowStart time.Time `json:"window_start"`
 	Active      bool      `json:"active"`
@@ -359,12 +388,13 @@ func (g *Guard) ListBans() []BanInfo {
 		s.mu.Lock()
 		for k, e := range s.ents {
 			active := !e.bannedUntil.IsZero() && now.Before(e.bannedUntil)
-			if !active && e.strikes == 0 {
+			if !active && e.strikes == 0 && e.bans == 0 {
 				continue
 			}
 			out = append(out, BanInfo{
 				Key:         k,
 				Strikes:     e.strikes,
+				Bans:        e.bans,
 				BannedUntil: e.bannedUntil,
 				WindowStart: e.windowStart,
 				Active:      active,
@@ -453,6 +483,9 @@ func (g *Guard) UpdateConfig(cfg Config) {
 	}
 	if cfg.MaxConcurrentClient > 0 {
 		cur.MaxConcurrentClient = cfg.MaxConcurrentClient
+	}
+	if cfg.BanEscalation > 0 {
+		cur.BanEscalation = cfg.BanEscalation
 	}
 	cur.AttackBlock = cfg.AttackBlock
 	if cfg.AttackScore > 0 {

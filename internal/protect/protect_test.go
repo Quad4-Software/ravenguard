@@ -54,6 +54,43 @@ func TestTempBan(t *testing.T) {
 	}
 }
 
+func TestBanEscalation(t *testing.T) {
+	if testing.Short() {
+		t.Skip("short")
+	}
+	g := protect.New(protect.Config{
+		Enabled:         true,
+		BanAfterStrikes: 2,
+		BanTTL:          200 * time.Millisecond,
+		BanEscalation:   3,
+	})
+	g.Strike("k")
+	g.Strike("k")
+	if !g.Banned("k") {
+		t.Fatal("first ban")
+	}
+
+	// Wait for the first ban to expire, simulating a yo-yo backoff.
+	time.Sleep(300 * time.Millisecond)
+	if g.Banned("k") {
+		t.Fatal("ban should have expired")
+	}
+
+	// Re-offend. The second ban should be longer (2x) because bans memory persists.
+	g.Strike("k")
+	g.Strike("k")
+	if !g.Banned("k") {
+		t.Fatal("second ban")
+	}
+	info := g.ListBans()
+	if len(info) != 1 || info[0].Bans != 2 {
+		t.Fatalf("expected bans=2, got %v", info)
+	}
+	if time.Until(info[0].BannedUntil) < 250*time.Millisecond {
+		t.Fatalf("second ban TTL not escalated: until=%v", info[0].BannedUntil)
+	}
+}
+
 func TestRequestSize(t *testing.T) {
 	g := protect.New(protect.Config{
 		Enabled:      true,
