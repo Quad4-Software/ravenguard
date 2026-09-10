@@ -495,6 +495,7 @@ func Default() Config {
 			MaxConnsPerHost:     256,
 			FlushInterval:       Duration{-1},
 			Protocol:            "h2",
+			AllowHTTP1:          true,
 			Health: UpstreamHealthConfig{
 				Path:     "/healthz",
 				Interval: Duration{10 * time.Second},

@@ -18,6 +18,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -361,11 +362,10 @@ func TestDialFuncPBT(t *testing.T) {
 	})
 
 	t.Run("unix path", func(t *testing.T) {
-		dir, err := os.MkdirTemp("/tmp", "proxyunix")
-		if err != nil {
-			t.Fatal(err)
+		if runtime.GOOS == "windows" {
+			t.Skip("unix domain sockets not used on windows")
 		}
-		t.Cleanup(func() { _ = os.RemoveAll(dir) })
+		dir := t.TempDir()
 		sock := filepath.Join(dir, "app.sock")
 		ln, err := net.Listen("unix", sock)
 		if err != nil {

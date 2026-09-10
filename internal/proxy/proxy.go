@@ -388,15 +388,22 @@ func (a *h3AutoTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	}
 
 	// Try HTTP/3 with a bounded probe. If the upstream does not speak QUIC
-	// this will fail quickly and we fall back to HTTP/2/1.1.
-	ctx, cancel := context.WithTimeout(req.Context(), a.timeout)
-	defer cancel()
+	// this will fail quickly and we fall back to HTTP/2/1.1. The probe context
+	// must not be cancelled on success: the response body still reads from it.
+	ctx, cancel := context.WithCancel(req.Context())
 	h3Req := req.Clone(ctx)
+	timer := time.AfterFunc(a.timeout, cancel)
 	resp, err := a.h3.RoundTrip(h3Req)
+	if !timer.Stop() {
+		cancel()
+		a.setCache(host, "h2", now.Add(5*time.Minute))
+		return a.fallback.RoundTrip(req)
+	}
 	if err == nil {
 		a.setCache(host, "h3", now.Add(1*time.Hour))
 		return resp, nil
 	}
+	cancel()
 	a.setCache(host, "h2", now.Add(5*time.Minute))
 	return a.fallback.RoundTrip(req)
 }

@@ -425,8 +425,8 @@ func FuzzProtocolSelection(f *testing.F) {
 }
 
 func TestDialFuncLandlockPBT(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("unix domain sockets not used on windows")
+	if runtime.GOOS != "linux" {
+		t.Skip("landlock is linux-only; dial error semantics differ elsewhere")
 	}
 
 	dir, err := os.MkdirTemp("/tmp", "proxylk")
