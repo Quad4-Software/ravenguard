@@ -119,6 +119,8 @@ response_header_timeout = "30s"
 idle_conn_timeout = "90s"
 max_idle_conns = 256
 # set_headers = ["X-RavenGuard: 1"]
+# protocol = "h2"        # h2 | http1.1 | h3 | auto
+# allow_http1 = true     # lets h2 fall back to HTTP/1.1 and uses h1 for plain http
 
 [upstream.health]
 enabled = false
@@ -130,9 +132,11 @@ timeout = "3s"
 
 ws:// and wss:// are scheme aliases for the same TCP origin as http:// and https://. WebSocket traffic is an HTTP upgrade on that connection. When [challenge] is enabled, upgrades require an existing clearance cookie from a prior page load (browsers cannot run the JS puzzle during a handshake). Forward WebSocket upgrades from your reverse proxy to RavenGuard.
 
+protocol selects the upstream HTTP version. The h2 value uses HTTP/2 and falls back to HTTP/1.1 when allow_http1 is true. The http1.1 value forces HTTP/1.1. The h3 value forces HTTP/3 over QUIC. The auto value tries HTTP/3 first, then falls back to HTTP/2 or HTTP/1.1. The default is h2 with allow_http1 set to true, so plain http:// origins use HTTP/1.1, and TLS origins negotiate HTTP/2 or HTTP/1.1 through ALPN. Set allow_http1 to false only if the origin is strictly HTTP/2.
+
 `success_codes` overrides the default 2xx-only health check. This is useful for origins like Prosody that return 403 on `/` while serving real paths. Env: `RG_UPSTREAM_HEALTH_SUCCESS_CODES` (comma-separated).
 
-Env: RG_UPSTREAM_URL, RG_UPSTREAM_HEALTH_ENABLED, RG_UPSTREAM_HEALTH_PATH.
+Env: RG_UPSTREAM_URL, RG_UPSTREAM_PROTOCOL, RG_UPSTREAM_ALLOW_HTTP1, RG_UPSTREAM_HEALTH_ENABLED, RG_UPSTREAM_HEALTH_PATH.
 
 ## Trust
 

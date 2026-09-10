@@ -214,7 +214,7 @@ The compose file runs as UID 65532, enables Landlock and in-process seccomp-bpf 
 
 Override with RG_SANDBOX_MODE=try or enforce as needed. Hosts without Landlock still start under try / best_effort.
 
-When adding upstreams on new TCP ports from the admin panel under sandbox.mode = enforce, either restart after the change or pre-open ports with [sandbox.landlock] connect_tcp. Prefer best_effort or try for dynamic routing during bring-up.
+When the admin panel adds or changes an upstream, RavenGuard refreshes Landlock connect_tcp rules for the new port or socket path automatically. You no longer need to restart or pre-open ports before the change.
 
 ## PROXY protocol and real IP
 

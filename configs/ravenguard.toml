@@ -45,6 +45,8 @@ max_idle_conns = 1024
 max_idle_conns_per_host = 256
 # max_conns_per_host = 0
 # set_headers = ["X-RavenGuard: 1"]
+# protocol = "h2"       # h2 | http1.1 | h3 | auto
+# allow_http1 = true    # lets h2 fall back to HTTP/1.1 and uses h1 for plain http
 
 [upstream.health]
 enabled = false
