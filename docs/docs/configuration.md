@@ -255,7 +255,15 @@ behavior_burst_limit = 60
 behavior_write_burst_limit = 20
 behavior_write_repeat_limit = 8
 behavior_strike_limit = 3
+behavior_ua_variety_limit = 4
+behavior_ua_variety_score = 30
 
+[detect.crawler_verify]
+enabled = true
+timeout = "250ms"
+spoof_score = 40
+
+# Only honor these when a trusted edge sets them (see detection.md).
 [detect.proxy_signals]
 bot_score_header = "CF-Bot-Score"
 bot_score_header_2 = "X-Bot-Score"

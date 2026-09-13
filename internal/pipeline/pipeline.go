@@ -63,6 +63,9 @@ type Handler struct {
 	beh             *detect.BehaviorTracker
 	health          *health.Checker
 	detectCfg       detect.Config
+	crawlerVer      *detect.CrawlerVerifier
+	crawlerVerify   bool
+	crawlerSpoof    int
 	challengeAlways bool
 	high404Action   uint8
 	penAction       uint8
@@ -138,39 +141,27 @@ func New(
 	prot *protect.Guard,
 ) *Handler {
 	h := &Handler{
-		cfg:      cfg,
-		lists:    lists,
-		feeds:    feeds,
-		limiter:  limiter,
-		chal:     chal,
-		pages:    pages,
-		upstream: upstream,
-		trusted:  trusted,
-		priv:     priv,
-		prot:     prot,
-		mux:      http.NewServeMux(),
-		nf:       nf,
-		beh:      beh,
-		health:   hc,
-		detectCfg: detect.Config{
-			MissingUAScore:         cfg.Detect.MissingUAScore,
-			ScannerUAScore:         cfg.Detect.ScannerUAScore,
-			AIUAScore:              cfg.Detect.AIUAScore,
-			ProbePathScore:         cfg.Detect.ProbePathScore,
-			OddMethodScore:         cfg.Detect.OddMethodScore,
-			MissingAcceptScore:     cfg.Detect.MissingAcceptScore,
-			MissingAcceptLangScore: cfg.Detect.MissingAcceptLangScore,
-			MissingSecFetchScore:   cfg.Detect.MissingSecFetchScore,
-			SecCHUAMismatchScore:   cfg.Detect.SecCHUAMismatchScore,
-			StarAcceptBrowserScore: cfg.Detect.StarAcceptBrowserScore,
-			EmptyFormContextScore:  cfg.Detect.EmptyFormContextScore,
-			ForumWritePathScore:    cfg.Detect.ForumWritePathScore,
-			ForgeExpensiveScore:    cfg.Detect.ForgeExpensiveScore,
-			ProxyBotLowScore:       cfg.Detect.ProxySignals.LowScorePoints,
-			ProxyBotHeader:         cfg.Detect.ProxySignals.BotScoreHeader,
-			ProxyBotScoreHeader:    cfg.Detect.ProxySignals.BotScoreHeader2,
-			ProxyJA4Header:         cfg.Detect.ProxySignals.JA4Header,
-		},
+		cfg:       cfg,
+		lists:     lists,
+		feeds:     feeds,
+		limiter:   limiter,
+		chal:      chal,
+		pages:     pages,
+		upstream:  upstream,
+		trusted:   trusted,
+		priv:      priv,
+		prot:      prot,
+		mux:       http.NewServeMux(),
+		nf:        nf,
+		beh:       beh,
+		health:    hc,
+		detectCfg: buildDetectConfig(cfg),
+		crawlerVer: detect.NewCrawlerVerifier(
+			cfg.Detect.CrawlerVerify.Timeout.Duration,
+			24*time.Hour, time.Hour,
+		),
+		crawlerVerify:   cfg.Detect.CrawlerVerify.Enabled,
+		crawlerSpoof:    cfg.Detect.CrawlerVerify.SpoofScore,
 		challengeAlways: strings.EqualFold(cfg.Challenge.Mode, "always") || strings.EqualFold(cfg.Challenge.Mode, "attack"),
 		writeCost:       3,
 		forgeRateCost:   cfg.Detect.ForgeRateCost,
@@ -446,24 +437,18 @@ func (h *Handler) ApplyConfig(cfg config.Config) {
 	if h.subnetV6 <= 0 || h.subnetV6 > 128 {
 		h.subnetV6 = 64
 	}
-	h.detectCfg = detect.Config{
-		MissingUAScore:         cfg.Detect.MissingUAScore,
-		ScannerUAScore:         cfg.Detect.ScannerUAScore,
-		AIUAScore:              cfg.Detect.AIUAScore,
-		ProbePathScore:         cfg.Detect.ProbePathScore,
-		OddMethodScore:         cfg.Detect.OddMethodScore,
-		MissingAcceptScore:     cfg.Detect.MissingAcceptScore,
-		MissingAcceptLangScore: cfg.Detect.MissingAcceptLangScore,
-		MissingSecFetchScore:   cfg.Detect.MissingSecFetchScore,
-		SecCHUAMismatchScore:   cfg.Detect.SecCHUAMismatchScore,
-		StarAcceptBrowserScore: cfg.Detect.StarAcceptBrowserScore,
-		EmptyFormContextScore:  cfg.Detect.EmptyFormContextScore,
-		ForumWritePathScore:    cfg.Detect.ForumWritePathScore,
-		ForgeExpensiveScore:    cfg.Detect.ForgeExpensiveScore,
-		ProxyBotLowScore:       cfg.Detect.ProxySignals.LowScorePoints,
-		ProxyBotHeader:         cfg.Detect.ProxySignals.BotScoreHeader,
-		ProxyBotScoreHeader:    cfg.Detect.ProxySignals.BotScoreHeader2,
-		ProxyJA4Header:         cfg.Detect.ProxySignals.JA4Header,
+	h.detectCfg = buildDetectConfig(cfg)
+	h.crawlerVerify = cfg.Detect.CrawlerVerify.Enabled
+	h.crawlerSpoof = cfg.Detect.CrawlerVerify.SpoofScore
+	if cfg.Detect.CrawlerVerify.Enabled {
+		// Rebuild so a changed timeout takes effect; reloads are rare and a
+		// fresh verdict cache is acceptable.
+		h.crawlerVer = detect.NewCrawlerVerifier(
+			cfg.Detect.CrawlerVerify.Timeout.Duration,
+			24*time.Hour, time.Hour,
+		)
+	} else {
+		h.crawlerVer = nil
 	}
 	h.forgeRateCost = cfg.Detect.ForgeRateCost
 	if nets, err := iputil.ParseCIDRs(cfg.Trust.TrustedProxies); err == nil {
@@ -495,6 +480,42 @@ func (h *Handler) ApplyConfig(cfg config.Config) {
 	if h.globalLimit != nil {
 		h.globalLimit.Update(cfg.RateLimit.GlobalRequests, cfg.RateLimit.GlobalBurst, cfg.RateLimit.GlobalWindow.Duration, false)
 	}
+}
+
+// buildDetectConfig maps TOML detect settings onto the scorer config. The
+// SNI-vs-Host check is dropped when running behind a proxy because r.TLS then
+// describes the proxy hop, not the real client hello.
+func buildDetectConfig(cfg config.Config) detect.Config {
+	dc := detect.Config{
+		MissingUAScore:          cfg.Detect.MissingUAScore,
+		ScannerUAScore:          cfg.Detect.ScannerUAScore,
+		AIUAScore:               cfg.Detect.AIUAScore,
+		ProbePathScore:          cfg.Detect.ProbePathScore,
+		OddMethodScore:          cfg.Detect.OddMethodScore,
+		MissingAcceptScore:      cfg.Detect.MissingAcceptScore,
+		MissingAcceptLangScore:  cfg.Detect.MissingAcceptLangScore,
+		MissingSecFetchScore:    cfg.Detect.MissingSecFetchScore,
+		SecCHUAMismatchScore:    cfg.Detect.SecCHUAMismatchScore,
+		StarAcceptBrowserScore:  cfg.Detect.StarAcceptBrowserScore,
+		EmptyFormContextScore:   cfg.Detect.EmptyFormContextScore,
+		ForumWritePathScore:     cfg.Detect.ForumWritePathScore,
+		ForgeExpensiveScore:     cfg.Detect.ForgeExpensiveScore,
+		MissingAcceptEncScore:   cfg.Detect.MissingAcceptEncScore,
+		SecCHUANonChromiumScore: cfg.Detect.SecCHUANonChromiumScore,
+		HTTP10BrowserScore:      cfg.Detect.HTTP10BrowserScore,
+		MissingContentTypeScore: cfg.Detect.MissingContentTypeScore,
+		LongUAScore:             cfg.Detect.LongUAScore,
+		MissingUIRScore:         cfg.Detect.MissingUIRScore,
+		SNIHostMismatchScore:    cfg.Detect.SNIHostMismatchScore,
+		ProxyBotLowScore:        cfg.Detect.ProxySignals.LowScorePoints,
+		ProxyBotHeader:          cfg.Detect.ProxySignals.BotScoreHeader,
+		ProxyBotScoreHeader:     cfg.Detect.ProxySignals.BotScoreHeader2,
+		ProxyJA4Header:          cfg.Detect.ProxySignals.JA4Header,
+	}
+	if strings.EqualFold(cfg.Trust.Mode, "behind_proxy") {
+		dc.SNIHostMismatchScore = 0
+	}
+	return dc
 }
 
 func (h *Handler) resolveClientIP(r *http.Request) net.IP {
@@ -852,8 +873,16 @@ func (h *Handler) guard(w http.ResponseWriter, r *http.Request) {
 	needChallenge := false
 	detectScore := 0
 	if !allowed && !isGitSmartHTTP && cfg.Detect.Enabled {
+		// Snapshot the live-tunable detect fields once; ApplyConfig swaps
+		// them under the write lock during admin reloads.
+		h.mu.RLock()
+		dcfg := h.detectCfg
+		cver := h.crawlerVer
+		cverify := h.crawlerVerify
+		cspoof := h.crawlerSpoof
+		h.mu.RUnlock()
 		if h.beh != nil {
-			h.beh.Record(bindID, r.URL.Path, r.Method)
+			h.beh.Record(bindID, r.URL.Path, r.Method, ua)
 			if h.beh.StrikesExceeded(bindID) {
 				if h.prot != nil && h.prot.Enabled() {
 					h.prot.BanNow(bindID)
@@ -863,11 +892,17 @@ func (h *Handler) guard(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
-		res := detect.Score(r, h.detectCfg)
+		res := detect.Score(r, dcfg)
 		if h.beh != nil {
 			br := h.beh.Score(bindID)
 			res.Score += br.Score
 			res.Reasons = append(res.Reasons, br.Reasons...)
+		}
+		if cverify && cver != nil && clientIP != nil {
+			if cver.Check(r.Context(), clientIP, ua) == detect.CrawlerSpoofed {
+				res.Score += cspoof
+				res.Reasons = append(res.Reasons, "crawler_spoof")
+			}
 		}
 		if mlExtra > 0 {
 			res.Score += mlExtra
@@ -886,7 +921,7 @@ func (h *Handler) guard(w http.ResponseWriter, r *http.Request) {
 			}
 			details := map[string]string{}
 			if res.Score > 0 {
-				dbg := detect.ScoreDebug(r, h.detectCfg)
+				dbg := detect.ScoreDebug(r, dcfg)
 				if h.beh != nil {
 					br := h.beh.Score(bindID)
 					dbg.Reasons = append(dbg.Reasons, br.Reasons...)

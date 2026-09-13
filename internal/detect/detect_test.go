@@ -4,6 +4,7 @@
 package detect_test
 
 import (
+	"crypto/tls"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -476,4 +477,140 @@ func FuzzIsScannerUA(f *testing.F) {
 		_ = detect.IsScannerUA(ua)
 		_ = detect.IsAIUA(ua)
 	})
+}
+
+func newBrowserGet(t *testing.T, path string) *http.Request {
+	t.Helper()
+	r := httptest.NewRequest(http.MethodGet, path, nil)
+	r.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+	r.Header.Set("Accept", "text/html,application/xhtml+xml")
+	r.Header.Set("Accept-Language", "en-US,en;q=0.9")
+	r.Header.Set("Accept-Encoding", "gzip, deflate, br")
+	r.Header.Set("Sec-Fetch-Site", "none")
+	r.Header.Set("Sec-Fetch-Mode", "navigate")
+	r.Header.Set("Sec-Fetch-Dest", "document")
+	r.Header.Set("Upgrade-Insecure-Requests", "1")
+	return r
+}
+
+func hasReason(res detect.Result, want string) bool {
+	return strings.Contains(strings.Join(res.Reasons, ","), want)
+}
+
+func TestScoreMissingAcceptEncoding(t *testing.T) {
+	cfg := testCfg()
+	cfg.MissingAcceptEncScore = 15
+	r := newBrowserGet(t, "/")
+	r.Header.Del("Accept-Encoding")
+	res := detect.ScoreDebug(r, cfg)
+	if !hasReason(res, "missing_accept_encoding") {
+		t.Fatalf("reasons=%v", res.Reasons)
+	}
+}
+
+func TestScoreSecCHUAOnNonChromium(t *testing.T) {
+	cfg := testCfg()
+	cfg.SecCHUANonChromiumScore = 20
+	r := newBrowserGet(t, "/")
+	r.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15")
+	r.Header.Set("Sec-CH-UA", `"Chromium";v="120"`)
+	res := detect.ScoreDebug(r, cfg)
+	if !hasReason(res, "sec_ch_ua_non_chromium") {
+		t.Fatalf("safari UA with chromium client hints must score reasons=%v", res.Reasons)
+	}
+}
+
+func TestScoreSecCHUAOnChromiumClean(t *testing.T) {
+	cfg := testCfg()
+	cfg.SecCHUANonChromiumScore = 20
+	cfg.SecCHUAMismatchScore = 25
+	r := newBrowserGet(t, "/")
+	r.Header.Set("Sec-CH-UA", `"Chromium";v="120", "Google Chrome";v="120"`)
+	res := detect.ScoreDebug(r, cfg)
+	if hasReason(res, "sec_ch_ua_non_chromium") || hasReason(res, "sec_ch_ua_mismatch") {
+		t.Fatalf("consistent chromium hints must not score reasons=%v", res.Reasons)
+	}
+}
+
+func TestScoreHTTP10Browser(t *testing.T) {
+	cfg := testCfg()
+	cfg.HTTP10BrowserScore = 25
+	r := newBrowserGet(t, "/")
+	r.ProtoMajor = 1
+	r.ProtoMinor = 0
+	r.Proto = "HTTP/1.0"
+	res := detect.ScoreDebug(r, cfg)
+	if !hasReason(res, "http10_browser") {
+		t.Fatalf("reasons=%v", res.Reasons)
+	}
+}
+
+func TestScoreMissingContentTypeOnWrite(t *testing.T) {
+	cfg := testCfg()
+	cfg.MissingContentTypeScore = 15
+	r := httptest.NewRequest(http.MethodPost, "/submit", strings.NewReader("x=1"))
+	r.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0) Chrome/120.0.0.0 Safari/537.36")
+	res := detect.ScoreDebug(r, cfg)
+	if !hasReason(res, "missing_content_type") {
+		t.Fatalf("reasons=%v", res.Reasons)
+	}
+}
+
+func TestScoreLongUA(t *testing.T) {
+	cfg := testCfg()
+	cfg.LongUAScore = 15
+	r := httptest.NewRequest(http.MethodGet, "/", nil)
+	r.Header.Set("User-Agent", "Mozilla/5.0 "+strings.Repeat("A", 300))
+	res := detect.ScoreDebug(r, cfg)
+	if !hasReason(res, "ua_anomalous") {
+		t.Fatalf("reasons=%v", res.Reasons)
+	}
+}
+
+func TestScoreMissingUpgradeInsecure(t *testing.T) {
+	cfg := testCfg()
+	cfg.MissingUIRScore = 10
+	r := newBrowserGet(t, "/")
+	r.Header.Del("Upgrade-Insecure-Requests")
+	res := detect.ScoreDebug(r, cfg)
+	if !hasReason(res, "missing_upgrade_insecure") {
+		t.Fatalf("reasons=%v", res.Reasons)
+	}
+}
+
+func TestScoreSNIHostMismatch(t *testing.T) {
+	cfg := testCfg()
+	cfg.SNIHostMismatchScore = 25
+	r := newBrowserGet(t, "https://site-a.example/")
+	r.TLS = &tls.ConnectionState{ServerName: "site-b.example"}
+	res := detect.ScoreDebug(r, cfg)
+	if !hasReason(res, "sni_host_mismatch") {
+		t.Fatalf("reasons=%v", res.Reasons)
+	}
+}
+
+func TestScoreSNIHostMatchClean(t *testing.T) {
+	cfg := testCfg()
+	cfg.SNIHostMismatchScore = 25
+	r := newBrowserGet(t, "https://site-a.example/")
+	r.TLS = &tls.ConnectionState{ServerName: "site-a.example"}
+	res := detect.ScoreDebug(r, cfg)
+	if hasReason(res, "sni_host_mismatch") {
+		t.Fatalf("matching SNI and Host must not score reasons=%v", res.Reasons)
+	}
+}
+
+func TestScoreCleanBrowserNoNewSignals(t *testing.T) {
+	cfg := testCfg()
+	cfg.MissingAcceptEncScore = 15
+	cfg.SecCHUANonChromiumScore = 20
+	cfg.HTTP10BrowserScore = 25
+	cfg.MissingUIRScore = 10
+	r := newBrowserGet(t, "/")
+	res := detect.ScoreDebug(r, cfg)
+	for _, bad := range []string{"missing_accept_encoding", "sec_ch_ua_non_chromium", "http10_browser", "missing_upgrade_insecure"} {
+		if hasReason(res, bad) {
+			t.Fatalf("clean browser must not score %s reasons=%v", bad, res.Reasons)
+		}
+	}
 }

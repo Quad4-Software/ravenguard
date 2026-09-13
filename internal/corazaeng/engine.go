@@ -85,14 +85,6 @@ func buildWAF(cfg config.CorazaConfig) (coraza.WAF, error) {
 		return nil, err
 	}
 	var b strings.Builder
-	// Always On so interruptions surface. Mode controls ShouldBlock in Evaluate.
-	fmt.Fprintf(&b, "SecRuleEngine On\n")
-	fmt.Fprintf(&b, "SecRequestBodyAccess On\n")
-	fmt.Fprintf(&b, "SecRequestBodyLimit %d\n", maxBody)
-	if cfg.Directives != "" {
-		b.WriteString(cfg.Directives)
-		b.WriteByte('\n')
-	}
 	root := coraza.NewWAFConfig()
 	if cfg.CRS {
 		fmt.Fprintf(&b, "Include @coraza.conf-recommended\n")
@@ -117,6 +109,18 @@ func buildWAF(cfg config.CorazaConfig) (coraza.WAF, error) {
 			root = root.WithRootFS(mergefsio.OSFS)
 		}
 		fmt.Fprintf(&b, "Include %s\n", rulesFile)
+	}
+	// These come last on purpose: @coraza.conf-recommended sets
+	// SecRuleEngine DetectionOnly and its own SecRequestBodyLimit, so the
+	// engine directives must be emitted after the includes or the WAF would
+	// match rules without ever producing interruptions, and the body cap
+	// would revert to the recommended default.
+	fmt.Fprintf(&b, "SecRuleEngine On\n")
+	fmt.Fprintf(&b, "SecRequestBodyAccess On\n")
+	fmt.Fprintf(&b, "SecRequestBodyLimit %d\n", maxBody)
+	if cfg.Directives != "" {
+		b.WriteString(cfg.Directives)
+		b.WriteByte('\n')
 	}
 	return coraza.NewWAF(root.WithDirectives(b.String()))
 }
@@ -240,30 +244,26 @@ func (e *Engine) Evaluate(r *http.Request) Result {
 		return interruptResult(it, mode)
 	}
 
-	if !tx.IsRequestBodyAccessible() || r.Body == nil || r.Body == http.NoBody {
-		return Result{}
+	// Phase 2 must run for every request, body or not: CRS evaluates ARGS and
+	// other request collections in phase 2, so skipping ProcessRequestBody on
+	// GET requests leaves query-string attacks unscanned.
+	if tx.IsRequestBodyAccessible() && r.Body != nil && r.Body != http.NoBody {
+		buf, err := bodybuf.Capture(r, maxBody)
+		if err != nil {
+			return failClosed(mode, "body read failed")
+		}
+		if len(buf) > 0 {
+			it, _, err := tx.ReadRequestBodyFrom(bytes.NewReader(buf))
+			if err != nil {
+				return failClosed(mode, "coraza body buffer failed")
+			}
+			if it != nil {
+				return interruptResult(it, mode)
+			}
+		}
 	}
 
-	buf, err := bodybuf.Capture(r, maxBody)
-	if err != nil {
-		return failClosed(mode, "body read failed")
-	}
-	if len(buf) == 0 {
-		return Result{}
-	}
-
-	it, _, err := tx.ReadRequestBodyFrom(bytes.NewReader(buf))
-	if err != nil {
-		bodybuf.Restore(r, buf)
-		return failClosed(mode, "coraza body buffer failed")
-	}
-	if it != nil {
-		bodybuf.Restore(r, buf)
-		return interruptResult(it, mode)
-	}
-	bodybuf.Restore(r, buf)
-
-	it, err = tx.ProcessRequestBody()
+	it, err := tx.ProcessRequestBody()
 	if err != nil {
 		return failClosed(mode, "coraza body process failed")
 	}

@@ -29,19 +29,27 @@ func AttackMatch(r *http.Request) string {
 	if reason := scanAttackString(rawQuery); reason != "" {
 		return reason
 	}
-	if indexByte(rawPath, '%') >= 0 {
-		if dec, err := url.PathUnescape(rawPath); err == nil && dec != rawPath {
-			if reason := scanAttackString(dec); reason != "" {
-				return reason
-			}
-		}
+	if reason := scanDecoded(rawPath, url.PathUnescape); reason != "" {
+		return reason
 	}
-	if indexByte(rawQuery, '%') >= 0 {
-		if dec, err := url.QueryUnescape(rawQuery); err == nil && dec != rawQuery {
-			if reason := scanAttackString(dec); reason != "" {
-				return reason
-			}
+	return scanDecoded(rawQuery, url.QueryUnescape)
+}
+
+// scanDecoded unescapes s up to two levels. Double encoding is a common WAF
+// evasion: %252e%252e%252f decodes once to %2e%2e%2f, then to ../.
+func scanDecoded(s string, unescape func(string) (string, error)) string {
+	for depth := 0; depth < 2; depth++ {
+		if indexByte(s, '%') < 0 {
+			return ""
 		}
+		dec, err := unescape(s)
+		if err != nil || dec == s {
+			return ""
+		}
+		if reason := scanAttackString(dec); reason != "" {
+			return reason
+		}
+		s = dec
 	}
 	return ""
 }
@@ -64,7 +72,8 @@ func scanAttackString(s string) string {
 	}
 	if faststr.ContainsFold(s, "../") || faststr.ContainsFold(s, `..\`) ||
 		faststr.ContainsFold(s, "%2e%2e/") || faststr.ContainsFold(s, "%2e%2e%2f") ||
-		faststr.ContainsFold(s, "..%2f") || faststr.ContainsFold(s, `%2e%2e\`) {
+		faststr.ContainsFold(s, "..%2f") || faststr.ContainsFold(s, `%2e%2e\`) ||
+		faststr.ContainsFold(s, "..;/") || faststr.ContainsFold(s, "/.;/") {
 		return "path_traversal"
 	}
 	if faststr.ContainsFold(s, "/etc/passwd") || faststr.ContainsFold(s, `c:\windows`) {
@@ -91,7 +100,7 @@ func scanAttackString(s string) string {
 func mayHaveInjection(s string) bool {
 	for i := 0; i < len(s); i++ {
 		switch s[i] {
-		case '<', '\'', '"', '{', '$', '#', '\\', '+', '%', '(', ')', ';', '*', '`', ' ', ':', '_':
+		case '<', '\'', '"', '{', '$', '#', '\\', '+', '%', '(', ')', ';', '*', '`', ' ', ':', '_', '|':
 			return true
 		}
 	}
@@ -117,4 +126,14 @@ var attackSubs = []string{
 	"{{", "${jndi:", "#{",
 	"xp_cmdshell", "information_schema",
 	"into outfile", "load_file(",
+	// Command-injection probes: shell metachar + command pairs that do not
+	// appear in ordinary URLs. Bare "/bin/sh", "$(", and ";id" are
+	// deliberately excluded: repository paths can legitimately contain
+	// /bin/sh, code searches can contain $(, and semicolon matrix params
+	// can produce ;id=.
+	"||id",
+	";powershell", "|powershell", ";cmd.exe",
+	"nc -e", "/dev/tcp/", ";cat ", "|cat ",
+	";ls ", "|ls ", ";chmod", "|chmod", ";wget", "|wget",
+	";curl", "|curl", ";nc ", "|nc ", ";ncat", "|ncat",
 }

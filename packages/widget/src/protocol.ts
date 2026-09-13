@@ -30,6 +30,10 @@ export interface EnvAttestation {
   selenium: boolean
   headless: boolean
   no_plugins: boolean
+  zero_viewport: boolean
+  soft_webgl: boolean
+  wd_deleted: boolean
+  perm_mismatch: boolean
   interacted: boolean
   solve_ms: number
 }

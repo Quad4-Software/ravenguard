@@ -41,7 +41,46 @@ function hasCdcKeys(obj: object | null | undefined): boolean {
   return false
 }
 
-function collectEnv(interacted: boolean, solveMs: number): EnvAttestation {
+function softWebGLRenderer(): boolean {
+  try {
+    if (typeof document === 'undefined') return false
+    const canvas = document.createElement('canvas')
+    const gl =
+      (canvas.getContext('webgl') as WebGLRenderingContext | null) ??
+      (canvas.getContext('experimental-webgl') as WebGLRenderingContext | null)
+    if (!gl) return false
+    let renderer = ''
+    const dbg = gl.getExtension('WEBGL_debug_renderer_info')
+    if (dbg) {
+      renderer = String(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) ?? '')
+    } else {
+      renderer = String(gl.getParameter(gl.RENDERER) ?? '')
+    }
+    return /swiftshader|llvmpipe|softpipe|software|angle \(google/i.test(renderer)
+  } catch {
+    return false
+  }
+}
+
+async function permissionsMismatch(): Promise<boolean> {
+  try {
+    if (
+      typeof navigator === 'undefined' ||
+      !navigator.permissions?.query ||
+      typeof Notification === 'undefined'
+    ) {
+      return false
+    }
+    const status = await navigator.permissions.query({
+      name: 'notifications' as PermissionName,
+    })
+    return status.state === 'prompt' && Notification.permission === 'denied'
+  } catch {
+    return false
+  }
+}
+
+async function collectEnv(interacted: boolean, solveMs: number): Promise<EnvAttestation> {
   const nav = typeof navigator !== 'undefined' ? navigator : undefined
   const win = typeof window !== 'undefined' ? (window as unknown as Record<string, unknown>) : {}
   const doc = typeof document !== 'undefined' ? (document as unknown as Record<string, unknown>) : {}
@@ -77,12 +116,22 @@ function collectEnv(interacted: boolean, solveMs: number): EnvAttestation {
     typeof win.chrome === 'undefined'
   const headless =
     /HeadlessChrome|Headless|PhantomJS/i.test(ua) || (chromeMissing && (!nav?.plugins || nav.plugins.length === 0))
+  // Real Chrome always exposes navigator.webdriver (false). Stealth plugins
+  // delete the property outright, which is itself a fingerprint.
+  const wdDeleted = /Chrome\//i.test(ua) && !!nav && !('webdriver' in nav)
+  const zeroViewport =
+    typeof window !== 'undefined' && (window.outerWidth === 0 || window.outerHeight === 0)
+  const [softWebGL, permMismatch] = await Promise.all([softWebGLRenderer(), permissionsMismatch()])
   return {
     webdriver: Boolean(nav && 'webdriver' in nav && (nav as Navigator & { webdriver?: boolean }).webdriver),
     playwright,
     selenium,
     headless,
     no_plugins: !nav?.plugins || nav.plugins.length === 0,
+    zero_viewport: zeroViewport,
+    soft_webgl: softWebGL,
+    wd_deleted: wdDeleted,
+    perm_mismatch: permMismatch,
     interacted,
     solve_ms: solveMs,
   }
@@ -281,7 +330,7 @@ export class RavenGuardWidget extends HTMLElement {
       const workers = this.#opts.workers ?? 2
       const sol = await solveInWorkers(ch, workers)
       const solveMs = Math.round(performance.now() - t0)
-      const env = collectEnv(this.#interacted, solveMs)
+      const env = await collectEnv(this.#interacted, solveMs)
       const payload: Payload = {
         v: ch.v,
         algorithm: ch.algorithm,

@@ -85,6 +85,8 @@ func TestAllowCleanRequest(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	req.Header.Set("User-Agent", "Mozilla/5.0")
 	req.Header.Set("Accept", "text/html")
+	req.Header.Set("Accept-Language", "en-US,en;q=0.9")
+	req.Header.Set("Accept-Encoding", "gzip, deflate, br")
 	req.RemoteAddr = "192.0.2.10:1234"
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)

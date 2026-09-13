@@ -28,9 +28,9 @@ func TestBehaviorForgeBurstRace(t *testing.T) {
 			}
 			for i := range 200 {
 				if i%2 == 0 {
-					beh.Record(key, "/o/r/compare/a...b", "GET")
+					beh.Record(key, "/o/r/compare/a...b", "GET", "test-agent")
 				} else {
-					beh.Record(key, "/o/r/src/branch/main", "GET")
+					beh.Record(key, "/o/r/src/branch/main", "GET", "test-agent")
 				}
 				_ = beh.Score(key)
 			}

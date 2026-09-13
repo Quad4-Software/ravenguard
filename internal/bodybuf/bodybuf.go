@@ -17,8 +17,11 @@ var bufPool = sync.Pool{
 	},
 }
 
-// Capture reads up to maxBytes from r.Body, replaces r.Body with a replayable
-// reader, and returns the captured bytes. maxBytes <= 0 means no capture.
+// Capture reads up to maxBytes from r.Body for inspection and returns them.
+// r.Body is left so the request still delivers the complete original stream:
+// when the body fits under maxBytes it becomes a replayable reader over the
+// captured bytes, and when it exceeds the cap the captured prefix is chained
+// back in front of the unread remainder. maxBytes <= 0 means no capture.
 func Capture(r *http.Request, maxBytes int64) ([]byte, error) {
 	if r == nil || r.Body == nil || r.Body == http.NoBody {
 		return nil, nil
@@ -36,19 +39,32 @@ func Capture(r *http.Request, maxBytes int64) ([]byte, error) {
 		bufPool.Put(bp)
 		return nil, err
 	}
-	_ = r.Body.Close()
-	if int64(len(buf)) > maxBytes {
-		buf = buf[:maxBytes]
+	if int64(len(buf)) <= maxBytes {
+		_ = r.Body.Close()
+		out := append([]byte(nil), buf...)
+		*bp = buf[:0]
+		bufPool.Put(bp)
+		r.Body = io.NopCloser(bytes.NewReader(out))
+		r.ContentLength = int64(len(out))
+		r.GetBody = func() (io.ReadCloser, error) {
+			return io.NopCloser(bytes.NewReader(out)), nil
+		}
+		return out, nil
 	}
-	out := append([]byte(nil), buf...)
+	// The body is larger than the inspection cap. Keep the whole stream intact
+	// for the upstream while handing the caller only the captured prefix.
+	head := append([]byte(nil), buf...)
 	*bp = buf[:0]
 	bufPool.Put(bp)
-	r.Body = io.NopCloser(bytes.NewReader(out))
-	r.ContentLength = int64(len(out))
-	r.GetBody = func() (io.ReadCloser, error) {
-		return io.NopCloser(bytes.NewReader(out)), nil
-	}
-	return out, nil
+	orig := r.Body
+	r.Body = &joinedBody{Reader: io.MultiReader(bytes.NewReader(head), orig), Closer: orig}
+	r.GetBody = nil
+	return head[:maxBytes], nil
+}
+
+type joinedBody struct {
+	io.Reader
+	io.Closer
 }
 
 func readAllAppend(dst []byte, r io.Reader) ([]byte, error) {

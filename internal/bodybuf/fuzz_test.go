@@ -44,8 +44,8 @@ func FuzzCapture(f *testing.F) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if !bytes.Equal(again, got) {
-			t.Fatalf("replay mismatch")
+		if !bytes.Equal(again, body) {
+			t.Fatalf("replay must return the complete original stream")
 		}
 		Restore(r, got)
 		third, err := io.ReadAll(r.Body)

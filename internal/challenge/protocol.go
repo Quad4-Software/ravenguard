@@ -104,13 +104,17 @@ type Challenge struct {
 
 // EnvAttestation is browser probe data carried in the solved payload.
 type EnvAttestation struct {
-	Webdriver  bool `json:"webdriver"`
-	Playwright bool `json:"playwright"`
-	Selenium   bool `json:"selenium"`
-	Headless   bool `json:"headless"`
-	NoPlugins  bool `json:"no_plugins"`
-	Interacted bool `json:"interacted"`
-	SolveMs    int  `json:"solve_ms"`
+	Webdriver    bool `json:"webdriver"`
+	Playwright   bool `json:"playwright"`
+	Selenium     bool `json:"selenium"`
+	Headless     bool `json:"headless"`
+	NoPlugins    bool `json:"no_plugins"`
+	ZeroViewport bool `json:"zero_viewport"`
+	SoftWebGL    bool `json:"soft_webgl"`
+	WDDeleted    bool `json:"wd_deleted"`
+	PermMismatch bool `json:"perm_mismatch"`
+	Interacted   bool `json:"interacted"`
+	SolveMs      int  `json:"solve_ms"`
 }
 
 // Payload is the base64url JSON the widget submits after solving.

@@ -30,8 +30,15 @@ block_score = 90
 | Odd methods | odd_method_score | Unusual HTTP methods |
 | Missing Accept | missing_accept_score | Incomplete browser headers |
 | Missing Accept-Language | missing_accept_lang_score | Incomplete browser headers |
+| Missing Accept-Encoding | missing_accept_enc_score | Incomplete browser headers |
 | Missing Sec-Fetch | missing_sec_fetch_score | Missing modern browser hints |
 | Sec-CH-UA mismatch | sec_ch_ua_mismatch_score | Client hints disagree |
+| Sec-CH-UA on non-Chromium | sec_ch_ua_non_chromium_score | Safari or Firefox never send client hints |
+| HTTP/1.0 as browser | http10_browser_score | Real browsers do not speak HTTP/1.0 |
+| Missing Content-Type on write | missing_content_type_score | Browsers always declare a body type |
+| Anomalous User-Agent | long_ua_score | Overlong or control bytes in UA |
+| Missing Upgrade-Insecure-Requests | missing_uir_score | Chrome, Edge, and Firefox always send it on document GETs |
+| SNI vs Host mismatch | sni_host_mismatch_score | TLS SNI disagrees with Host (edge mode only) |
 | */* Accept as browser | star_accept_browser_score | Overly generic Accept |
 | Empty form context | empty_form_context_score | Browser-like POST/PUT/PATCH missing Origin and Referer |
 | Forum write path | forum_write_path_score | Suspicious POSTs to comment/register/reply style paths |
@@ -84,6 +91,8 @@ behavior_write_repeat_limit = 8
 behavior_write_repeat_score = 40
 behavior_forge_burst_limit = 24
 behavior_forge_burst_score = 35
+behavior_ua_variety_limit = 4
+behavior_ua_variety_score = 30
 empty_form_context_score = 30
 forum_write_path_score = 25
 forge_expensive_score = 40
@@ -92,6 +101,7 @@ forge_rate_cost = 4
 
 - **Burst** adds score when a client exceeds behavior_burst_limit in the window
 - **Path fan-out** scores clients that hit many distinct paths quickly
+- **UA variety** scores clients that rotate through many distinct User-Agent strings in the window, a common residential-proxy fleet pattern
 - **Write burst** scores rapid POST/PUT/PATCH volume (default 20/min) without treating normal API traffic as a hard block by itself
 - **Write repeat** only escalates repeated posts to spam-prone path segments such as comment / register / reply
 - **Forge burst** scores clients that hit many forge hot or browse paths in the window
@@ -112,6 +122,27 @@ high_404_action = "challenge"   # or "block" / "off"
 
 Clients that produce many origin 404s in the window can be challenged or blocked.
 
+## Crawler verification
+
+Requests whose User-Agent claims a well-known crawler (Googlebot, Bingbot,
+DuckDuckBot, Applebot, Baiduspider, Yandex bots, and similar) are verified
+with forward-confirmed reverse DNS: the source IP must reverse-resolve to a
+hostname under the operator's published crawler suffix, and that hostname
+must resolve back to the source IP.
+
+```toml
+[detect.crawler_verify]
+enabled = true
+timeout = "250ms"
+spoof_score = 40
+```
+
+A claim that fails verification adds spoof_score. Verified claims are not
+penalized. DNS errors and timeouts are inconclusive and never score. Results
+are cached per IP and claimed identity (24h positive, 1h negative) and each
+lookup is bounded by timeout. Crawlers that publish IP ranges instead of PTR
+hostnames (OpenAI, Anthropic, Perplexity) are not verified this way.
+
 ## Proxy bot signals
 
 ```toml
@@ -123,6 +154,8 @@ low_score_points = 40
 ```
 
 TLS fingerprints are not reconstructed after the reverse proxy. Forward edge headers such as X-JA4 or Cloudflare bot scores to reuse them.
+
+Only configure these headers when RavenGuard sits behind a trusted edge that sets them, such as Cloudflare. If clients can reach the origin directly, these values are attacker-controlled and must not be trusted.
 
 ## Combined with protect
 

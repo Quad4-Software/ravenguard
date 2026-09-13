@@ -347,7 +347,26 @@ type DetectConfig struct {
 	BehaviorForgeBurstLimit  int                `toml:"behavior_forge_burst_limit"`
 	BehaviorForgeBurstScore  int                `toml:"behavior_forge_burst_score"`
 	ForgeRateCost            int                `toml:"forge_rate_cost"`
+	MissingAcceptEncScore    int                `toml:"missing_accept_enc_score"`
+	SecCHUANonChromiumScore  int                `toml:"sec_ch_ua_non_chromium_score"`
+	HTTP10BrowserScore       int                `toml:"http10_browser_score"`
+	MissingContentTypeScore  int                `toml:"missing_content_type_score"`
+	LongUAScore              int                `toml:"long_ua_score"`
+	MissingUIRScore          int                `toml:"missing_uir_score"`
+	SNIHostMismatchScore     int                `toml:"sni_host_mismatch_score"`
+	BehaviorUAVarietyLimit   int                `toml:"behavior_ua_variety_limit"`
+	BehaviorUAVarietyScore   int                `toml:"behavior_ua_variety_score"`
+	CrawlerVerify            CrawlerVerify      `toml:"crawler_verify"`
 	ProxySignals             DetectProxySignals `toml:"proxy_signals"`
+}
+
+// CrawlerVerify enables forward-confirmed reverse-DNS verification of
+// User-Agents that claim a well-known crawler identity such as Googlebot or
+// Bingbot. Unverified claims are scored as spoofed.
+type CrawlerVerify struct {
+	Enabled    bool     `toml:"enabled"`
+	Timeout    Duration `toml:"timeout"`
+	SpoofScore int      `toml:"spoof_score"`
 }
 
 type DetectProxySignals struct {
@@ -598,7 +617,21 @@ func Default() Config {
 			BehaviorWriteRepeatLimit: 8, BehaviorWriteRepeatScore: 40,
 			EmptyFormContextScore: 30, ForumWritePathScore: 25,
 			ForgeExpensiveScore: 40, BehaviorForgeBurstLimit: 24, BehaviorForgeBurstScore: 35,
-			ForgeRateCost: 4,
+			ForgeRateCost:           4,
+			MissingAcceptEncScore:   10,
+			SecCHUANonChromiumScore: 15,
+			HTTP10BrowserScore:      15,
+			MissingContentTypeScore: 15,
+			LongUAScore:             15,
+			MissingUIRScore:         10,
+			SNIHostMismatchScore:    25,
+			BehaviorUAVarietyLimit:  4,
+			BehaviorUAVarietyScore:  30,
+			CrawlerVerify: CrawlerVerify{
+				Enabled:    true,
+				Timeout:    Duration{250 * time.Millisecond},
+				SpoofScore: 40,
+			},
 			ProxySignals: DetectProxySignals{
 				BotScoreHeader:  "CF-Bot-Score",
 				BotScoreHeader2: "X-Bot-Score",
@@ -1054,6 +1087,12 @@ func normalize(c *Config) {
 	if c.Detect.CacheMissTTL.Duration <= 0 {
 		c.Detect.CacheMissTTL = Duration{5 * time.Second}
 	}
+	if c.Detect.CrawlerVerify.Timeout.Duration <= 0 {
+		c.Detect.CrawlerVerify.Timeout = Duration{250 * time.Millisecond}
+	}
+	if c.Detect.CrawlerVerify.SpoofScore <= 0 {
+		c.Detect.CrawlerVerify.SpoofScore = 40
+	}
 	if c.RateLimit.SubnetV4Prefix <= 0 {
 		c.RateLimit.SubnetV4Prefix = 24
 	}
@@ -1466,6 +1505,14 @@ func (c Config) Validate() error {
 		case "challenge", "block", "off", "":
 		default:
 			return fmt.Errorf("detect.penalty_action must be challenge, block, or off")
+		}
+		if c.Detect.CrawlerVerify.Enabled {
+			if c.Detect.CrawlerVerify.Timeout.Duration < 0 || c.Detect.CrawlerVerify.Timeout.Duration > 10*time.Second {
+				return fmt.Errorf("detect.crawler_verify.timeout must be between 0 and 10s")
+			}
+			if c.Detect.CrawlerVerify.SpoofScore < 0 {
+				return fmt.Errorf("detect.crawler_verify.spoof_score must be >= 0")
+			}
 		}
 	}
 	if c.RateLimit.Enabled {

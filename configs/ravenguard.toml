@@ -184,12 +184,40 @@ behavior_path_fanout = 40
 behavior_path_fanout_score = 30
 behavior_strike_limit = 3
 behavior_strike_score = 25
+# behavior_ua_variety_* catches rotating-UA campaigns (residential proxy fleets
+# that shuffle User-Agent strings per request) per client key.
+behavior_ua_variety_limit = 4
+behavior_ua_variety_score = 30
 forge_expensive_score = 40
 behavior_forge_burst_limit = 24
 behavior_forge_burst_score = 35
 forge_rate_cost = 4
+# Request-consistency signals for headless browsers, automation frameworks,
+# and bare-HTTP tooling claiming to be real browsers.
+missing_accept_enc_score = 10
+sec_ch_ua_non_chromium_score = 15
+http10_browser_score = 15
+missing_content_type_score = 15
+long_ua_score = 15
+missing_uir_score = 10
+# sni_host_mismatch_score compares the TLS SNI with the Host header. Only
+# meaningful at the edge (mode "edge" or "both"); behind a proxy the TLS state
+# describes the proxy connection, so it is ignored.
+sni_host_mismatch_score = 25
+
+# crawler_verify validates self-declared good crawlers (Googlebot, GPTBot,
+# Bingbot, and similar) with forward-confirmed reverse DNS against published
+# operator hostname suffixes. Claimed identities that fail verification get
+# spoof_score added to the request score. Verified claims are not penalized.
+[detect.crawler_verify]
+enabled = true
+timeout = "250ms"
+spoof_score = 40
 
 [detect.proxy_signals]
+# Only honor these headers when RavenGuard sits behind a trusted edge (for
+# example Cloudflare) that sets them. Do not configure them when clients can
+# reach the origin directly, since the values are then attacker-controlled.
 bot_score_header = "CF-Bot-Score"
 bot_score_header_2 = "X-Bot-Score"
 ja4_header = "X-JA4"

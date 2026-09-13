@@ -26,6 +26,8 @@ type BehaviorConfig struct {
 	WriteRepeatScore int
 	ForgeBurstLimit  int
 	ForgeBurstScore  int
+	UAVarietyLimit   int
+	UAVarietyScore   int
 }
 
 type BehaviorTracker struct {
@@ -43,6 +45,7 @@ type behEntry struct {
 	reqs          int
 	writes        int
 	paths         map[string]struct{}
+	uas           map[uint32]struct{}
 	strikes       int
 	lastPath      string
 	seqHits       int
@@ -73,6 +76,9 @@ func NewBehaviorTracker(cfg BehaviorConfig) *BehaviorTracker {
 	if cfg.ForgeBurstLimit <= 0 {
 		cfg.ForgeBurstLimit = 24
 	}
+	if cfg.UAVarietyLimit <= 0 {
+		cfg.UAVarietyLimit = 4
+	}
 	t := &BehaviorTracker{cfg: cfg}
 	for i := range t.shards {
 		t.shards[i].ents = make(map[string]*behEntry)
@@ -80,8 +86,13 @@ func NewBehaviorTracker(cfg BehaviorConfig) *BehaviorTracker {
 	return t
 }
 
-// Record notes a request for burst, fan-out, and write-spam scoring.
-func (t *BehaviorTracker) Record(key, path, method string) {
+// maxTrackedUAs caps the per-client UA set so a hostile client cannot grow
+// entry memory without bound.
+const maxTrackedUAs = 64
+
+// Record notes a request for burst, fan-out, write-spam, and UA-churn
+// scoring. ua is hashed so raw agent strings are not retained.
+func (t *BehaviorTracker) Record(key, path, method, ua string) {
 	if t == nil || key == "" {
 		return
 	}
@@ -91,6 +102,14 @@ func (t *BehaviorTracker) Record(key, path, method string) {
 	defer s.mu.Unlock()
 	e := t.entryLocked(s, key, now)
 	e.reqs++
+	if ua != "" {
+		if e.uas == nil {
+			e.uas = make(map[uint32]struct{})
+		}
+		if len(e.uas) < maxTrackedUAs {
+			e.uas[strhash.String(ua)] = struct{}{}
+		}
+	}
 	if e.paths == nil {
 		e.paths = make(map[string]struct{})
 	}
@@ -197,6 +216,10 @@ func (t *BehaviorTracker) Score(key string) Result {
 	if e.strikes > 0 && t.cfg.StrikeScore > 0 {
 		res.Score += e.strikes * t.cfg.StrikeScore
 		res.Reasons = append(res.Reasons, "behavior_strikes")
+	}
+	if len(e.uas) >= t.cfg.UAVarietyLimit && t.cfg.UAVarietyScore > 0 {
+		res.Score += t.cfg.UAVarietyScore
+		res.Reasons = append(res.Reasons, "behavior_ua_variety")
 	}
 	return res
 }

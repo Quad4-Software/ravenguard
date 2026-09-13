@@ -109,3 +109,58 @@ func TestEvaluateEnvTooFast(t *testing.T) {
 		t.Fatal("expected solve_too_fast")
 	}
 }
+
+func TestEvaluateEnvSingleSoftSignalPasses(t *testing.T) {
+	m := &challenge.Manager{Secret: []byte("test-secret-16chars"), Difficulty: 8}
+	for name, rep := range map[string]challenge.EnvReport{
+		"no_plugins":    {NoPlugins: true},
+		"zero_viewport": {ZeroViewport: true},
+		"soft_webgl":    {SoftWebGL: true},
+		"wd_deleted":    {WDDeleted: true},
+		"perm_mismatch": {PermMismatch: true},
+	} {
+		rep.Interacted = true
+		rep.SolveMs = 100
+		v := m.EvaluateEnv(rep, 8, challenge.GateInteractive)
+		if v.Refuse {
+			t.Fatalf("%s alone must not refuse %v", name, v.Reasons)
+		}
+	}
+}
+
+func TestEvaluateEnvTwoSoftSignalsRefuse(t *testing.T) {
+	m := &challenge.Manager{Secret: []byte("test-secret-16chars"), Difficulty: 8}
+	v := m.EvaluateEnv(challenge.EnvReport{
+		ZeroViewport: true,
+		SoftWebGL:    true,
+		Interacted:   true,
+		SolveMs:      100,
+	}, 8, challenge.GateInteractive)
+	if !v.Refuse {
+		t.Fatal("two soft signals must refuse")
+	}
+	joined := strings.Join(v.Reasons, ",")
+	if !strings.Contains(joined, "zero_viewport") || !strings.Contains(joined, "soft_webgl") {
+		t.Fatalf("reasons=%v", v.Reasons)
+	}
+}
+
+func TestEvaluateEnvHardSignalIncludesSoftReasons(t *testing.T) {
+	m := &challenge.Manager{Secret: []byte("test-secret-16chars"), Difficulty: 16}
+	v := m.EvaluateEnv(challenge.EnvReport{
+		Webdriver:  true,
+		NoPlugins:  true,
+		SoftWebGL:  true,
+		Interacted: true,
+		SolveMs:    500,
+	}, 16, challenge.GateInteractive)
+	if !v.Refuse {
+		t.Fatal("expected refuse")
+	}
+	joined := strings.Join(v.Reasons, ",")
+	for _, want := range []string{"webdriver", "no_plugins", "soft_webgl"} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("missing %s in reasons=%v", want, v.Reasons)
+		}
+	}
+}

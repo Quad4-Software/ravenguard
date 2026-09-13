@@ -30,6 +30,28 @@ type Config struct {
 	ProxyBotHeader         string
 	ProxyBotScoreHeader    string
 	ProxyJA4Header         string
+	// MissingAcceptEncScore applies to browser-like UAs that omit
+	// Accept-Encoding. Every real browser sends it on every request.
+	MissingAcceptEncScore int
+	// SecCHUANonChromiumScore applies when a Firefox or Safari UA still
+	// sends Chromium client hints. Those browsers never emit Sec-CH-UA.
+	SecCHUANonChromiumScore int
+	// HTTP10BrowserScore applies to browser-like UAs arriving on HTTP/1.0,
+	// which modern browsers never use.
+	HTTP10BrowserScore int
+	// MissingContentTypeScore applies to browser-like UAs sending a body
+	// without Content-Type. Browsers always declare one on writes.
+	MissingContentTypeScore int
+	// LongUAScore applies to absurdly long User-Agent strings or strings
+	// containing control bytes, a hallmark of bot tooling.
+	LongUAScore int
+	// MissingUIRScore applies to Chrome or Firefox UAs fetching a document
+	// without Upgrade-Insecure-Requests, which both always send.
+	MissingUIRScore int
+	// SNIHostMismatchScore applies when the TLS SNI and Host header disagree,
+	// a sign of domain fronting or off-target scanning. Only meaningful when
+	// RavenGuard terminates TLS; leave unset behind a TLS-terminating proxy.
+	SNIHostMismatchScore int
 }
 
 type Result struct {
@@ -93,6 +115,20 @@ var probePaths = []string{
 	"/.git", "/admin", "/actuator", "/server-status", "/cgi-bin",
 	"/vendor/phpunit", "/etc/passwd", "/.aws", "/api/v1/admin",
 	"/console", "/manager/html", "/owa/", "/hnap1",
+	// Version-control and IDE leftovers leaked by deployments.
+	"/.svn", "/.hg", "/.bzr", "/.ds_store", "/.vscode", "/.idea",
+	"/.npmrc", "/.ssh", "/composer.json", "/vendor/composer",
+	// App-specific recon endpoints seen in scanner template sets.
+	// /wp-content and /wp-includes are deliberately excluded: they are the
+	// normal asset paths on every WordPress site.
+	"/server-info", "/phpinfo", "/boaform", "/hudson", "/jmx-console",
+	"/elmah", "/debug/vars", "/debug/pprof", "/wp-login", "/xmlrpc.php",
+	"/host-manager", "/druid", "/nacos", "/geoserver",
+	"/actuator/env", "/actuator/heapdump", "/actuator/beans",
+	// Backup dumps and webshell names probed by exploit bots.
+	"/db.sql", "/dump.sql", "/backup.sql", "/backup.zip", "/backup.tar",
+	"/wp-config", "/shell.php", "/cmd.php", "/up.php", "/c99", "/r57",
+	"/webshell",
 }
 
 var lowerPool = sync.Pool{
@@ -207,6 +243,12 @@ func score(r *http.Request, cfg Config, wantReasons bool) Result {
 				res.Reasons = append(res.Reasons, "ai_ua")
 			}
 		}
+		if uaAnomalous(ua) && cfg.LongUAScore > 0 {
+			res.Score += cfg.LongUAScore
+			if wantReasons {
+				res.Reasons = append(res.Reasons, "ua_anomalous")
+			}
+		}
 	}
 
 	accept := r.Header.Get("Accept")
@@ -224,16 +266,48 @@ func score(r *http.Request, cfg Config, wantReasons bool) Result {
 				res.Reasons = append(res.Reasons, "missing_accept_lang")
 			}
 		}
+		if r.Header.Get("Accept-Encoding") == "" && cfg.MissingAcceptEncScore > 0 {
+			res.Score += cfg.MissingAcceptEncScore
+			if wantReasons {
+				res.Reasons = append(res.Reasons, "missing_accept_encoding")
+			}
+		}
 		if isDocumentGET(r) && missingSecFetch(r) && cfg.MissingSecFetchScore > 0 {
 			res.Score += cfg.MissingSecFetchScore
 			if wantReasons {
 				res.Reasons = append(res.Reasons, "missing_sec_fetch")
 			}
 		}
-		if secCHUAMismatchBytes(r, lowUA) && cfg.SecCHUAMismatchScore > 0 {
+		chMismatch := secCHUAMismatchBytes(r, lowUA)
+		if chMismatch && cfg.SecCHUAMismatchScore > 0 {
 			res.Score += cfg.SecCHUAMismatchScore
 			if wantReasons {
 				res.Reasons = append(res.Reasons, "sec_ch_ua_mismatch")
+			}
+		}
+		if !chMismatch && secCHUAOnNonChromiumBytes(r, lowUA) && cfg.SecCHUANonChromiumScore > 0 {
+			res.Score += cfg.SecCHUANonChromiumScore
+			if wantReasons {
+				res.Reasons = append(res.Reasons, "sec_ch_ua_non_chromium")
+			}
+		}
+		if r.ProtoMajor == 1 && r.ProtoMinor == 0 && cfg.HTTP10BrowserScore > 0 {
+			res.Score += cfg.HTTP10BrowserScore
+			if wantReasons {
+				res.Reasons = append(res.Reasons, "http10_browser")
+			}
+		}
+		if chromiumOrFirefoxUA(lowUA) && isDocumentGET(r) &&
+			r.Header.Get("Upgrade-Insecure-Requests") == "" && cfg.MissingUIRScore > 0 {
+			res.Score += cfg.MissingUIRScore
+			if wantReasons {
+				res.Reasons = append(res.Reasons, "missing_upgrade_insecure")
+			}
+		}
+		if missingContentTypeOnWrite(r) && cfg.MissingContentTypeScore > 0 {
+			res.Score += cfg.MissingContentTypeScore
+			if wantReasons {
+				res.Reasons = append(res.Reasons, "missing_content_type")
 			}
 		}
 		if accept == "*/*" && isDocumentPath(r.URL.Path) && cfg.StarAcceptBrowserScore > 0 {
@@ -243,6 +317,13 @@ func score(r *http.Request, cfg Config, wantReasons bool) Result {
 			}
 		}
 		scoreFormSpam(r, cfg, &res, wantReasons)
+	}
+
+	if cfg.SNIHostMismatchScore > 0 && sniHostMismatch(r) {
+		res.Score += cfg.SNIHostMismatchScore
+		if wantReasons {
+			res.Reasons = append(res.Reasons, "sni_host_mismatch")
+		}
 	}
 
 	switch r.Method {
@@ -465,6 +546,71 @@ func missingSecFetch(r *http.Request) bool {
 	return r.Header.Get("Sec-Fetch-Site") == "" &&
 		r.Header.Get("Sec-Fetch-Mode") == "" &&
 		r.Header.Get("Sec-Fetch-Dest") == ""
+}
+
+// uaAnomalous reports whether ua is implausibly long or contains control
+// bytes. Real browsers cap around 200 chars and never emit controls.
+func uaAnomalous(ua string) bool {
+	if len(ua) > 280 {
+		return true
+	}
+	for i := 0; i < len(ua); i++ {
+		if ua[i] < 0x20 && ua[i] != '\t' {
+			return true
+		}
+	}
+	return false
+}
+
+// chromiumOrFirefoxUA reports whether the UA claims Chrome, Edge, or
+// Firefox. Those browsers always send Upgrade-Insecure-Requests.
+func chromiumOrFirefoxUA(low []byte) bool {
+	return faststr.ContainsBytes(low, "chrome/") ||
+		faststr.ContainsBytes(low, "edg/") ||
+		faststr.ContainsBytes(low, "firefox/")
+}
+
+// secCHUAOnNonChromiumBytes reports whether the request sends Chromium
+// client hints while the UA claims a browser that never emits them.
+// Safari and Firefox do not send Sec-CH-UA at all.
+func secCHUAOnNonChromiumBytes(r *http.Request, lowUA []byte) bool {
+	if r.Header.Get("Sec-CH-UA") == "" {
+		return false
+	}
+	chromium := faststr.ContainsBytes(lowUA, "chrome/") ||
+		faststr.ContainsBytes(lowUA, "chromium") ||
+		faststr.ContainsBytes(lowUA, "edg/") ||
+		faststr.ContainsBytes(lowUA, "opr/")
+	return !chromium
+}
+
+// missingContentTypeOnWrite reports whether a write request carries a body
+// but no Content-Type. Browsers always declare one.
+func missingContentTypeOnWrite(r *http.Request) bool {
+	if !isWriteMethod(r.Method) {
+		return false
+	}
+	hasBody := r.ContentLength != 0 || (r.Body != nil && r.Body != http.NoBody)
+	return hasBody && r.Header.Get("Content-Type") == ""
+}
+
+// sniHostMismatch reports whether the TLS SNI and the HTTP Host header name
+// different sites. Browsers send the same name for both; disagreement is a
+// sign of domain fronting or scanners reusing a TLS session.
+func sniHostMismatch(r *http.Request) bool {
+	if r.TLS == nil || r.TLS.ServerName == "" {
+		return false
+	}
+	host := r.Host
+	if i := strings.IndexByte(host, ':'); i >= 0 {
+		host = host[:i]
+	}
+	host = strings.TrimSuffix(host, ".")
+	sni := strings.TrimSuffix(r.TLS.ServerName, ".")
+	if host == "" {
+		return false
+	}
+	return !strings.EqualFold(host, sni)
 }
 
 func secCHUAMismatchBytes(r *http.Request, lowUA []byte) bool {

@@ -192,6 +192,8 @@ func runEdge(cfg config.Config, proxyOnly bool, configPath string, sentryRep *rg
 			WriteRepeatScore: cfg.Detect.BehaviorWriteRepeatScore,
 			ForgeBurstLimit:  cfg.Detect.BehaviorForgeBurstLimit,
 			ForgeBurstScore:  cfg.Detect.BehaviorForgeBurstScore,
+			UAVarietyLimit:   cfg.Detect.BehaviorUAVarietyLimit,
+			UAVarietyScore:   cfg.Detect.BehaviorUAVarietyScore,
 		})
 		pipeline.StartBehaviorSweeper(ctx, beh, time.Minute, retention)
 	}

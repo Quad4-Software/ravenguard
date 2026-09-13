@@ -11,11 +11,13 @@ require (
 	github.com/elastic/go-seccomp-bpf v1.6.0
 	github.com/getkin/kin-openapi v0.149.0
 	github.com/getsentry/sentry-go v0.49.0
+	github.com/hashicorp/yamux v0.1.2
 	github.com/jcchavezs/mergefs v0.1.1
 	github.com/landlock-lsm/go-landlock v0.10.0
 	github.com/mholt/acmez/v3 v3.1.6
 	github.com/quic-go/quic-go v0.62.0
 	golang.org/x/crypto v0.55.0
+	golang.org/x/sync v0.22.0
 	modernc.org/sqlite v1.57.0
 )
 
@@ -31,7 +33,6 @@ require (
 	github.com/gorilla/mux v1.8.0 // indirect
 	github.com/gotnospirit/makeplural v0.0.0-20180622080156-a5f48d94d976 // indirect
 	github.com/gotnospirit/messageformat v0.0.0-20221001023931-dfe49f1eb092 // indirect
-	github.com/hashicorp/yamux v0.1.2 // indirect
 	github.com/kaptinlin/go-i18n v0.1.4 // indirect
 	github.com/kaptinlin/jsonschema v0.4.6 // indirect
 	github.com/klauspost/cpuid/v2 v2.3.0 // indirect
@@ -56,7 +57,6 @@ require (
 	go.uber.org/zap/exp v0.3.0 // indirect
 	golang.org/x/mod v0.38.0 // indirect
 	golang.org/x/net v0.57.0 // indirect
-	golang.org/x/sync v0.22.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/text v0.41.0 // indirect
 	golang.org/x/tools v0.48.0 // indirect
