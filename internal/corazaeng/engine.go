@@ -6,6 +6,7 @@ package corazaeng
 import (
 	"bytes"
 	"fmt"
+	"io/fs"
 	"net"
 	"net/http"
 	"path/filepath"
@@ -93,20 +94,20 @@ func buildWAF(cfg config.CorazaConfig) (coraza.WAF, error) {
 		fmt.Fprintf(&b, "SecAction \"id:900002,phase:1,pass,nolog,t:none,setvar:tx.detection_paranoia_level=%d\"\n", paranoia)
 		fmt.Fprintf(&b, "Include @owasp_crs/*.conf\n")
 		if rulesDir != "" {
-			root = root.WithRootFS(mergefs.Merge(coreruleset.FS, mergefsio.OSFS))
+			root = root.WithRootFS(slashFS{mergefs.Merge(coreruleset.FS, mergefsio.OSFS)})
 			fmt.Fprintf(&b, "Include %s/*.conf\n", rulesDir)
 		} else {
-			root = root.WithRootFS(coreruleset.FS)
+			root = root.WithRootFS(slashFS{coreruleset.FS})
 		}
 	} else if rulesDir != "" {
-		root = root.WithRootFS(mergefsio.OSFS)
+		root = root.WithRootFS(slashFS{mergefsio.OSFS})
 		fmt.Fprintf(&b, "Include %s/*.conf\n", rulesDir)
 	} else if strings.TrimSpace(cfg.Directives) == "" && rulesFile == "" {
 		return nil, fmt.Errorf("coraza: enable crs or set rules_dir/directives")
 	}
 	if rulesFile != "" {
 		if !cfg.CRS && rulesDir == "" {
-			root = root.WithRootFS(mergefsio.OSFS)
+			root = root.WithRootFS(slashFS{mergefsio.OSFS})
 		}
 		fmt.Fprintf(&b, "Include %s\n", rulesFile)
 	}
@@ -123,6 +124,47 @@ func buildWAF(cfg config.CorazaConfig) (coraza.WAF, error) {
 		b.WriteByte('\n')
 	}
 	return coraza.NewWAF(root.WithDirectives(b.String()))
+}
+
+// slashFS normalizes Windows path separators on Open. Coraza joins include
+// paths with filepath.Join, which produces backslashes on Windows, while
+// embed.FS and fs.Glob only understand forward slashes. Forward slashes are
+// also valid for the OS filesystem on Windows, so wrapping is safe for both
+// the embedded CRS and user rule directories.
+type slashFS struct{ fs.FS }
+
+func (s slashFS) clean(name string) string {
+	name = strings.ReplaceAll(name, "\\", "/")
+	name = strings.TrimPrefix(name, "./")
+	return name
+}
+
+func (s slashFS) Open(name string) (fs.File, error) {
+	return s.FS.Open(s.clean(name))
+}
+
+// The fs helpers used by the Coraza parser (Glob, ReadFile) call the
+// optional ReadDirFS/ReadFileFS/StatFS interfaces when present, bypassing
+// Open, so each is forwarded with the same normalization.
+func (s slashFS) ReadDir(name string) ([]fs.DirEntry, error) {
+	if r, ok := s.FS.(fs.ReadDirFS); ok {
+		return r.ReadDir(s.clean(name))
+	}
+	return fs.ReadDir(s.FS, s.clean(name))
+}
+
+func (s slashFS) ReadFile(name string) ([]byte, error) {
+	if r, ok := s.FS.(fs.ReadFileFS); ok {
+		return r.ReadFile(s.clean(name))
+	}
+	return fs.ReadFile(s.FS, s.clean(name))
+}
+
+func (s slashFS) Stat(name string) (fs.FileInfo, error) {
+	if r, ok := s.FS.(fs.StatFS); ok {
+		return r.Stat(s.clean(name))
+	}
+	return fs.Stat(s.FS, s.clean(name))
 }
 
 // sanitizeRulesPath rejects path traversal and relative escapes for Include targets.

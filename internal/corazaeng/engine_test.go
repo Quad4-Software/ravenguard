@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"testing/fstest"
 
 	"github.com/Quad4-Software/ravenguard/internal/config"
 )
@@ -260,5 +261,29 @@ func TestSanitizeRulesPath(t *testing.T) {
 	got, err := sanitizeRulesPath("./rules", true)
 	if err != nil || got != "rules" {
 		t.Fatalf("got %q err %v", got, err)
+	}
+}
+
+// slashFS must normalize backslash-separated names, which is what Coraza's
+// filepath.Join produces for include paths on Windows.
+func TestSlashFSNormalizesSeparators(t *testing.T) {
+	inner := fstest.MapFS{
+		"a/b/c.conf": &fstest.MapFile{Data: []byte("x")},
+	}
+	s := slashFS{inner}
+	for _, name := range []string{`a\b\c.conf`, `./a\b\c.conf`, "a/b/c.conf"} {
+		data, err := s.ReadFile(name)
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if string(data) != "x" {
+			t.Fatalf("%s: %q", name, data)
+		}
+		if _, err := s.Stat(name); err != nil {
+			t.Fatalf("stat %s: %v", name, err)
+		}
+	}
+	if _, err := s.ReadDir(`a\b`); err != nil {
+		t.Fatalf("readdir: %v", err)
 	}
 }
