@@ -98,7 +98,7 @@ func TestEngineCRSBlocksQueryAttacks(t *testing.T) {
 		"sqli":      "http://example.com/?id=1%27%20OR%20%271%27=%271",
 		"xss":       "http://example.com/?q=%3Cscript%3Ealert(1)%3C/script%3E",
 		"traversal": "http://example.com/?p=../../../../etc/passwd",
-		"rce":       "http://example.com/?cmd=;cat%20/etc/passwd",
+		"rce":       "http://example.com/?cmd=%24%28cat%20/etc/passwd%29",
 	}
 	for name, u := range cases {
 		r := httptest.NewRequest(http.MethodGet, u, nil)
