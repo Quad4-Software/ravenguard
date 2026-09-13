@@ -4,11 +4,14 @@
 package proxy
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/binary"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"net/http"
@@ -19,6 +22,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/quic-go/quic-go"
 	"github.com/quic-go/quic-go/http3"
 )
 
@@ -131,6 +135,10 @@ func New(cfg Config) *Proxy {
 		if proto == ProtocolAuto {
 			proto = ProtocolH2
 		}
+	}
+	if proto == ProtocolAuto && IsH3Scheme(cfg.Target) {
+		// An explicit h3:// target only speaks QUIC; TCP fallback is useless.
+		proto = ProtocolH3
 	}
 
 	var rt roundTripperCloser
@@ -257,19 +265,6 @@ func newTCPTransport(cfg Config, dial func(context.Context, string, string) (net
 		return &closeTransport{t}
 	}
 
-	h2 := baseTransport(cfg, dial)
-	h2.TLSClientConfig = tlsClone(cfg.TLSClientConfig)
-	h2p := &http.Protocols{}
-	h2p.SetHTTP2(true)
-	h2p.SetUnencryptedHTTP2(true)
-	h2p.SetHTTP1(cfg.AllowHTTP1)
-	if cfg.AllowHTTP1 {
-		h2.TLSClientConfig.NextProtos = []string{"h2", "http/1.1"}
-	} else {
-		h2.TLSClientConfig.NextProtos = []string{"h2"}
-	}
-	h2.Protocols = h2p
-
 	h1 := baseTransport(cfg, dial)
 	h1.ForceAttemptHTTP2 = false
 	h1.TLSClientConfig = tlsClone(cfg.TLSClientConfig)
@@ -280,7 +275,36 @@ func newTCPTransport(cfg Config, dial func(context.Context, string, string) (net
 	h1p.SetUnencryptedHTTP2(false)
 	h1.Protocols = h1p
 
-	return &switchingTransport{h2: h2, h1: h1}
+	h2 := baseTransport(cfg, dial)
+	h2.TLSClientConfig = tlsClone(cfg.TLSClientConfig)
+	h2p := &http.Protocols{}
+	h2p.SetHTTP2(true)
+	h2p.SetHTTP1(cfg.AllowHTTP1)
+	if cfg.AllowHTTP1 {
+		h2.TLSClientConfig.NextProtos = []string{"h2", "http/1.1"}
+	} else {
+		h2.TLSClientConfig.NextProtos = []string{"h2"}
+		// Strict HTTP/2: cleartext origins get prior-knowledge h2c only.
+		h2p.SetUnencryptedHTTP2(true)
+	}
+	h2.Protocols = h2p
+
+	st := &switchingTransport{h2: h2, h1: h1}
+	if cfg.AllowHTTP1 {
+		// Cleartext origins get h2c when the peer speaks it and HTTP/1.1
+		// otherwise. A dedicated transport is required because the standard
+		// library only uses unencrypted HTTP/2 when HTTP/1 is disabled.
+		h2c := baseTransport(cfg, dial)
+		h2c.TLSClientConfig = tlsClone(cfg.TLSClientConfig)
+		h2c.TLSClientConfig.NextProtos = []string{"h2"}
+		h2cp := &http.Protocols{}
+		h2cp.SetHTTP2(true)
+		h2cp.SetUnencryptedHTTP2(true)
+		h2c.Protocols = h2cp
+		st.h2c = h2c
+		st.prober = newH2CProber(dial, cfg.ConnectTimeout)
+	}
+	return st
 }
 
 type closeTransport struct {
@@ -299,11 +323,32 @@ func (c *closeTransport) Close() error {
 type switchingTransport struct {
 	h2 *http.Transport
 	h1 *http.Transport
+	// h2c and prober are set only when allow_http1 is true: cleartext requests
+	// use h2c when the origin speaks it and fall back to HTTP/1.1 otherwise.
+	h2c    *http.Transport
+	prober *h2cProber
 }
 
 func (s *switchingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	if isWebSocket(req) {
 		return s.h1.RoundTrip(req)
+	}
+	if s.h2c != nil && req.URL != nil && req.URL.Scheme == "http" {
+		if !s.prober.useH2C(req.URL.Host) {
+			return s.h1.RoundTrip(req)
+		}
+		att, retry := fallbackAttempt(req)
+		resp, err := s.h2c.RoundTrip(att)
+		if err == nil {
+			return resp, nil
+		}
+		if att.Context().Err() == nil {
+			s.prober.demote(req.URL.Host)
+		}
+		if r2, ok := retry(); ok {
+			return s.h1.RoundTrip(r2)
+		}
+		return nil, err
 	}
 	return s.h2.RoundTrip(req)
 }
@@ -311,6 +356,9 @@ func (s *switchingTransport) RoundTrip(req *http.Request) (*http.Response, error
 func (s *switchingTransport) CloseIdleConnections() {
 	s.h2.CloseIdleConnections()
 	s.h1.CloseIdleConnections()
+	if s.h2c != nil {
+		s.h2c.CloseIdleConnections()
+	}
 }
 
 func (s *switchingTransport) Close() error {
@@ -322,13 +370,156 @@ func isWebSocket(req *http.Request) bool {
 	return req != nil && req.Method == http.MethodGet && strings.EqualFold(req.Header.Get("Upgrade"), "websocket")
 }
 
+// h2cProber tracks which cleartext origins speak HTTP/2. Results are cached:
+// capable hosts are re-checked after an hour, incapable after five minutes.
+type h2cProber struct {
+	dial    func(context.Context, string, string) (net.Conn, error)
+	timeout time.Duration
+	mu      sync.Mutex
+	cache   map[string]h2cProbeEntry
+	pending map[string]bool
+}
+
+type h2cProbeEntry struct {
+	h2c     bool
+	expires time.Time
+}
+
+func newH2CProber(dial func(context.Context, string, string) (net.Conn, error), timeout time.Duration) *h2cProber {
+	if timeout <= 0 || timeout > 3*time.Second {
+		timeout = 3 * time.Second
+	}
+	return &h2cProber{
+		dial:    dial,
+		timeout: timeout,
+		cache:   make(map[string]h2cProbeEntry),
+		pending: make(map[string]bool),
+	}
+}
+
+// useH2C reports whether addr is known to speak h2c. Requests made while a
+// probe is in flight use HTTP/1.1.
+func (p *h2cProber) useH2C(addr string) bool {
+	p.mu.Lock()
+	e, ok := p.cache[addr]
+	if ok && time.Now().Before(e.expires) {
+		p.mu.Unlock()
+		return e.h2c
+	}
+	if p.pending[addr] {
+		p.mu.Unlock()
+		return false
+	}
+	p.pending[addr] = true
+	p.mu.Unlock()
+
+	go func() {
+		ok := probeH2C(p.dial, addr, p.timeout)
+		ttl := 5 * time.Minute
+		if ok {
+			ttl = time.Hour
+		}
+		p.mu.Lock()
+		p.cache[addr] = h2cProbeEntry{h2c: ok, expires: time.Now().Add(ttl)}
+		delete(p.pending, addr)
+		p.mu.Unlock()
+	}()
+	return false
+}
+
+// demote marks addr as not h2c-capable after a failed h2c exchange so later
+// requests skip h2c until the entry expires.
+func (p *h2cProber) demote(addr string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.cache[addr] = h2cProbeEntry{h2c: false, expires: time.Now().Add(5 * time.Minute)}
+}
+
+var h2cPreface = append([]byte("PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n"),
+	// Empty SETTINGS frame.
+	0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00)
+
+// probeH2C reports whether addr answers the HTTP/2 client preface with a
+// server SETTINGS frame on stream 0.
+func probeH2C(dial func(context.Context, string, string) (net.Conn, error), addr string, timeout time.Duration) bool {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	conn, err := dial(ctx, "tcp", addr)
+	if err != nil {
+		return false
+	}
+	defer conn.Close()
+	_ = conn.SetDeadline(time.Now().Add(timeout))
+	if _, err = conn.Write(h2cPreface); err != nil {
+		return false
+	}
+	var hdr [9]byte
+	if _, err = io.ReadFull(conn, hdr[:]); err != nil {
+		return false
+	}
+	if bytes.HasPrefix(hdr[:], []byte("HTTP/")) {
+		return false
+	}
+	streamID := binary.BigEndian.Uint32(hdr[5:9]) & 0x7fffffff
+	return hdr[3] == 0x04 && streamID == 0
+}
+
+type countingBody struct {
+	rc io.ReadCloser
+	n  int64
+}
+
+func (c *countingBody) Read(p []byte) (int, error) {
+	n, err := c.rc.Read(p)
+	c.n += int64(n)
+	return n, err
+}
+
+func (c *countingBody) Close() error { return c.rc.Close() }
+
+// fallbackAttempt prepares req for a speculative transport attempt and returns
+// a retry func producing a request that is safe to send on a different
+// transport: the original request when the body is untouched, a clone with a
+// fresh GetBody, or false when the failed attempt consumed part of the body.
+func fallbackAttempt(req *http.Request) (attempt *http.Request, retry func() (*http.Request, bool)) {
+	if req.Body == nil || req.Body == http.NoBody {
+		return req, func() (*http.Request, bool) { return req, true }
+	}
+	if req.GetBody != nil {
+		if b, err := req.GetBody(); err == nil {
+			att := req.Clone(req.Context())
+			att.Body = b
+			return att, func() (*http.Request, bool) {
+				b2, err := req.GetBody()
+				if err != nil {
+					return nil, false
+				}
+				r2 := req.Clone(req.Context())
+				r2.Body = b2
+				return r2, true
+			}
+		}
+	}
+	cb := &countingBody{rc: req.Body}
+	att := req.Clone(req.Context())
+	att.Body = cb
+	return att, func() (*http.Request, bool) {
+		if cb.n != 0 {
+			return nil, false
+		}
+		r2 := req.Clone(req.Context())
+		r2.Body = req.Body
+		return r2, true
+	}
+}
+
 func newH3Transport(cfg Config, dial func(context.Context, string, string) (net.Conn, error), fallback bool) roundTripperCloser {
 	tlsCfg := cfg.TLSClientConfig
 	if tlsCfg == nil {
 		tlsCfg = &tls.Config{}
 	}
 	h3t := &http3.Transport{
-		TLSClientConfig:    tlsCfg,
+		TLSClientConfig:    tlsClone(tlsCfg),
 		DisableCompression: true,
 	}
 	if !fallback {
@@ -337,7 +528,10 @@ func newH3Transport(cfg Config, dial func(context.Context, string, string) (net.
 	return &h3AutoTransport{
 		h3:       h3t,
 		fallback: newTCPTransport(cfg, dial),
-		timeout:  5 * time.Second,
+		tlsCfg:   tlsCfg,
+		timeout:  3 * time.Second,
+		cache:    make(map[string]protoCacheEntry),
+		pending:  make(map[string]bool),
 	}
 }
 
@@ -360,9 +554,11 @@ func (h *h3OnlyTransport) Close() error {
 type h3AutoTransport struct {
 	h3       *http3.Transport
 	fallback roundTripperCloser
+	tlsCfg   *tls.Config
 	timeout  time.Duration
-	mu       sync.RWMutex
+	mu       sync.Mutex
 	cache    map[string]protoCacheEntry
+	pending  map[string]bool
 }
 
 type protoCacheEntry struct {
@@ -371,50 +567,98 @@ type protoCacheEntry struct {
 }
 
 func (a *h3AutoTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	if req.URL == nil || req.URL.Scheme != "https" {
+		// HTTP/3 always runs over TLS; cleartext targets go straight to TCP.
+		return a.fallback.RoundTrip(req)
+	}
 	host := req.URL.Host
 	if host == "" {
 		host = req.Host
 	}
 
-	a.mu.RLock()
-	e, ok := a.cache[host]
-	a.mu.RUnlock()
-	now := time.Now()
-	if ok && now.Before(e.expires) {
-		if e.proto == "h3" {
-			return a.h3.RoundTrip(req)
+	switch a.cached(host) {
+	case "h3":
+		att, retry := fallbackAttempt(req)
+		resp, err := a.h3.RoundTrip(att)
+		if err == nil {
+			return resp, nil
 		}
+		if att.Context().Err() == nil {
+			a.setCache(host, "h2", time.Now().Add(5*time.Minute))
+		}
+		if r2, ok := retry(); ok {
+			return a.fallback.RoundTrip(r2)
+		}
+		return nil, err
+	case "h2":
 		return a.fallback.RoundTrip(req)
 	}
 
-	// Try HTTP/3 with a bounded probe. If the upstream does not speak QUIC
-	// this will fail quickly and we fall back to HTTP/2/1.1. The probe context
-	// must not be cancelled on success: the response body still reads from it.
-	ctx, cancel := context.WithCancel(req.Context())
-	h3Req := req.Clone(ctx)
-	timer := time.AfterFunc(a.timeout, cancel)
-	resp, err := a.h3.RoundTrip(h3Req)
-	if !timer.Stop() {
-		cancel()
-		a.setCache(host, "h2", now.Add(5*time.Minute))
-		return a.fallback.RoundTrip(req)
-	}
-	if err == nil {
-		a.setCache(host, "h3", now.Add(1*time.Hour))
-		return resp, nil
-	}
-	cancel()
-	a.setCache(host, "h2", now.Add(5*time.Minute))
+	// Unknown capability: serve this request over TCP now and probe QUIC in
+	// the background so the first request is not stalled by a handshake.
+	a.probeAsync(host)
 	return a.fallback.RoundTrip(req)
+}
+
+func (a *h3AutoTransport) cached(host string) string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	e, ok := a.cache[host]
+	if ok && time.Now().Before(e.expires) {
+		return e.proto
+	}
+	return ""
 }
 
 func (a *h3AutoTransport) setCache(host, proto string, expires time.Time) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	if a.cache == nil {
-		a.cache = make(map[string]protoCacheEntry)
-	}
 	a.cache[host] = protoCacheEntry{proto: proto, expires: expires}
+}
+
+func (a *h3AutoTransport) probeAsync(host string) {
+	a.mu.Lock()
+	if a.pending[host] {
+		a.mu.Unlock()
+		return
+	}
+	a.pending[host] = true
+	a.mu.Unlock()
+	go func() {
+		proto, ttl := "h2", 5*time.Minute
+		if probeQUIC(a.tlsCfg, host, a.timeout) {
+			proto, ttl = "h3", time.Hour
+		}
+		a.setCache(host, proto, time.Now().Add(ttl))
+		a.mu.Lock()
+		delete(a.pending, host)
+		a.mu.Unlock()
+	}()
+}
+
+// probeQUIC reports whether hostport completes a QUIC handshake within timeout.
+func probeQUIC(base *tls.Config, hostport string, timeout time.Duration) bool {
+	tlsCfg := tlsClone(base)
+	tlsCfg.NextProtos = []string{http3.NextProtoH3}
+	addr := hostport
+	if h, _, err := net.SplitHostPort(hostport); err == nil {
+		if tlsCfg.ServerName == "" {
+			tlsCfg.ServerName = h
+		}
+	} else {
+		if tlsCfg.ServerName == "" {
+			tlsCfg.ServerName = hostport
+		}
+		addr = net.JoinHostPort(hostport, "443")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	conn, err := quic.DialAddrEarly(ctx, addr, tlsCfg, nil)
+	if err != nil {
+		return false
+	}
+	_ = conn.CloseWithError(0, "")
+	return true
 }
 
 func (a *h3AutoTransport) CloseIdleConnections() {
@@ -435,6 +679,18 @@ func IsUnix(u *url.URL) bool {
 		return false
 	}
 	return u.Scheme == "unix" || strings.HasPrefix(u.Path, "/") && u.Host == "" && u.Scheme == ""
+}
+
+// IsH3Scheme reports whether u names an HTTP/3 (QUIC) target.
+func IsH3Scheme(u *url.URL) bool {
+	if u == nil {
+		return false
+	}
+	switch strings.ToLower(u.Scheme) {
+	case "h3", "http3", "quic":
+		return true
+	}
+	return false
 }
 
 func UnixPath(u *url.URL) string {

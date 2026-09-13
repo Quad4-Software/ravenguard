@@ -234,6 +234,9 @@ func normalizeUpstream(u UpstreamRow) UpstreamRow {
 	}
 	if u.Protocol == "" {
 		u.Protocol = "h2"
+		// Match the built-in default: h2 with HTTP/1.1 fallback. Strict h2c
+		// against a cleartext origin that does not speak it fails outright.
+		u.AllowHTTP1 = true
 	}
 	return u
 }

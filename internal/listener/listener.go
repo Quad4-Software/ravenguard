@@ -60,7 +60,7 @@ func (s *Server) Run(ctx context.Context) error {
 			Handler:           s.cfg.Handler,
 			ReadHeaderTimeout: 10 * time.Second,
 			ReadTimeout:       30 * time.Second,
-			WriteTimeout:      60 * time.Second,
+			WriteTimeout:      10 * time.Minute,
 			IdleTimeout:       120 * time.Second,
 			MaxHeaderBytes:    s.maxHeaderBytes(),
 		}
@@ -102,7 +102,7 @@ func (s *Server) Run(ctx context.Context) error {
 			TLSConfig:         httpsTLS,
 			ReadHeaderTimeout: 10 * time.Second,
 			ReadTimeout:       30 * time.Second,
-			WriteTimeout:      60 * time.Second,
+			WriteTimeout:      10 * time.Minute,
 			IdleTimeout:       120 * time.Second,
 			MaxHeaderBytes:    s.maxHeaderBytes(),
 		}

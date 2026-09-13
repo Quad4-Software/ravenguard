@@ -204,6 +204,11 @@ var migrations = []string{
 	`ALTER TABLE upstreams ADD COLUMN tls_client_cert_file TEXT NOT NULL DEFAULT ''`,
 	`ALTER TABLE upstreams ADD COLUMN tls_client_key_file TEXT NOT NULL DEFAULT ''`,
 	`ALTER TABLE upstreams ADD COLUMN insecure_skip_verify INTEGER NOT NULL DEFAULT 0`,
+	// Repair upstreams stored with allow_http1=0 on cleartext targets. Strict
+	// prior-knowledge h2c fails outright against HTTP/1.1-only origins, and the
+	// admin checkbox could never set the flag on, so these rows are accidental.
+	`UPDATE upstreams SET allow_http1 = 1 WHERE allow_http1 = 0
+		AND (url LIKE 'http://%' OR url LIKE 'ws://%' OR url LIKE 'unix:%' OR url LIKE 'tunnel:%')`,
 }
 
 func migrate(db *sql.DB) error {

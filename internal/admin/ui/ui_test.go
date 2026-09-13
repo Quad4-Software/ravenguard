@@ -100,3 +100,54 @@ func TestLoginAndOverviewVector(t *testing.T) {
 		}
 	}
 }
+
+// TestUpstreamsPageAllowHTTP1 asserts the allow_http1 checkbox renders the
+// stored state: checked by default on the create form, matching the row when
+// editing. Regression test for a template bug that rendered the bool value
+// into the attribute name and silently disabled HTTP/1 on save.
+func TestUpstreamsPageAllowHTTP1(t *testing.T) {
+	apiMux := http.NewServeMux()
+	apiMux.HandleFunc("/api/v1/auth/me", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"user":{"id":1,"username":"admin","role":"owner"},"csrf_token":"tok"}`))
+	})
+	apiMux.HandleFunc("/api/v1/upstreams", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"upstreams":[]}`))
+	})
+	apiMux.HandleFunc("/api/v1/upstreams/u1", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"id":"u1","name":"x","url":"http://a","protocol":"h2","allow_http1":false}`))
+	})
+	apiMux.HandleFunc("/api/v1/upstreams/u2", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"id":"u2","name":"y","url":"http://b","protocol":"h2","allow_http1":true}`))
+	})
+
+	u, err := New(apiMux, "/")
+	if err != nil {
+		t.Fatalf("new ui: %v", err)
+	}
+
+	get := func(path string) string {
+		r := httptest.NewRequest(http.MethodGet, path, nil)
+		r.Header.Set("Cookie", "rg_admin_session=dummy")
+		w := httptest.NewRecorder()
+		u.route(w, r)
+		if w.Code != http.StatusOK {
+			t.Fatalf("GET %s: status %d: %s", path, w.Code, w.Body.String())
+		}
+		return w.Body.String()
+	}
+
+	const checkbox = `name="allow_http1" value="true"`
+	if body := get("/upstreams"); !strings.Contains(body, checkbox+" checked") {
+		t.Fatalf("create form should default allow_http1 to checked:\n%s", body)
+	}
+	if body := get("/upstreams/u1"); strings.Contains(body, checkbox+" checked") {
+		t.Fatalf("edit form should show stored allow_http1=false:\n%s", body)
+	}
+	if body := get("/upstreams/u2"); !strings.Contains(body, checkbox+" checked") {
+		t.Fatalf("edit form should show stored allow_http1=true:\n%s", body)
+	}
+}

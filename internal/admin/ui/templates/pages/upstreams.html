@@ -40,8 +40,8 @@
       <div class="field"><label>Max idle conns</label><input name="max_idle_conns" type="number" value="{{if $up}}{{$up.max_idle_conns}}{{end}}"></div>
       <div class="field"><label>Max idle per host</label><input name="max_idle_conns_per_host" type="number" value="{{if $up}}{{$up.max_idle_conns_per_host}}{{end}}"></div>
       <div class="field"><label>Max conns per host</label><input name="max_conns_per_host" type="number" value="{{if $up}}{{$up.max_conns_per_host}}{{end}}"></div>
-      <div class="field"><label><input type="checkbox" name="allow_http1" value="true" {{if $up}}{{$up.allow_http1}}checked{{end}}> Allow HTTP/1</label></div>
-      <div class="field"><label><input type="checkbox" name="insecure_skip_verify" value="true" {{if $up}}{{$up.insecure_skip_verify}}checked{{end}}> Insecure</label></div>
+      <div class="field"><label><input type="checkbox" name="allow_http1" value="true" {{if $up}}{{if $up.allow_http1}}checked{{end}}{{else}}checked{{end}}> Allow HTTP/1</label></div>
+      <div class="field"><label><input type="checkbox" name="insecure_skip_verify" value="true" {{if $up}}{{if $up.insecure_skip_verify}}checked{{end}}{{end}}> Insecure</label></div>
     </div>
     <div class="field-row">
       <div class="field">
@@ -56,7 +56,7 @@
       </div>
     </div>
     <div class="field-row">
-      <div class="field"><label><input type="checkbox" name="health_enabled" value="true" {{if $up}}{{$up.health_enabled}}checked{{end}}> Health enabled</label></div>
+      <div class="field"><label><input type="checkbox" name="health_enabled" value="true" {{if $up}}{{if $up.health_enabled}}checked{{end}}{{end}}> Health enabled</label></div>
       <div class="field"><label>Health path</label><input name="health_path" value="{{if $up}}{{$up.health_path}}{{end}}"></div>
       <div class="field"><label>Health interval</label><input name="health_interval" value="{{if $up}}{{$up.health_interval}}{{end}}"></div>
       <div class="field"><label>Health timeout</label><input name="health_timeout" value="{{if $up}}{{$up.health_timeout}}{{end}}"></div>

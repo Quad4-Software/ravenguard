@@ -502,7 +502,7 @@ func Default() Config {
 	tlsALPN := true
 	redir := true
 	return Config{
-		Listen: ListenConfig{HTTP: ":8080"},
+		Listen: ListenConfig{HTTP: ":8080", AllowHTTP1: true},
 		TLS: TLSConfig{
 			Mode: "off",
 			ACME: ACMEConfig{

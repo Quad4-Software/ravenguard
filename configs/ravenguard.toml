@@ -8,6 +8,7 @@ http = ":8080"
 # http = ":80"
 # https = ":443"
 # quic = ":443"
+# allow_http1 = true    # lets the TLS listener accept HTTP/1.1 alongside h2
 
 [tls]
 mode = "off" # off | files | acme | selfsigned
@@ -46,7 +47,7 @@ max_idle_conns_per_host = 256
 # max_conns_per_host = 0
 # set_headers = ["X-RavenGuard: 1"]
 # protocol = "h2"       # h2 | http1.1 | h3 | auto
-# allow_http1 = true    # lets h2 fall back to HTTP/1.1 and uses h1 for plain http
+# allow_http1 = true    # lets h2 fall back to HTTP/1.1 (h1 for plain http unless the origin speaks h2c)
 
 [upstream.health]
 enabled = false
