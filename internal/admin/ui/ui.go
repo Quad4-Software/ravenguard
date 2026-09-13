@@ -338,28 +338,7 @@ func (u *UI) include(name string, data any) template.HTML {
 		return template.HTML("")
 	}
 	if err := u.tmpl.ExecuteTemplate(&buf, name, data); err != nil {
-		return template.HTML("<p class=\"alert alert-error\">template " + name + ": " + err.Error() + "</p>")
+		return template.HTML("<p class=\"alert alert-error\">template " + template.HTMLEscapeString(name+": "+err.Error()) + "</p>") // #nosec G203 -- name and error escaped above
 	}
-	return template.HTML(buf.Bytes())
-}
-
-func (u *UI) formJSON(r *http.Request) (map[string]any, error) {
-	if err := r.ParseForm(); err != nil {
-		return nil, err
-	}
-	out := make(map[string]any, len(r.PostForm))
-	for k, v := range r.PostForm {
-		if len(v) == 1 {
-			out[k] = v[0]
-		} else {
-			out[k] = v
-		}
-	}
-	return out, nil
-}
-
-func (u *UI) writeJSON(w http.ResponseWriter, status int, v any) {
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(v)
+	return template.HTML(buf.Bytes()) // #nosec G203 -- include emits already-escaped template output
 }

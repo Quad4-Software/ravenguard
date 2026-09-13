@@ -97,7 +97,7 @@ Upstream forwarding sets X-Real-IP and rebuilds X-Forwarded-For from the resolve
 | Open threat intel (STIX/CSV) | internal/threatintel |
 | Sentry / GlitchTip | internal/sentry |
 | Landlock + seccomp-bpf | internal/sandbox |
-| Admin control plane | internal/admin, packages/admin |
+| Admin control plane | internal/admin, internal/admin/ui |
 | Hub / proxy agent protocol | internal/agentprotocol |
 
 ## Detection limits

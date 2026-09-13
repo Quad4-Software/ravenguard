@@ -225,8 +225,7 @@ When Landlock is enabled, RavenGuard derives:
 ## Building the UI
 
 ```bash
-make admin
 make build
 ```
 
-make admin builds packages/admin and copies assets into internal/admin/ui/dist for go:embed.
+The admin console is server-rendered Go templates with vendored HTMX 4 assets under internal/admin/ui, embedded with go:embed. No Node or pnpm step is required.

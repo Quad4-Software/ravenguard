@@ -25,7 +25,6 @@ on:
       - "package.json"
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
-      - "packages/admin/**"
   workflow_dispatch:
 
 concurrency:

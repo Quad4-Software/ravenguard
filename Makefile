@@ -46,8 +46,9 @@ e2e: build
 	pnpm --filter @quad4/ravenguard-e2e test --project=chromium
 	-pnpm --filter @quad4/ravenguard-e2e test --project=firefox --project=webkit
 
-# Cover internal packages. Skip cmd (mains) and the listener (network-heavy integration surface).
-COVER_PKGS ?= $(shell $(GO) list ./internal/... | grep -Ev '/listener$$')
+# Cover internal packages. Skip cmd (mains), the listener (network-heavy integration
+# surface), and the server-rendered admin UI (covered by Playwright e2e).
+COVER_PKGS ?= $(shell $(GO) list ./internal/... | grep -Ev '/listener$$|/admin/ui$$')
 
 cover:
 	$(GO) test $(COVER_PKGS) -covermode=atomic -coverprofile=coverage.out -count=1
@@ -136,7 +137,3 @@ tidy:
 
 clean:
 	rm -rf bin/ coverage.out coverage.html bench.txt
-	rm -rf packages/admin/build packages/admin/.svelte-kit
-	rm -rf internal/admin/ui/dist
-	mkdir -p internal/admin/ui/dist
-	touch internal/admin/ui/dist/.gitkeep

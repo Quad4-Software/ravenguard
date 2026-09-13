@@ -6,7 +6,6 @@ package ui
 import (
 	"encoding/json"
 	"net/http"
-	"strconv"
 	"strings"
 )
 
@@ -270,14 +269,6 @@ func (u *UI) handleUserAction(w http.ResponseWriter, r *http.Request, user *User
 	u.redirect(w, r, "/users")
 }
 
-func (u *UI) numberField(m map[string]any, key string) float64 {
-	return jsonNumber(m[key])
-}
-
-func (u *UI) stringField(m map[string]any, key string) string {
-	return jsonString(m[key])
-}
-
 func parseHosts(raw string) []string {
 	out := []string{}
 	for _, part := range strings.Split(raw, ",") {
@@ -298,9 +289,4 @@ func parseLines(raw string) []string {
 		}
 	}
 	return out
-}
-
-func parseOptionalInt(raw string) int {
-	n, _ := strconv.Atoi(strings.TrimSpace(raw))
-	return n
 }

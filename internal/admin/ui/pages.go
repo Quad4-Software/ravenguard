@@ -8,7 +8,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"html/template"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -115,23 +114,6 @@ func (u *UI) getMap(r *http.Request, apiPath string) (map[string]any, error) {
 	return out, nil
 }
 
-func (u *UI) getJSON(r *http.Request, apiPath string) (any, error) {
-	status, body, _, err := u.apiGET(r, apiPath)
-	if err != nil {
-		return nil, err
-	}
-	if status != http.StatusOK {
-		return nil, fmt.Errorf("%s", parseAPIError(body))
-	}
-	var out any
-	if len(body) > 0 {
-		if err := json.Unmarshal(body, &out); err != nil {
-			return nil, err
-		}
-	}
-	return out, nil
-}
-
 func (u *UI) mutate(w http.ResponseWriter, r *http.Request, method, apiPath string, body any) (map[string]any, bool) {
 	status, resp, _, err := u.apiCall(r, method, apiPath, body, "application/json")
 	if err != nil || status >= http.StatusBadRequest {
@@ -146,14 +128,6 @@ func (u *UI) mutate(w http.ResponseWriter, r *http.Request, method, apiPath stri
 		}
 	}
 	return out, true
-}
-
-func (u *UI) renderOrRedirect(w http.ResponseWriter, r *http.Request, name, target string, data PageData) {
-	if r.Header.Get("HX-Request") == "true" {
-		u.render(w, r, name, data)
-		return
-	}
-	u.redirect(w, r, target)
 }
 
 func (u *UI) failAPI(w http.ResponseWriter, r *http.Request, status int, body []byte) {
@@ -191,27 +165,6 @@ func formInt(r *http.Request, name string) int {
 	return n
 }
 
-func formFloat(r *http.Request, name string) float64 {
-	f, _ := strconv.ParseFloat(strings.TrimSpace(r.FormValue(name)), 64)
-	return f
-}
-
-func setNested(root map[string]any, path []string, value any) {
-	cur := root
-	for i, p := range path {
-		if i == len(path)-1 {
-			cur[p] = value
-			return
-		}
-		next, _ := cur[p].(map[string]any)
-		if next == nil {
-			next = map[string]any{}
-			cur[p] = next
-		}
-		cur = next
-	}
-}
-
 func jsonPretty(v any) string {
 	b, _ := json.MarshalIndent(v, "", "  ")
 	return string(b)
@@ -234,11 +187,6 @@ func strList(v any) []string {
 
 func joinLines(v any) string {
 	return strings.Join(strList(v), "\n")
-}
-
-func boolChecked(v any) bool {
-	b, _ := v.(bool)
-	return b
 }
 
 func ruleSlots(p map[string]any, extra int) []map[string]any {
@@ -667,7 +615,7 @@ func (u *UI) renderConfig(w http.ResponseWriter, r *http.Request, user *User, cs
 	data := map[string]any{
 		"view":           view,
 		"live":           live,
-		"live_json":      template.HTML(jsonPretty(live)),
+		"live_json":      jsonPretty(live),
 		"restart_fields": view["restart_required"],
 	}
 	for k, v := range extra {
@@ -1280,7 +1228,7 @@ func (u *UI) renderSchemas(w http.ResponseWriter, r *http.Request, user *User, c
 		var editing map[string]any
 		if json.Unmarshal(body, &editing) == nil {
 			if spec, ok := editing["spec_text"].(string); ok {
-				editing["spec_text"] = template.HTML(spec)
+				editing["spec_text"] = spec
 			}
 			data["editing"] = editing
 		}
@@ -1526,7 +1474,8 @@ func (u *UI) handleAppearance(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Method == http.MethodPost {
-		if err := r.ParseMultipartForm(8 << 20); err != nil {
+		r.Body = http.MaxBytesReader(w, r.Body, (8<<20)+(64<<10))
+		if err := r.ParseMultipartForm(8 << 20); err != nil { // #nosec G120 -- body capped by MaxBytesReader above
 			if err := r.ParseForm(); err != nil {
 				u.renderError(w, r, http.StatusBadRequest, "invalid form")
 				return
@@ -1553,7 +1502,7 @@ func (u *UI) renderAppearance(w http.ResponseWriter, r *http.Request, user *User
 	if stealth == nil {
 		stealth = map[string]any{}
 	}
-	ui["custom_css_raw"] = template.HTML(jsonString(ui["custom_css"]))
+	ui["custom_css_raw"] = jsonString(ui["custom_css"])
 	data := map[string]any{
 		"view":    view,
 		"live":    live,

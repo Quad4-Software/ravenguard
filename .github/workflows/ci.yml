@@ -122,8 +122,6 @@ jobs:
           set -euo pipefail
           pnpm install --frozen-lockfile
           pnpm widget:test
-          pnpm admin:test
-          pnpm admin:typecheck
 
   e2e:
     name: Playwright e2e

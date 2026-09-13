@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"html/template"
 	"math"
-	"net/http"
 	"strconv"
 	"strings"
 	"time"
@@ -134,8 +133,8 @@ func roleRank(role string) int {
 	return 0
 }
 
-func roleAtLeast(role, min string) bool {
-	return roleRank(role) >= roleRank(min)
+func roleAtLeast(role, minRole string) bool {
+	return roleRank(role) >= roleRank(minRole)
 }
 
 func canWriteOps(role string) bool {
@@ -232,7 +231,7 @@ func moduleState(status PageData, key string) string {
 
 func sparklineSVG(values []float64, width, height int, stroke string) template.HTML {
 	if len(values) == 0 {
-		return template.HTML(fmt.Sprintf(`<svg viewBox="0 0 %d %d" width="%d" height="%d" class="sparkline"></svg>`, width, height, width, height))
+		return template.HTML(fmt.Sprintf(`<svg viewBox="0 0 %d %d" width="%d" height="%d" class="sparkline"></svg>`, width, height, width, height)) // #nosec G203 -- static svg attrs only
 	}
 	minV, maxV := values[0], values[0]
 	for _, v := range values {
@@ -254,7 +253,7 @@ func sparklineSVG(values []float64, width, height int, stroke string) template.H
 	}
 	polyline := strings.Join(points, " ")
 	area := polyline + fmt.Sprintf(" %d,%.1f 0,%.1f", width, float64(height), float64(height))
-	return template.HTML(fmt.Sprintf(
+	return template.HTML(fmt.Sprintf( // #nosec G203 -- numeric points and literal css color args
 		`<svg viewBox="0 0 %d %d" width="%d" height="%d" class="sparkline" preserveAspectRatio="none">`+
 			`<polygon points="%s" fill="color-mix(in srgb, %s 12%%, transparent)"/>`+
 			`<polyline points="%s" fill="none" stroke="%s" stroke-width="2" vector-effect="non-scaling-stroke"/>`+
@@ -269,7 +268,7 @@ func gaugeSVG(value float64, label string, display string, tone string, size int
 	r := rad * 0.7
 	circ := 2 * math.Pi * r
 	offset := circ * (1 - math.Min(1, math.Max(0, value/100)))
-	return template.HTML(fmt.Sprintf(
+	return template.HTML(fmt.Sprintf( // #nosec G203 -- numeric attrs, label/display escaped below
 		`<svg viewBox="0 0 %d %d" width="%d" height="%d" class="gauge">`+
 			`<circle cx="%.1f" cy="%.1f" r="%.1f" fill="none" stroke="var(--line)" stroke-width="%.1f"/>`+
 			`<circle cx="%.1f" cy="%.1f" r="%.1f" fill="none" stroke="var(--%s)" stroke-width="%.1f" stroke-dasharray="%.1f" stroke-dashoffset="%.1f" transform="rotate(-90 %.1f %.1f)"/>`+
@@ -279,16 +278,16 @@ func gaugeSVG(value float64, label string, display string, tone string, size int
 		size, size, size, size,
 		cx, cy, r, stroke*0.14,
 		cx, cy, r, tone, stroke*0.14, circ, offset, cx, cy,
-		cx, cy, display,
-		cx, cy+r*0.55, label))
+		cx, cy, template.HTMLEscapeString(display),
+		cx, cy+r*0.55, template.HTMLEscapeString(label)))
 }
 
-func barMeter(label string, value, max float64, display string) template.HTML {
-	if max <= 0 {
-		max = 1
+func barMeter(label string, value, maxVal float64, display string) template.HTML {
+	if maxVal <= 0 {
+		maxVal = 1
 	}
-	pct := math.Min(100, (value/max)*100)
-	return template.HTML(fmt.Sprintf(
+	pct := math.Min(100, (value/maxVal)*100)
+	return template.HTML(fmt.Sprintf( // #nosec G203 -- label/display escaped below
 		`<div class="meter">`+
 			`<div class="meter-head"><span class="meter-label">%s</span><span class="meter-value">%s</span></div>`+
 			`<div class="meter-track"><div class="meter-bar" style="width:%.1f%%"></div></div>`+
@@ -299,13 +298,6 @@ func barMeter(label string, value, max float64, display string) template.HTML {
 func toastHTML(kind, message string) string {
 	return fmt.Sprintf(`<div class="toast toast-%s" role="status" data-kind="%s"><span class="toast-msg">%s</span></div>`,
 		kind, kind, template.HTMLEscaper(message))
-}
-
-func jsonGet(m map[string]any, key string) any {
-	if m == nil {
-		return nil
-	}
-	return m[key]
 }
 
 func jsonString(v any) string {
@@ -352,27 +344,4 @@ func sampleLast(samples []map[string]any, key string) float64 {
 		return 0
 	}
 	return jsonNumber(samples[len(samples)-1][key])
-}
-
-func setFlash(w http.ResponseWriter, r *http.Request, kind, message string) {
-	http.SetCookie(w, &http.Cookie{
-		Name:     "rg_admin_flash",
-		Value:    kind + "|" + message,
-		Path:     "/",
-		MaxAge:   30,
-		HttpOnly: true,
-		SameSite: http.SameSiteStrictMode,
-	})
-}
-
-func getFlash(r *http.Request) (string, string) {
-	c, err := r.Cookie("rg_admin_flash")
-	if err != nil || c.Value == "" {
-		return "", ""
-	}
-	parts := strings.SplitN(c.Value, "|", 2)
-	if len(parts) != 2 {
-		return "", ""
-	}
-	return parts[0], parts[1]
 }
