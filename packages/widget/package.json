@@ -39,7 +39,7 @@
     "lint": "tsc --noEmit"
   },
   "devDependencies": {
-    "javascript-obfuscator": "5.0.1",
+    "javascript-obfuscator": "5.7.0",
     "tsup": "^8.5.0",
     "typescript": "~5.9.2",
     "vitest": "^4.1.11"
