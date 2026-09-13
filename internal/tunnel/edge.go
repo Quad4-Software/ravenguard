@@ -14,6 +14,8 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
+
+	"github.com/Quad4-Software/ravenguard/internal/logging"
 )
 
 // EdgeAcceptConfig configures the edge tunnel accept endpoint.
@@ -54,10 +56,10 @@ func (c EdgeAcceptConfig) HandleConnect(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	c.Registry.Replace(t.ConnectorID, sess)
-	slog.Info("tunnel connector online", "connector_id", t.ConnectorID)
+	slog.Info("tunnel connector online", "connector_id", logging.Safe(t.ConnectorID))
 	<-sess.sess.CloseChan()
 	c.Registry.Remove(t.ConnectorID, sess)
-	slog.Info("tunnel connector offline", "connector_id", t.ConnectorID)
+	slog.Info("tunnel connector offline", "connector_id", logging.Safe(t.ConnectorID))
 }
 
 // Allowlist maps upstream_id to local origin URL (http://127.0.0.1:port).

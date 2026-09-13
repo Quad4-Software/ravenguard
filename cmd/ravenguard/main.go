@@ -298,7 +298,7 @@ func runEdge(cfg config.Config, proxyOnly bool, configPath string, sentryRep *rg
 			if ray == "" {
 				ray = "unknown"
 			}
-			slog.Debug("upstream error", "err", err, "ray", ray)
+			slog.Debug("upstream error", "err", err, "ray", logging.Safe(ray))
 			sentryRep.CaptureUpstreamError(err, ray)
 			pages.RenderUpstream(w, ray)
 		},
@@ -310,7 +310,7 @@ func runEdge(cfg config.Config, proxyOnly bool, configPath string, sentryRep *rg
 		if ray == "" {
 			ray = "unknown"
 		}
-		slog.Debug("upstream error", "err", err, "ray", ray)
+		slog.Debug("upstream error", "err", err, "ray", logging.Safe(ray))
 		sentryRep.CaptureUpstreamError(err, ray)
 		pages.RenderUpstream(w, ray)
 	})

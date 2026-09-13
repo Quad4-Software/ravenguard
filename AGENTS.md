@@ -29,4 +29,4 @@ The `make admin` target is a no-op now. `make widget` is also a no-op because th
 go run ./cmd/ravenguard -admin-enabled -admin-listen 127.0.0.1:9090 -admin-data-dir .tmp/admin-data -log-level warn -config configs/ravenguard.toml -listen-http :18080
 ```
 
-The initial owner password is printed to the log and `admin-data-dir/initial_admin_password` on first start.
+The initial owner password is written to `admin-data-dir/initial_admin_password` on first start.

@@ -150,6 +150,9 @@ func (c *AbuseIPDBClient) ReportIP(ctx context.Context, ip, comment string, cate
 
 // FetchURL downloads bytes from a URL for ingest.
 func FetchURL(ctx context.Context, rawURL string, client *http.Client) ([]byte, string, error) {
+	if err := ValidateURL(rawURL); err != nil {
+		return nil, "", err
+	}
 	if client == nil {
 		client = http.DefaultClient
 	}

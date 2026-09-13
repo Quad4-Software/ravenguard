@@ -15,7 +15,7 @@ session_ttl = "12h"
 cookie_secure = "auto"
 ```
 
-On first start with an empty database, RavenGuard creates one owner. If bootstrap_password / RG_ADMIN_BOOTSTRAP_PASSWORD is unset, a random password is generated, printed once in the process log, and written to data_dir/initial_admin_password (mode 0600). That file is removed after the first successful login. Later starts do not recreate users.
+On first start with an empty database, RavenGuard creates one owner. If bootstrap_password / RG_ADMIN_BOOTSTRAP_PASSWORD is unset, a random password is generated and written to data_dir/initial_admin_password (mode 0600). That file is removed after the first successful login. Later starts do not recreate users.
 
 You can still set an explicit bootstrap password instead of auto-generation.
 

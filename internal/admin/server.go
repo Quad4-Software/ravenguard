@@ -95,12 +95,15 @@ func New(opts Options) (*Server, error) {
 		}
 		passFile := filepath.Join(opts.Config.DataDir, "initial_admin_password")
 		if err := os.WriteFile(passFile, []byte(pass+"\n"), 0o600); err != nil {
+			if generated {
+				_ = st.Close()
+				return nil, fmt.Errorf("write bootstrap password file %s: %w", passFile, err)
+			}
 			slog.Warn("admin bootstrap could not write password file", "path", passFile, "err", err)
 		}
 		if generated {
 			slog.Warn("admin initial owner created (change this password after login)",
 				"user", user,
-				"password", pass,
 				"password_file", passFile,
 			)
 		} else {

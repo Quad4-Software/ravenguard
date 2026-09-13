@@ -16,6 +16,8 @@ import (
 
 	"github.com/coder/websocket"
 	"github.com/coder/websocket/wsjson"
+
+	"github.com/Quad4-Software/ravenguard/internal/logging"
 )
 
 // TokenLookup resolves an enrollment token hash to a proxy record.
@@ -306,7 +308,7 @@ func (h *Hub) HandleConnect(w http.ResponseWriter, r *http.Request) {
 		displayName = name
 	}
 	if err := h.Lookup.BindFingerprint(proxyID, fpPayload.Fingerprint, displayName, fpPayload.Hostname); err != nil {
-		slog.Warn("agent bind fingerprint", "proxy_id", proxyID, "err", err)
+		slog.Warn("agent bind fingerprint", "proxy_id", logging.Safe(proxyID), "err", err)
 		_ = conn.Close(websocket.StatusPolicyViolation, "bind failed")
 		return
 	}
@@ -328,7 +330,7 @@ func (h *Hub) HandleConnect(w http.ResponseWriter, r *http.Request) {
 		closed:      make(chan struct{}),
 	}
 	h.Registry.Put(sess)
-	slog.Info("agent connected", "proxy_id", proxyID, "name", displayName, "version", sess.Version)
+	slog.Info("agent connected", "proxy_id", logging.Safe(proxyID), "name", logging.Safe(displayName), "version", logging.Safe(sess.Version))
 
 	if h.OnReady != nil {
 		go h.OnReady(context.Background(), sess)
@@ -337,7 +339,7 @@ func (h *Hub) HandleConnect(w http.ResponseWriter, r *http.Request) {
 	defer func() {
 		h.Registry.Remove(proxyID, sess)
 		sess.Close("bye")
-		slog.Info("agent disconnected", "proxy_id", proxyID)
+		slog.Info("agent disconnected", "proxy_id", logging.Safe(proxyID))
 	}()
 
 	for {

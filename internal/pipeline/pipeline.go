@@ -26,6 +26,7 @@ import (
 	"github.com/Quad4-Software/ravenguard/internal/detect"
 	"github.com/Quad4-Software/ravenguard/internal/health"
 	"github.com/Quad4-Software/ravenguard/internal/iputil"
+	"github.com/Quad4-Software/ravenguard/internal/logging"
 	"github.com/Quad4-Software/ravenguard/internal/ml"
 	"github.com/Quad4-Software/ravenguard/internal/privacy"
 	"github.com/Quad4-Software/ravenguard/internal/protect"
@@ -1521,7 +1522,7 @@ func (h *Handler) handleChallengePOST(w http.ResponseWriter, r *http.Request) {
 		// already bound to a different client.
 		if h.reqLog != nil {
 			if existing, ok := h.reqLog.GetByRay(rayFromBody); ok && existing.BindID != "" && existing.BindID != bindID {
-				slog.Debug("challenge ray spoof ignored", "ray", ray, "spoof", rayFromBody)
+				slog.Debug("challenge ray spoof ignored", "ray", logging.Safe(ray), "spoof", logging.Safe(rayFromBody))
 			} else {
 				ray = rayFromBody
 				h.setRayHeader(w, ray)
@@ -1584,7 +1585,7 @@ func (h *Handler) handleChallengePOST(w http.ResponseWriter, r *http.Request) {
 				h.prot.Strike(bindID)
 			}
 			h.chal.RememberChallenge(bindID, challenge.RiskHigh, challenge.GateInteractive)
-			slog.Debug("challenge env refuse", "ray", ray, "ip", h.logIP(ipStr), "reasons", verdict.Reasons)
+			slog.Debug("challenge env refuse", "ray", logging.Safe(ray), "ip", h.logIP(ipStr), "reasons", verdict.Reasons)
 			host := stripPort(r.Host)
 			ua := r.Header.Get("User-Agent")
 			if (h.beh != nil && h.beh.StrikesExceeded(bindID)) || (h.prot != nil && h.prot.Banned(bindID)) {
