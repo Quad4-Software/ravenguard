@@ -11,17 +11,18 @@ require (
 	github.com/elastic/go-seccomp-bpf v1.6.0
 	github.com/getkin/kin-openapi v0.149.0
 	github.com/getsentry/sentry-go v0.49.0
-	github.com/hashicorp/yamux v0.1.2
 	github.com/jcchavezs/mergefs v0.1.1
 	github.com/landlock-lsm/go-landlock v0.10.0
 	github.com/mholt/acmez/v3 v3.1.6
 	github.com/quic-go/quic-go v0.62.0
+	github.com/slackhq/nebula v1.11.1
 	golang.org/x/crypto v0.56.0
 	golang.org/x/sync v0.22.0
 	modernc.org/sqlite v1.57.0
 )
 
 require (
+	filippo.io/bigmod v0.1.0 // indirect
 	github.com/caddyserver/zerossl v0.1.5 // indirect
 	github.com/corazawaf/libinjection-go v0.3.2 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect

@@ -35,7 +35,7 @@ Optional [admin control plane](./admin.md): separate listen address, multi-user 
 - For edge TLS: public DNS pointing at this host and open ports 80/443
 - Or a reverse proxy that terminates TLS and forwards the client address
 - An upstream origin on TCP or a unix socket
-- For fleet mode: a private overlay (Tailscale, Netbird, or WireGuard) for the hub
+- For fleet mode: the Nebula overlay (see [Deployment](./deployment.md#nebula-overlay)) for the hub
 
 ## Build and run
 
@@ -51,7 +51,6 @@ make build
 | all (default) | Combined WAF and optional admin |
 | hub | Admin SPA, SQLite, agent accept |
 | proxy | Public WAF and outbound agent to the hub |
-| connector | Outbound tunnel dialer to an edge (no public WAF) |
 
 Set the mode with the first CLI argument (ravenguard hub) or RG_MODE when the process manager cannot set a custom command:
 

@@ -5,7 +5,6 @@ package router
 
 import (
 	"context"
-	"net"
 	"net/http"
 	"strings"
 	"sync"
@@ -79,7 +78,6 @@ type Table struct {
 	fallback       http.Handler
 	fallbackHealth *health.Checker
 	errHandler     func(http.ResponseWriter, *http.Request, error)
-	tunnelDial     func(ctx context.Context, connectorID, upstreamID string) (net.Conn, error)
 	ctx            context.Context
 	cancel         context.CancelFunc
 }
@@ -101,13 +99,6 @@ func New(parent context.Context) *Table {
 func (t *Table) SetErrorHandler(fn func(http.ResponseWriter, *http.Request, error)) {
 	t.mu.Lock()
 	t.errHandler = fn
-	t.mu.Unlock()
-}
-
-// SetTunnelDial registers the dialer used for tunnel:// upstreams.
-func (t *Table) SetTunnelDial(fn func(ctx context.Context, connectorID, upstreamID string) (net.Conn, error)) {
-	t.mu.Lock()
-	t.tunnelDial = fn
 	t.mu.Unlock()
 }
 
@@ -260,7 +251,6 @@ func (t *Table) buildProxy(up Upstream, strip bool, prefix string) (*proxy.Proxy
 	}
 	t.mu.RLock()
 	errHandler := t.errHandler
-	tunnelDial := t.tunnelDial
 	t.mu.RUnlock()
 
 	tlsCfg, err := proxy.BuildTLSClientConfig(up.TLSCAFile, up.TLSClientCertFile, up.TLSClientKeyFile, up.InsecureSkipVerify)
@@ -282,22 +272,13 @@ func (t *Table) buildProxy(up Upstream, strip bool, prefix string) (*proxy.Proxy
 		AllowHTTP1:            up.AllowHTTP1,
 		TLSClientConfig:       tlsCfg,
 	}
-	if connectorID, upstreamID, ok := proxy.TunnelParts(target); ok {
-		if tunnelDial == nil {
-			return nil, nil, errTunnelDialUnavailable
-		}
-		cid, uid := connectorID, upstreamID
-		cfg.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
-			return tunnelDial(ctx, cid, uid)
-		}
-	}
 	if strip && prefix != "" && prefix != "/" {
 		cfg.StripPrefix = strings.TrimSuffix(prefix, "/")
 	}
 	rp := proxy.New(cfg)
 
 	var hc *health.Checker
-	if up.HealthEnabled && !strings.EqualFold(target.Scheme, "tunnel") {
+	if up.HealthEnabled {
 		hc = health.New(health.Config{
 			Enabled:      true,
 			URL:          target,
@@ -310,8 +291,6 @@ func (t *Table) buildProxy(up Upstream, strip bool, prefix string) (*proxy.Proxy
 	}
 	return rp, hc, nil
 }
-
-var errTunnelDialUnavailable = errString("tunnel dialer not configured")
 
 type errString string
 

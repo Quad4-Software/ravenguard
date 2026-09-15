@@ -33,9 +33,9 @@ Full example: [configs/ravenguard.toml](https://github.com/Quad4-Software/raveng
 | -admin-enabled | RG_ADMIN_ENABLED | Enable admin control plane |
 | -admin-listen | RG_ADMIN_LISTEN | Admin HTTP bind (default 127.0.0.1:9090) |
 | -admin-data-dir | RG_ADMIN_DATA_DIR | Admin SQLite directory |
-| (first arg) | RG_MODE | Process mode: all (default), hub, proxy, or connector |
+| (first arg) | RG_MODE | Process mode: all (default), hub, or proxy |
 
-Set the mode with ravenguard hub / ravenguard proxy / ravenguard connector, or with RG_MODE when the process manager cannot set a custom command. CLI mode wins over the env var. Pair with RG_CONFIG when the hub uses a different TOML than the edge. See [Admin](./admin.md) for roles, bootstrap, API tokens, fleet enrollment, and reverse-proxying the SPA.
+Set the mode with ravenguard hub / ravenguard proxy, or with RG_MODE when the process manager cannot set a custom command. CLI mode wins over the env var. Pair with RG_CONFIG when the hub uses a different TOML than the edge. See [Admin](./admin.md) for roles, bootstrap, API tokens, fleet enrollment, and reverse-proxying the SPA.
 
 ## Hub and agent
 
@@ -380,21 +380,28 @@ enabled = false
 mode = "shadow"
 ```
 
-## Tunnel (connector)
+## Nebula
 
-Edge accept and connector dial share the tunnel table. See [Deployment](./deployment.md#tunnel-connector-private-origin).
+Hub-side overlay PKI. The hub keeps the CA under admin.data_dir/nebula by default and signs host certs from the admin UI or API. See [Deployment](./deployment.md#nebula-overlay).
 
 ```toml
-[tunnel]
-# enabled = true
-# ticket_key = ""
-# edge_id = "edge-1"
-# edge_url = "wss://edge.example.com/api/v1/tunnel/connect"
-# ticket = ""
-# require_tls = true
-# [tunnel.origins]
-# web = "http://127.0.0.1:8080"
+[nebula]
+# cidr = "10.42.0.0/16"          # overlay address pool; empty disables
+# ca_crt = ""                    # default <data_dir>/nebula/ca.crt
+# ca_key = ""                    # default <data_dir>/nebula/ca.key
+# cert_ttl = "720h"              # host cert lifetime, capped at CA validity
+# groups = ["edges"]             # default groups for issued host certs
+# cert_version = 2               # 1 or 2; v2 supports IPv6 and multiple networks
+# lighthouse_ips = ["10.42.0.1"]
+# [nebula.static_host_map]
+# "10.42.0.1" = ["203.0.113.10:4242"]
 ```
+
+| Flag | Env | Meaning |
+|------|-----|---------|
+| nebula.cidr | RG_NEBULA_CIDR | IPv4 overlay pool used for host IP allocation |
+| nebula.ca_crt | RG_NEBULA_CA_CRT | CA certificate path |
+| nebula.ca_key | RG_NEBULA_CA_KEY | CA private key path (hub only, never served) |
 
 ## Privacy and logging
 

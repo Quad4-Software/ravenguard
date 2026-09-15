@@ -8,7 +8,6 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"log/slog"
-	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -50,7 +49,6 @@ import (
 	"github.com/Quad4-Software/ravenguard/internal/threatshare"
 	"github.com/Quad4-Software/ravenguard/internal/tlsacme"
 	"github.com/Quad4-Software/ravenguard/internal/tlscerts"
-	"github.com/Quad4-Software/ravenguard/internal/tunnel"
 	"github.com/Quad4-Software/ravenguard/internal/ui"
 	"github.com/Quad4-Software/ravenguard/internal/version"
 )
@@ -92,11 +90,6 @@ func main() {
 		runHub(cfg)
 		return
 	}
-	if mode == "connector" {
-		runConnector(cfg)
-		return
-	}
-
 	runEdge(cfg, mode == "proxy", flags.ConfigPath, sentryRep)
 }
 
@@ -317,12 +310,6 @@ func runEdge(cfg config.Config, proxyOnly bool, configPath string, sentryRep *rg
 	routeTable.SetFallback(up, hc)
 	defer routeTable.Close()
 
-	tunnelReg := tunnel.NewRegistry()
-	routeTable.SetTunnelDial(func(c context.Context, connectorID, upstreamID string) (net.Conn, error) {
-		_ = c
-		return tunnelReg.Dial(connectorID, upstreamID)
-	})
-
 	accessSecret := []byte(cfg.Challenge.Secret)
 	if len(accessSecret) == 0 {
 		accessSecret = []byte(hashSecret)
@@ -477,23 +464,6 @@ func runEdge(cfg config.Config, proxyOnly bool, configPath string, sentryRep *rg
 	}
 
 	handler := sentryRep.Wrap(pipe)
-	if cfg.Tunnel.Enabled || cfg.Tunnel.TicketKey != "" {
-		key := []byte(cfg.Tunnel.TicketKey)
-		if len(key) == 0 {
-			key = []byte(cfg.Challenge.Secret)
-		}
-		accept := tunnel.EdgeAcceptConfig{
-			Registry:   tunnelReg,
-			TicketKey:  key,
-			EdgeID:     cfg.Tunnel.EdgeID,
-			RequireTLS: cfg.Tunnel.RequireTLS,
-		}
-		root := http.NewServeMux()
-		root.HandleFunc(tunnel.ConnectPath, accept.HandleConnect)
-		root.Handle("/", handler)
-		handler = root
-		slog.Info("tunnel accept enabled", "path", tunnel.ConnectPath)
-	}
 
 	sbCfg, err := sandbox.FromFileConfig(
 		cfg.Sandbox.Mode,

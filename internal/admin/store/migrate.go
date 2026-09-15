@@ -209,6 +209,22 @@ var migrations = []string{
 	// admin checkbox could never set the flag on, so these rows are accidental.
 	`UPDATE upstreams SET allow_http1 = 1 WHERE allow_http1 = 0
 		AND (url LIKE 'http://%' OR url LIKE 'ws://%' OR url LIKE 'unix:%' OR url LIKE 'tunnel:%')`,
+	// The connector tunnel is gone; tunnel:// upstreams can never be dialed.
+	`DELETE FROM routes WHERE upstream_id IN (SELECT id FROM upstreams WHERE url LIKE 'tunnel:%')`,
+	`DELETE FROM upstreams WHERE url LIKE 'tunnel:%'`,
+	`CREATE TABLE IF NOT EXISTS nebula_hosts (
+		id TEXT PRIMARY KEY,
+		name TEXT NOT NULL,
+		ip TEXT NOT NULL UNIQUE,
+		fingerprint TEXT NOT NULL DEFAULT '',
+		groups_json TEXT NOT NULL DEFAULT '[]',
+		cert_pem TEXT NOT NULL,
+		created_at TEXT NOT NULL,
+		expires_at TEXT NOT NULL,
+		revoked INTEGER NOT NULL DEFAULT 0,
+		revoked_at TEXT
+	)`,
+	`CREATE INDEX IF NOT EXISTS idx_nebula_hosts_fp ON nebula_hosts(fingerprint)`,
 }
 
 func migrate(db *sql.DB) error {

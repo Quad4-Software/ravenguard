@@ -162,6 +162,7 @@ type navLink struct {
 var links = []navLink{
 	{"/", "Overview", ""},
 	{"/proxies", "Proxies", ""},
+	{"/nebula", "Nebula", ""},
 	{"/migrations", "Move services", ""},
 	{"/upstreams", "Upstreams", ""},
 	{"/routes", "Routes", ""},

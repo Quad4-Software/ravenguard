@@ -1943,3 +1943,100 @@ func (u *UI) handleMigrationsPost(w http.ResponseWriter, r *http.Request, user *
 		u.renderError(w, r, http.StatusBadRequest, "unknown action")
 	}
 }
+
+func (u *UI) handleNebula(w http.ResponseWriter, r *http.Request) {
+	user, csrf, ok := u.authed(w, r)
+	if !ok {
+		return
+	}
+	if r.Method == http.MethodPost {
+		if err := r.ParseForm(); err != nil {
+			u.renderError(w, r, http.StatusBadRequest, "invalid form")
+			return
+		}
+		u.handleNebulaPost(w, r, user, csrf)
+		return
+	}
+	u.renderNebula(w, r, user, csrf, nil)
+}
+
+func (u *UI) renderNebula(w http.ResponseWriter, r *http.Request, user *User, csrf string, extra map[string]any) {
+	status, err := u.getMap(r, "/nebula")
+	if err != nil {
+		u.renderError(w, r, http.StatusBadGateway, err.Error())
+		return
+	}
+	hosts, err := u.getMap(r, "/nebula/hosts")
+	if err != nil {
+		u.renderError(w, r, http.StatusBadGateway, err.Error())
+		return
+	}
+	blocklist, err := u.getMap(r, "/nebula/blocklist")
+	if err != nil {
+		u.renderError(w, r, http.StatusBadGateway, err.Error())
+		return
+	}
+	data := map[string]any{
+		"status":       status,
+		"hosts":        hosts["hosts"],
+		"fingerprints": blocklist["fingerprints"],
+	}
+	for k, v := range extra {
+		data[k] = v
+	}
+	u.render(w, r, "nebula", PageData{User: user, CSRF: csrf, PageTitle: "Nebula overlay", Data: data})
+}
+
+func (u *UI) handleNebulaPost(w http.ResponseWriter, r *http.Request, user *User, csrf string) {
+	action := r.FormValue("action")
+	undo := u.csrfHeader(r, csrf)
+	defer undo()
+
+	switch action {
+	case "init_ca":
+		name := strings.TrimSpace(r.FormValue("name"))
+		status, resp, _, err := u.apiPOST(r, "/nebula/ca", map[string]any{"name": name})
+		if err != nil || status != http.StatusOK {
+			u.failAPI(w, r, status, resp)
+			return
+		}
+		u.renderNebula(w, r, user, csrf, map[string]any{"notice": "ca created"})
+	case "issue":
+		name := strings.TrimSpace(r.FormValue("name"))
+		if name == "" {
+			u.renderError(w, r, http.StatusBadRequest, "name required")
+			return
+		}
+		payload := map[string]any{
+			"name":   name,
+			"ip":     strings.TrimSpace(r.FormValue("ip")),
+			"groups": parseHosts(r.FormValue("groups")),
+			"ttl":    strings.TrimSpace(r.FormValue("ttl")),
+		}
+		status, resp, _, err := u.apiPOST(r, "/nebula/hosts", payload)
+		if err != nil || status != http.StatusOK {
+			u.failAPI(w, r, status, resp)
+			return
+		}
+		var issued map[string]any
+		if json.Unmarshal(resp, &issued) != nil {
+			u.renderError(w, r, http.StatusBadGateway, "invalid issue response")
+			return
+		}
+		u.renderNebula(w, r, user, csrf, map[string]any{"issued": issued})
+	case "revoke":
+		id := r.FormValue("id")
+		if id == "" {
+			u.renderError(w, r, http.StatusBadRequest, "id required")
+			return
+		}
+		status, resp, _, err := u.apiDELETE(r, "/nebula/hosts/"+id)
+		if err != nil || status != http.StatusOK {
+			u.failAPI(w, r, status, resp)
+			return
+		}
+		u.renderNebula(w, r, user, csrf, map[string]any{"notice": "host revoked"})
+	default:
+		u.renderError(w, r, http.StatusBadRequest, "unknown action")
+	}
+}

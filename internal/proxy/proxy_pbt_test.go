@@ -8,7 +8,6 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
-	"errors"
 	"fmt"
 	"io"
 	"math/rand/v2"
@@ -40,14 +39,6 @@ func parseUpstreamURLRef(raw string) (*url.URL, error) {
 	if after, ok := strings.CutPrefix(raw, "unix:"); ok {
 		return &url.URL{Scheme: "unix", Path: after}, nil
 	}
-	if after, ok := strings.CutPrefix(raw, "tunnel://"); ok {
-		after = strings.TrimSpace(after)
-		connectorID, upstreamID, cutOK := strings.Cut(after, "/")
-		if !cutOK || connectorID == "" || upstreamID == "" {
-			return nil, &url.Error{Op: "parse", URL: raw, Err: errors.New("tunnel:// requires connector_id/upstream_id")}
-		}
-		return &url.URL{Scheme: "tunnel", Host: connectorID, Path: "/" + upstreamID}, nil
-	}
 	if after, ok := strings.CutPrefix(raw, "h3://"); ok {
 		return &url.URL{Scheme: "h3", Host: after}, nil
 	}
@@ -72,11 +63,6 @@ func normalizeTargetRef(u *url.URL) *url.URL {
 		out.Scheme = "https"
 	case "h3", "http3", "quic":
 		out.Scheme = "https"
-	case "tunnel":
-		out.Scheme = "http"
-		out.Host = "tunnel.local"
-		out.Path = ""
-		out.Opaque = ""
 	}
 	return &out
 }
@@ -146,8 +132,7 @@ func compareTLSConfigs(t *testing.T, got, want *tls.Config) {
 func hasSpecialPrefix(raw string) bool {
 	return strings.HasPrefix(raw, "unix://") ||
 		strings.HasPrefix(raw, "unix:") ||
-		strings.HasPrefix(raw, "h3://") ||
-		strings.HasPrefix(raw, "tunnel://")
+		strings.HasPrefix(raw, "h3://")
 }
 
 func token(r *rand.Rand) string {
@@ -188,12 +173,12 @@ func generateRawURL(r *rand.Rand) string {
 		case 2:
 			return "h3://" + token(r) + ".example:" + strconv.Itoa(r.IntN(65536))
 		case 3:
-			return "tunnel://" + token(r) + "/" + token(r)
+			return "ws://" + token(r) + ".example/" + token(r)
 		}
 	case 6, 7:
 		adversarial := []string{
 			"", "://", "http://", "https://", "h3://", "unix://", "unix:",
-			"tunnel://", "tunnel://a", "tunnel:///b", "http://[",
+			"http://[",
 			"http://host:abc", "http://host:99999", "%", " ",
 			"foo://bar/baz", "http://host:-1",
 		}
@@ -268,7 +253,7 @@ func TestNormalizeTargetPBT(t *testing.T) {
 				}
 
 				// Host preservation oracle.
-				if u.Host != "" && !strings.EqualFold(u.Scheme, "unix") && !strings.EqualFold(u.Scheme, "tunnel") {
+				if u.Host != "" && !strings.EqualFold(u.Scheme, "unix") {
 					if got.Host != u.Host {
 						t.Fatalf("host not preserved for %q: got=%q want=%q", raw, got.Host, u.Host)
 					}
@@ -279,10 +264,6 @@ func TestNormalizeTargetPBT(t *testing.T) {
 				case "unix":
 					if got.Host != "localhost" {
 						t.Fatalf("unix host: got=%q want=localhost", got.Host)
-					}
-				case "tunnel":
-					if got.Host != "tunnel.local" {
-						t.Fatalf("tunnel host: got=%q want=tunnel.local", got.Host)
 					}
 				}
 			}
@@ -308,7 +289,6 @@ func TestNormalizeTargetNilAndDefaults(t *testing.T) {
 		{"http3://origin.example", "https", "origin.example"},
 		{"quic://origin.example", "https", "origin.example"},
 		{"unix:///tmp/app.sock", "http", "localhost"},
-		{"tunnel://conn/up", "http", "tunnel.local"},
 	}
 	for _, tc := range cases {
 		u, err := proxy.ParseUpstreamURL(tc.raw)

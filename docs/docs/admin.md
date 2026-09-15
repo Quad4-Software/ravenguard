@@ -114,6 +114,11 @@ Base path: `{base_path}/api/v1`
 | POST | `/migrations/{id}/prep` | prep destination (routes + certs) |
 | POST | `/migrations/{id}/complete` | finish cutover after DNS |
 | POST | `/migrations/{id}/abort` | abort in-progress migration |
+| GET | /nebula | overlay status, CA info (cert only, never key) |
+| POST | /nebula/ca | create the overlay CA (one time, ops role) |
+| GET/POST | /nebula/hosts | list / issue host cert (key shown once) |
+| GET/DELETE | `/nebula/hosts/{id}` | host detail / revoke into blocklist |
+| GET | /nebula/blocklist | revoked cert fingerprints for pki.blocklist |
 
 Optional JSON body for POST `/certs/{host}/generate`: validity and dns_names. Default DNS name is the path host. Generated certs appear with source selfsigned and can be deleted like manual uploads.
 
@@ -149,14 +154,13 @@ RavenGuard can run as separate processes:
 |------|------|
 | hub | Admin SPA, SQLite, agent WebSocket accept (no public WAF) |
 | proxy | Public WAF and outbound agent to the hub |
-| connector | Outbound tunnel dialer to an edge (no public WAF) |
 | all | Combined single-process mode (default) |
 
-Start with ravenguard hub, ravenguard proxy, ravenguard connector, or set RG_MODE when the process manager cannot pass a custom command. Optional RG_CONFIG selects the TOML path.
+Start with ravenguard hub or ravenguard proxy, or set RG_MODE when the process manager cannot pass a custom command. Optional RG_CONFIG selects the TOML path.
 
 **Threat share:** the Bans page lists fleet ledger entries (redacted). Creating a ban or posting to /api/v1/threat fans out to online proxies. The **Threat intel** page exports STIX/CSV, ingests feeds, and syncs AbuseIPDB or MISP into that ledger. Config saves also update fleet_defaults so privacy bind secrets stay aligned across edges.
 
-Preferred deploy keeps the hub on a private overlay (Tailscale, Netbird, or WireGuard). Bind admin.listen to the overlay IP only. Proxies set agent.hub_url to that address. Operators open the panel from a machine on the same mesh. Nothing management-facing needs a public A record.
+Preferred deploy keeps the hub on the Nebula overlay. Bind admin.listen to the overlay IP only. Proxies set agent.hub_url to that address. Operators open the panel from a machine on the same mesh. Nothing management-facing needs a public A record. The Nebula page on the hub issues and revokes overlay host certificates; see [Deployment](./deployment.md#nebula-overlay).
 
 ### Hub config
 

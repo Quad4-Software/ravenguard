@@ -128,7 +128,7 @@ func New(cfg Config) *Proxy {
 
 	proto := normalizeProtocol(cfg.Protocol)
 	if cfg.DialContext != nil || IsUnix(cfg.Target) {
-		// Tunnels and Unix sockets cannot carry QUIC.
+		// Custom dialers and Unix sockets cannot carry QUIC.
 		if proto == ProtocolH3 {
 			proto = ProtocolH2
 		}
@@ -749,11 +749,6 @@ func NormalizeTarget(u *url.URL) *url.URL {
 		out.Scheme = "https"
 	case "h3", "http3", "quic":
 		out.Scheme = "https"
-	case "tunnel":
-		out.Scheme = "http"
-		out.Host = "tunnel.local"
-		out.Path = ""
-		out.Opaque = ""
 	}
 	return &out
 }
@@ -779,38 +774,15 @@ func ParseUpstreamURL(raw string) (*url.URL, error) {
 		path := after
 		return &url.URL{Scheme: "unix", Path: path}, nil
 	}
-	if after, ok := strings.CutPrefix(raw, "tunnel://"); ok {
-		after = strings.TrimSpace(after)
-		connectorID, upstreamID, cutOK := strings.Cut(after, "/")
-		if !cutOK || connectorID == "" || upstreamID == "" {
-			return nil, &url.Error{Op: "parse", URL: raw, Err: errBadTunnelURL}
-		}
-		return &url.URL{Scheme: "tunnel", Host: connectorID, Path: "/" + upstreamID}, nil
-	}
 	if after, ok := strings.CutPrefix(raw, "h3://"); ok {
 		return &url.URL{Scheme: "h3", Host: after}, nil
 	}
 	return url.Parse(raw)
 }
 
-var errBadTunnelURL = errString("tunnel:// requires connector_id/upstream_id")
-
 type errString string
 
 func (e errString) Error() string { return string(e) }
-
-// TunnelParts extracts connector and upstream ids from a tunnel:// URL.
-func TunnelParts(u *url.URL) (connectorID, upstreamID string, ok bool) {
-	if u == nil || !strings.EqualFold(u.Scheme, "tunnel") {
-		return "", "", false
-	}
-	connectorID = u.Host
-	upstreamID = strings.TrimPrefix(u.Path, "/")
-	if connectorID == "" || upstreamID == "" {
-		return "", "", false
-	}
-	return connectorID, upstreamID, true
-}
 
 // BuildTLSClientConfig creates a TLS config from file paths.
 func BuildTLSClientConfig(caFile, clientCertFile, clientKeyFile string, insecureSkipVerify bool) (*tls.Config, error) {

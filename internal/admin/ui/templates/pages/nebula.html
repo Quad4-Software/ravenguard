@@ -1,0 +1,126 @@
+{{define "nebula"}}{{template "layout" .}}{{end}}
+
+{{define "nebula-content"}}{{template "shell" .}}{{end}}
+
+{{define "nebula-fragment"}}
+<main id="main" class="shell-main">
+  {{template "nebula-main" .}}
+</main>
+{{end}}
+
+{{define "nebula-main"}}
+{{$base := .BasePath}}
+{{$st := .Data.status}}
+<section class="page-head">
+  <div>
+    <h1 class="page-title">Nebula overlay</h1>
+    <p class="page-sub">Issue host certificates for the fleet overlay. Nebula runs as a separate daemon on each host.</p>
+  </div>
+</section>
+
+{{if .Data.notice}}<p class="alert alert-loading">{{.Data.notice}}</p>{{end}}
+
+<section class="section">
+  <h2 class="page-sub">Overlay status</h2>
+  <div class="table-wrap">
+    <table>
+      <tbody>
+        <tr><td class="muted">Address pool (nebula.cidr)</td><td class="mono">{{or $st.cidr "not configured"}}</td></tr>
+        <tr><td class="muted">CA</td><td class="mono">{{if $st.ca_present}}{{$st.ca_name}} ({{$st.ca_fingerprint}}){{else}}not initialized{{end}}</td></tr>
+        {{if $st.ca_present}}<tr><td class="muted">CA expires</td><td class="mono">{{$st.ca_not_after}}</td></tr>{{end}}
+        <tr><td class="muted">Hosts</td><td class="mono">{{or $st.hosts_active 0}} active, {{or $st.hosts_revoked 0}} revoked</td></tr>
+        <tr><td class="muted">Default groups</td><td class="mono">{{$st.groups}}</td></tr>
+        <tr><td class="muted">Lighthouses</td><td class="mono">{{$st.lighthouse_ips}}</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+{{if not $st.ca_present}}
+<section class="section">
+  <h2 class="page-sub">Initialize CA</h2>
+  <p class="muted">Creates the overlay certificate authority under admin data dir. The CA key signs every host cert; keep a backup.</p>
+  <form method="post" action="{{$base}}/nebula" hx-post="{{$base}}/nebula" hx-target="#main" hx-swap="outerHTML">
+    <input type="hidden" name="action" value="init_ca">
+    <div class="field-row">
+      <div class="field"><label>CA name</label><input name="name" placeholder="ravenguard"></div>
+      <button class="btn btn-primary">Create CA</button>
+    </div>
+  </form>
+</section>
+{{end}}
+
+{{with index .Data "issued"}}
+<section class="section">
+  <p class="alert alert-loading">Host cert issued for {{.name}} at {{.ip}}. Copy the key now; it is shown only once.</p>
+  <div class="field"><label>ca.crt</label><textarea class="mono" rows="6" readonly>{{.ca_pem}}</textarea></div>
+  <div class="field"><label>host.crt</label><textarea class="mono" rows="8" readonly>{{.cert_pem}}</textarea></div>
+  <div class="field"><label>host.key</label><textarea class="mono" rows="4" readonly>{{.key_pem}}</textarea></div>
+  <div class="field"><label>config.yml (starter)</label><textarea class="mono" rows="16" readonly>{{.config_yaml}}</textarea></div>
+</section>
+{{end}}
+
+{{if $st.ca_present}}
+<section class="section">
+  <h2 class="page-sub">Issue host certificate</h2>
+  <form method="post" action="{{$base}}/nebula" hx-post="{{$base}}/nebula" hx-target="#main" hx-swap="outerHTML">
+    <input type="hidden" name="action" value="issue">
+    <div class="field-row">
+      <div class="field"><label>Name</label><input name="name" required placeholder="edge-1"></div>
+      <div class="field"><label>Overlay IP (optional)</label><input name="ip" placeholder="auto"></div>
+      <div class="field"><label>Groups (comma separated)</label><input name="groups" placeholder="edges"></div>
+      <div class="field"><label>Validity</label><input name="ttl" placeholder="8760h"></div>
+      <button class="btn btn-primary">Issue</button>
+    </div>
+  </form>
+</section>
+{{end}}
+
+<section class="section">
+  <h2 class="page-sub">Issued hosts</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Name</th><th>Overlay IP</th><th>Groups</th><th>Expires</th><th>Status</th><th></th></tr></thead>
+      <tbody>
+      {{range $h := .Data.hosts}}
+        <tr>
+          <td class="mono">{{$h.name}}</td>
+          <td class="mono">{{$h.ip}}</td>
+          <td class="mono">{{$h.groups}}</td>
+          <td class="mono">{{$h.expires_at}}</td>
+          <td>{{if $h.revoked}}<span class="badge">revoked</span>{{else}}active{{end}}</td>
+          <td class="actions">
+            {{if not $h.revoked}}
+            <form method="post" action="{{$base}}/nebula" hx-post="{{$base}}/nebula" hx-target="#main" hx-swap="outerHTML">
+              <input type="hidden" name="action" value="revoke">
+              <input type="hidden" name="id" value="{{$h.id}}">
+              <button class="btn btn-sm btn-danger">Revoke</button>
+            </form>
+            {{end}}
+          </td>
+        </tr>
+      {{else}}
+        <tr><td colspan="6" class="muted">No hosts issued</td></tr>
+      {{end}}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="section">
+  <h2 class="page-sub">Certificate blocklist</h2>
+  <p class="muted">Add these fingerprints to pki.blocklist on every host to drop revoked tunnels.</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Fingerprint</th></tr></thead>
+      <tbody>
+      {{range $fp := .Data.fingerprints}}
+        <tr><td class="mono">{{$fp}}</td></tr>
+      {{else}}
+        <tr><td class="muted">Empty</td></tr>
+      {{end}}
+      </tbody>
+    </table>
+  </div>
+</section>
+{{end}}

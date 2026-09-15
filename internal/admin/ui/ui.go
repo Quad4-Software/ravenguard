@@ -145,6 +145,8 @@ func (u *UI) route(w http.ResponseWriter, r *http.Request) {
 		u.handleRequests(w, r)
 	case strings.HasPrefix(p, "/proxies"):
 		u.handleProxies(w, r)
+	case strings.HasPrefix(p, "/nebula"):
+		u.handleNebula(w, r)
 	case strings.HasPrefix(p, "/migrations"):
 		u.handleMigrations(w, r)
 	case p == "/users":

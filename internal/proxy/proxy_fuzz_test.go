@@ -33,14 +33,6 @@ func parseUpstreamURLRef(raw string) (*url.URL, error) {
 	if after, ok := strings.CutPrefix(raw, "unix:"); ok {
 		return &url.URL{Scheme: "unix", Path: after}, nil
 	}
-	if after, ok := strings.CutPrefix(raw, "tunnel://"); ok {
-		after = strings.TrimSpace(after)
-		connectorID, upstreamID, cutOK := strings.Cut(after, "/")
-		if !cutOK || connectorID == "" || upstreamID == "" {
-			return nil, &url.Error{Op: "parse", URL: raw, Err: errors.New("tunnel:// requires connector_id/upstream_id")}
-		}
-		return &url.URL{Scheme: "tunnel", Host: connectorID, Path: "/" + upstreamID}, nil
-	}
 	if after, ok := strings.CutPrefix(raw, "h3://"); ok {
 		return &url.URL{Scheme: "h3", Host: after}, nil
 	}
@@ -65,11 +57,6 @@ func normalizeTargetRef(u *url.URL) *url.URL {
 		out.Scheme = "https"
 	case "h3", "http3", "quic":
 		out.Scheme = "https"
-	case "tunnel":
-		out.Scheme = "http"
-		out.Host = "tunnel.local"
-		out.Path = ""
-		out.Opaque = ""
 	}
 	return &out
 }
@@ -139,8 +126,7 @@ func compareTLSConfigs(t *testing.T, got, want *tls.Config) {
 func hasSpecialPrefix(raw string) bool {
 	return strings.HasPrefix(raw, "unix://") ||
 		strings.HasPrefix(raw, "unix:") ||
-		strings.HasPrefix(raw, "h3://") ||
-		strings.HasPrefix(raw, "tunnel://")
+		strings.HasPrefix(raw, "h3://")
 }
 
 func FuzzParseUpstreamURL(f *testing.F) {
@@ -157,10 +143,6 @@ func FuzzParseUpstreamURL(f *testing.F) {
 		"unix:///tmp/app.sock",
 		"unix:/tmp/app.sock",
 		"unix:",
-		"tunnel://connector/upstream",
-		"tunnel://",
-		"tunnel://a",
-		"tunnel:///b",
 		"foo://bar/baz",
 		"http://[",
 		"http://host:abc",
@@ -218,7 +200,6 @@ func FuzzNormalizeTarget(f *testing.F) {
 		"http3://origin.example",
 		"quic://origin.example",
 		"unix:///tmp/app.sock",
-		"tunnel://connector/upstream",
 		"foo://bar/baz",
 		"",
 	}
@@ -245,7 +226,7 @@ func FuzzNormalizeTarget(f *testing.F) {
 		}
 
 		// Host preservation oracle.
-		if u.Host != "" && !strings.EqualFold(u.Scheme, "unix") && !strings.EqualFold(u.Scheme, "tunnel") {
+		if u.Host != "" && !strings.EqualFold(u.Scheme, "unix") {
 			if got.Host != u.Host {
 				t.Fatalf("host not preserved for %q: got=%q want=%q", raw, got.Host, u.Host)
 			}

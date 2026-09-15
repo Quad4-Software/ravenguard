@@ -6,6 +6,7 @@ package config
 import (
 	"flag"
 	"fmt"
+	"net/netip"
 	"net/url"
 	"os"
 	"strconv"
@@ -40,7 +41,7 @@ type Config struct {
 	Admin       AdminConfig       `toml:"admin"`
 	Hub         HubConfig         `toml:"hub"`
 	Agent       AgentConfig       `toml:"agent"`
-	Tunnel      TunnelConfig      `toml:"tunnel"`
+	Nebula      NebulaConfig      `toml:"nebula"`
 	ThreatIntel ThreatIntelConfig `toml:"threatintel"`
 
 	runMode string `toml:"-"`
@@ -61,15 +62,28 @@ type ThreatIntelConfig struct {
 	DefaultTTL             Duration `toml:"default_ttl"`
 }
 
-// TunnelConfig configures edge tunnel accept or connector dial.
-type TunnelConfig struct {
-	Enabled    bool              `toml:"enabled"`
-	TicketKey  string            `toml:"ticket_key"`
-	EdgeID     string            `toml:"edge_id"`
-	EdgeURL    string            `toml:"edge_url"`
-	Ticket     string            `toml:"ticket"`
-	Origins    map[string]string `toml:"origins"`
-	RequireTLS bool              `toml:"require_tls"`
+// NebulaConfig configures hub-side Nebula PKI for fleet overlay enrollment.
+// The hub admin API signs host certificates for the overlay; Nebula itself
+// runs as a separate daemon on each host.
+type NebulaConfig struct {
+	// CACertFile and CAKeyFile hold the overlay CA material. Empty paths
+	// default to nebula/ca.crt and nebula/ca.key under admin.data_dir.
+	CACertFile string `toml:"ca_crt"`
+	CAKeyFile  string `toml:"ca_key"`
+	// CIDR is the overlay address pool host certs are allocated from.
+	CIDR string `toml:"cidr"`
+	// CertTTL bounds the validity window of issued host certificates.
+	CertTTL Duration `toml:"cert_ttl"`
+	// Groups are applied to every issued host certificate.
+	Groups []string `toml:"groups"`
+	// CertVersion selects the Nebula certificate format (1 or 2, default 2).
+	CertVersion int `toml:"cert_version"`
+	// StaticHostMap feeds the static_host_map section of generated host
+	// config snippets: overlay IP -> public address list.
+	StaticHostMap map[string][]string `toml:"static_host_map"`
+	// LighthouseIPs are overlay IPs of lighthouse hosts, used for the
+	// lighthouse.hosts list in generated host config snippets.
+	LighthouseIPs []string `toml:"lighthouse_ips"`
 }
 
 // HubConfig is reserved for hub-specific options (keypair lives under admin.data_dir).
@@ -961,6 +975,9 @@ func applyEnv(c *Config) {
 	setStr(&c.Agent.HubPubKey, "RG_AGENT_HUB_PUBKEY")
 	setStr(&c.Agent.Name, "RG_AGENT_NAME")
 	setStr(&c.Agent.DataDir, "RG_AGENT_DATA_DIR")
+	setStr(&c.Nebula.CACertFile, "RG_NEBULA_CA_CRT")
+	setStr(&c.Nebula.CAKeyFile, "RG_NEBULA_CA_KEY")
+	setStr(&c.Nebula.CIDR, "RG_NEBULA_CIDR")
 	if v := os.Getenv("RG_ADMIN_SESSION_TTL"); v != "" {
 		if d, err := time.ParseDuration(v); err == nil {
 			c.Admin.SessionTTL = Duration{d}
@@ -1275,13 +1292,8 @@ func validateUpstreamURL(raw string) error {
 		return nil
 	case "unix":
 		return nil
-	case "tunnel":
-		if u.Host == "" || strings.Trim(u.Path, "/") == "" {
-			return fmt.Errorf("upstream.url tunnel:// requires connector_id/upstream_id")
-		}
-		return nil
 	default:
-		return fmt.Errorf("upstream.url scheme must be http, https, ws, wss, unix, or tunnel")
+		return fmt.Errorf("upstream.url scheme must be http, https, ws, wss, or unix")
 	}
 }
 
@@ -1293,7 +1305,7 @@ func (c *Config) SetRunMode(mode string) {
 }
 
 // ResolveRunMode picks process mode for Coolify-style deploys that cannot set a custom command.
-// Precedence: first CLI token (hub|proxy|connector|all) then RG_MODE then all.
+// Precedence: first CLI token (hub|proxy|all) then RG_MODE then all.
 func ResolveRunMode(args []string) (mode string, rest []string, err error) {
 	mode = "all"
 	if v := strings.ToLower(strings.TrimSpace(os.Getenv("RG_MODE"))); v != "" {
@@ -1302,31 +1314,21 @@ func ResolveRunMode(args []string) (mode string, rest []string, err error) {
 	rest = args
 	if len(args) > 0 {
 		switch args[0] {
-		case "hub", "proxy", "connector", "all":
+		case "hub", "proxy", "all":
 			mode = args[0]
 			rest = args[1:]
 		}
 	}
 	switch mode {
-	case "hub", "proxy", "connector", "all":
+	case "hub", "proxy", "all":
 		return mode, rest, nil
 	default:
-		return "", rest, fmt.Errorf("mode must be all, hub, proxy, or connector (got %q)", mode)
+		return "", rest, fmt.Errorf("mode must be all, hub, or proxy (got %q)", mode)
 	}
 }
 
 func (c Config) Validate() error {
 	hubOnly := c.runMode == "hub"
-	connectorOnly := c.runMode == "connector"
-	if connectorOnly {
-		if strings.TrimSpace(c.Tunnel.EdgeURL) == "" || strings.TrimSpace(c.Tunnel.Ticket) == "" {
-			return fmt.Errorf("tunnel.edge_url and tunnel.ticket are required in connector mode")
-		}
-		if len(c.Tunnel.Origins) == 0 {
-			return fmt.Errorf("tunnel.origins is required in connector mode")
-		}
-		return nil
-	}
 	if !hubOnly {
 		if c.Upstream.URL == "" {
 			return fmt.Errorf("upstream.url is required")
@@ -1619,6 +1621,39 @@ func (c Config) Validate() error {
 		}
 		if strings.TrimSpace(c.Agent.DataDir) == "" {
 			return fmt.Errorf("agent.data_dir is required in proxy mode")
+		}
+	}
+	if err := c.Nebula.Validate(); err != nil {
+		return err
+	}
+	return nil
+}
+
+// Validate checks the [nebula] section when it is configured.
+func (n NebulaConfig) Validate() error {
+	cidr := strings.TrimSpace(n.CIDR)
+	if cidr == "" {
+		return nil
+	}
+	p, err := netip.ParsePrefix(cidr)
+	if err != nil || !p.Addr().Is4() {
+		return fmt.Errorf("nebula.cidr must be an IPv4 prefix such as 10.42.0.0/16")
+	}
+	switch n.CertVersion {
+	case 0, 1, 2:
+	default:
+		return fmt.Errorf("nebula.cert_version must be 1 or 2")
+	}
+	for ip := range n.StaticHostMap {
+		a, err := netip.ParseAddr(strings.TrimSpace(ip))
+		if err != nil || !a.Is4() {
+			return fmt.Errorf("nebula.static_host_map key %q must be an IPv4 overlay address", ip)
+		}
+	}
+	for _, ip := range n.LighthouseIPs {
+		a, err := netip.ParseAddr(strings.TrimSpace(ip))
+		if err != nil || !a.Is4() {
+			return fmt.Errorf("nebula.lighthouse_ips entry %q must be an IPv4 overlay address", ip)
 		}
 	}
 	return nil

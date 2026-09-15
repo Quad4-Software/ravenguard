@@ -24,7 +24,7 @@ Public clients -> Proxy A / Proxy B (WAF)
 Operator / proxies (overlay) -> Hub (admin + agent WebSocket)
 ```
 
-Proxies dial the hub outbound (Beszel-style). The hub never needs a public management port when it binds only on Tailscale, Netbird, or WireGuard.
+Proxies dial the hub outbound (Beszel-style). The hub never needs a public management port when it binds only on the Nebula overlay.
 
 ### Fleet threat sharing
 
@@ -32,15 +32,15 @@ Online proxies report bans and high-confidence blocks to the hub (threat.report)
 
 Open threat intel on the hub can export that ledger as STIX or CSV, ingest feeds, and sync AbuseIPDB or MISP into the same ledger. See [Threat intel](./threatintel.md).
 
-### Tunnel overlay (connector)
+### Nebula overlay
 
-Private origins can sit behind ravenguard connector, which dials a public edge outbound:
+Private origins and the management plane sit on a Nebula overlay. Every host runs the `nebula` daemon with a host certificate signed by the hub CA:
 
 ```text
-Client -> Edge (WAF) -> tunnel stream -> Connector -> origin
+Client -> Edge (WAF) -> origin app (overlay IP:port)
 ```
 
-Upstream URLs use tunnel://connector_id/upstream_id. The connector allowlists upstream_id to local origin URLs (SSRF guard). Tunnel auth uses short-lived HMAC tickets (ticket_key on the edge, ticket on the connector). The hub agent WebSocket stays control-plane only.
+Edge upstream URLs are plain http or https pointed at the origin's overlay address. Host identity and mutual authentication come from Nebula certificates, and each origin host's Nebula firewall rules decide which ports each group may reach. The hub signs host certs and tracks issued fingerprints through internal/nebulapki and the admin API. Revocation works through the pki.blocklist mechanism, not a CRL. The hub agent WebSocket stays control-plane only.
 
 Controls run at the HTTP application layer. Volumetric DDoS mitigation belongs at the network edge or CDN.
 
@@ -99,6 +99,7 @@ Upstream forwarding sets X-Real-IP and rebuilds X-Forwarded-For from the resolve
 | Landlock + seccomp-bpf | internal/sandbox |
 | Admin control plane | internal/admin, internal/admin/ui |
 | Hub / proxy agent protocol | internal/agentprotocol |
+| Nebula PKI (CA + host certs) | internal/nebulapki |
 
 ## Detection limits
 

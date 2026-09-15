@@ -12,38 +12,37 @@ description: Edge WAF placement, reverse proxy trust, and Docker.
 Run the management plane on a private mesh host and edge proxies on public servers:
 
 ```text
-ravenguard hub   # admin.bind = overlay IP only
-ravenguard proxy # public :80/:443 + agent dials hub
-ravenguard connector # optional: outbound tunnel to edge for private origins
+ravenguard hub   # admin.listen = overlay IP only
+ravenguard proxy # public :80/:443 + agent dials hub over the overlay
 ```
 
-Tailscale / Netbird / WireGuard encrypt the management path. Set each proxy's public IPv4/IPv6 in the Proxies UI so Move services can show DNS cutover instructions.
+The overlay is Nebula: every hub, proxy, and private origin runs the `nebula` daemon and gets a certificate from the hub admin. Set each proxy's public IPv4/IPv6 in the Proxies UI so Move services can show DNS cutover instructions.
 
 Fleet threat sharing: bans and scraper signals propagate through the hub ledger automatically when agents are online. Open TI export and feed ingest live on the hub. See Architecture and [Threat intel](./threatintel.md).
 
-### Tunnel connector (private origin)
+### Nebula overlay
 
-On the edge (enable accept + shared ticket key):
+Nebula replaces the old connector tunnel. Each host (hub, edges, private origins, operator laptops) runs the `nebula` daemon with a host certificate issued by the hub. The hub itself does not run Nebula inside ravenguard; it only keeps the CA material and signs host certs.
 
-```toml
-[tunnel]
-enabled = true
-ticket_key = "long-random-secret"
-edge_id = "edge-1"
-require_tls = true
-```
-
-Issue a ticket (same key) and run the connector near the origin:
+On the hub, configure the address pool and lighthouse hints:
 
 ```toml
-[tunnel]
-edge_url = "wss://edge.example.com/api/v1/tunnel/connect"
-ticket = "..." # hub or operator issued HMAC ticket
-[tunnel.origins]
-web = "http://127.0.0.1:8080"
+[nebula]
+cidr = "10.42.0.0/16"
+lighthouse_ips = ["10.42.0.1"]
+[nebula.static_host_map]
+"10.42.0.1" = ["203.0.113.10:4242"]
 ```
 
-Point a route upstream at `tunnel://<connector_id>/web`.
+Then in the admin UI Nebula page (or the API):
+
+1. Create the CA (stored under `admin.data_dir/nebula/` or `nebula.ca_crt`/`nebula.ca_key` paths).
+2. Issue a host certificate per node. The response includes `ca.crt`, `host.crt`, `host.key`, and a starter `config.yml`.
+3. Install `nebula` on the node (distro package or the `nebulaoss/nebula` image), write those files under `/etc/nebula/`, and start the daemon.
+
+Edges then reach private origins as ordinary upstreams (`http://<origin overlay ip>:<port>`). The origin host's Nebula firewall rules decide which ports each group may reach, which replaces the old connector allowlist. Run a lighthouse on a stable public address (the hub host works) so NATed nodes can punch through; add a relay if two nodes sit behind symmetric NAT.
+
+Revoking a host in the UI adds its fingerprint to the blocklist; put those fingerprints in `pki.blocklist` on every node so revoked tunnels drop.
 
 Combined single-host installs still use ravenguard / ravenguard all with [admin] enabled = true.
 
