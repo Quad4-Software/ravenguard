@@ -144,9 +144,9 @@ func (c *CA) SignHost(name string, network netip.Prefix, groups []string, ttl ti
 	if caEnd := c.cert.NotAfter(); notAfter.After(caEnd) {
 		notAfter = caEnd
 	}
-	v := cert.Version(version)
-	if v != cert.Version1 && v != cert.Version2 {
-		v = cert.Version2
+	v := cert.Version2
+	if version == int(cert.Version1) {
+		v = cert.Version1
 	}
 	tbs := &cert.TBSCertificate{
 		Version:   v,

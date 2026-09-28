@@ -1623,10 +1623,7 @@ func (c Config) Validate() error {
 			return fmt.Errorf("agent.data_dir is required in proxy mode")
 		}
 	}
-	if err := c.Nebula.Validate(); err != nil {
-		return err
-	}
-	return nil
+	return c.Nebula.Validate()
 }
 
 // Validate checks the [nebula] section when it is configured.

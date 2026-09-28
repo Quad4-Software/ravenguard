@@ -6,6 +6,7 @@ package store
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"time"
 
 	"github.com/Quad4-Software/ravenguard/internal/ml"
@@ -122,7 +123,7 @@ func (s *Store) ListLabeledMLSamples(limit int) ([]ml.Sample, error) {
 func (s *Store) MLSampleIDByRay(ray string) (int64, bool, error) {
 	var id int64
 	err := s.db.QueryRow(`SELECT id FROM ml_samples WHERE ray_id = ? ORDER BY created_at DESC LIMIT 1`, ray).Scan(&id)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return 0, false, nil
 	}
 	if err != nil {

@@ -6,6 +6,7 @@ package store
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -66,7 +67,7 @@ func (s *Store) ListNebulaHosts() ([]NebulaHost, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	out := []NebulaHost{}
 	for rows.Next() {
 		h, err := scanNebulaHost(rows)
@@ -99,7 +100,7 @@ func (s *Store) NebulaUsedIPs() (map[string]struct{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	out := map[string]struct{}{}
 	for rows.Next() {
 		var ip string
@@ -117,7 +118,7 @@ func (s *Store) NebulaBlocklist() ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	out := []string{}
 	for rows.Next() {
 		var fp string
@@ -139,7 +140,7 @@ func scanNebulaHost(row rowScanner) (NebulaHost, error) {
 	var revoked int
 	var revokedAt sql.NullString
 	if err := row.Scan(&h.ID, &h.Name, &h.IP, &h.Fingerprint, &groups, &h.CertPEM, &created, &expires, &revoked, &revokedAt); err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return NebulaHost{}, ErrNotFound
 		}
 		return NebulaHost{}, err

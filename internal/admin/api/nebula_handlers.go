@@ -54,7 +54,7 @@ func (s *Server) handleNebula(w http.ResponseWriter, r *http.Request) {
 	out := map[string]any{
 		"cidr":            cfg.Nebula.CIDR,
 		"groups":          cfg.Nebula.Groups,
-		"cert_ttl":        cfg.Nebula.CertTTL.Duration.String(),
+		"cert_ttl":        cfg.Nebula.CertTTL.String(),
 		"cert_version":    cfg.Nebula.CertVersion,
 		"static_host_map": cfg.Nebula.StaticHostMap,
 		"lighthouse_ips":  cfg.Nebula.LighthouseIPs,
