@@ -31,7 +31,7 @@ Optional [admin control plane](./admin.md): separate listen address, multi-user 
 
 ## Requirements
 
-- Go 1.26.6 or newer to build from source
+- Go 1.27.1 or newer to build from source
 - For edge TLS: public DNS pointing at this host and open ports 80/443
 - Or a reverse proxy that terminates TLS and forwards the client address
 - An upstream origin on TCP or a unix socket

@@ -92,21 +92,6 @@ function HomepageHeader(): ReactNode {
           <img className={styles.raven} src={raven} width={180} height={180} alt="" />
         </div>
       </div>
-      <div className={styles.topology}>
-        <div className={styles.topologyInner}>
-          <strong>Client</strong>
-          <span className={styles.sep}>{'->'}</span>
-          <strong>RavenGuard</strong>
-          <span className={styles.sep}>{'->'}</span>
-          <span>Origin</span>
-          <span className={styles.topologySplit} aria-hidden="true">
-            |
-          </span>
-          <strong>Proxy</strong>
-          <span className={styles.sep}>{'->'}</span>
-          <strong>Hub</strong>
-        </div>
-      </div>
     </header>
   );
 }

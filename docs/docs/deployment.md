@@ -22,7 +22,7 @@ Fleet threat sharing: bans and scraper signals propagate through the hub ledger 
 
 ### Nebula overlay
 
-Nebula replaces the old connector tunnel. Each host (hub, edges, private origins, operator laptops) runs the `nebula` daemon with a host certificate issued by the hub. The hub itself does not run Nebula inside ravenguard; it only keeps the CA material and signs host certs.
+Nebula replaces the old connector tunnel. Each host (hub, edges, private origins, operator laptops) runs the `nebula` daemon with a host certificate issued by the hub. The hub itself does not run Nebula inside ravenguard. It only keeps the CA material and signs host certs.
 
 On the hub, configure the address pool and lighthouse hints:
 
@@ -40,9 +40,9 @@ Then in the admin UI Nebula page (or the API):
 2. Issue a host certificate per node. The response includes `ca.crt`, `host.crt`, `host.key`, and a starter `config.yml`.
 3. Install `nebula` on the node (distro package or the `nebulaoss/nebula` image), write those files under `/etc/nebula/`, and start the daemon.
 
-Edges then reach private origins as ordinary upstreams (`http://<origin overlay ip>:<port>`). The origin host's Nebula firewall rules decide which ports each group may reach, which replaces the old connector allowlist. Run a lighthouse on a stable public address (the hub host works) so NATed nodes can punch through; add a relay if two nodes sit behind symmetric NAT.
+Edges then reach private origins as ordinary upstreams (`http://<origin overlay ip>:<port>`). The origin host's Nebula firewall rules decide which ports each group may reach, which replaces the old connector allowlist. Run a lighthouse on a stable public address (the hub host works) so NATed nodes can punch through. Add a relay if two nodes sit behind symmetric NAT.
 
-Revoking a host in the UI adds its fingerprint to the blocklist; put those fingerprints in `pki.blocklist` on every node so revoked tunnels drop.
+Revoking a host in the UI adds its fingerprint to the blocklist. Put those fingerprints in `pki.blocklist` on every node so revoked tunnels drop.
 
 Combined single-host installs still use ravenguard / ravenguard all with [admin] enabled = true.
 
