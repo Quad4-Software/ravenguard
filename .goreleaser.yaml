@@ -13,7 +13,7 @@ builds:
     binary: ravenguard
     env:
       - CGO_ENABLED=0
-      - GOTOOLCHAIN=go1.26.6
+      - GOTOOLCHAIN=go1.27.1
     goos:
       - linux
       - darwin

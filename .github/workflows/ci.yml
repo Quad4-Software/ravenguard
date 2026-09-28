@@ -82,14 +82,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          GOTOOLCHAIN=go1.26.6 go test ./... -count=1
+          GOTOOLCHAIN=go1.27.1 go test ./... -count=1
 
       - name: Race
         if: runner.os == 'Linux'
         shell: bash
         run: |
           set -euo pipefail
-          GOTOOLCHAIN=go1.26.6 go test ./... -race -count=1
+          GOTOOLCHAIN=go1.27.1 go test ./... -race -count=1
 
   frontend:
     name: Frontend
@@ -289,7 +289,7 @@ jobs:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: "0"
-          GOTOOLCHAIN: go1.26.6
+          GOTOOLCHAIN: go1.27.1
         shell: bash
         run: |
           set -euo pipefail

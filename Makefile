@@ -1,4 +1,4 @@
-GOTOOLCHAIN ?= go1.26.6
+GOTOOLCHAIN ?= go1.27.1
 GO ?= GOTOOLCHAIN=$(GOTOOLCHAIN) go
 GOBIN ?= $(shell $(GO) env GOPATH)/bin
 export PATH := $(GOBIN):$(PATH)
