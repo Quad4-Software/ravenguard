@@ -286,10 +286,7 @@ func (g *Guard) banTTLWithEscalation(cfg Config, bans int) time.Duration {
 	if cfg.BanEscalation <= 0 || bans <= 1 {
 		return cfg.BanTTL
 	}
-	shift := bans - 1
-	if shift > cfg.BanEscalation {
-		shift = cfg.BanEscalation
-	}
+	shift := min(bans-1, cfg.BanEscalation)
 	// Cap at 1 << 30 to avoid overflow of the time.Duration multiplication.
 	if shift > 30 {
 		shift = 30

@@ -122,14 +122,12 @@ func (m *Manager) getCompiled(id string) (compiledPolicy, bool) {
 
 func compilePolicy(p Policy) compiledPolicy {
 	out := compiledPolicy{
-		Policy: Policy{
-			ID:        p.ID,
-			Name:      p.Name,
-			Mode:      normalizeMode(p.Mode),
-			CookieTTL: p.CookieTTL,
-			Rules:     make([]Rule, 0, len(p.Rules)),
-		},
-		rules: make([]compiledRule, 0, len(p.Rules)),
+		ID:        p.ID,
+		Name:      p.Name,
+		Mode:      normalizeMode(p.Mode),
+		CookieTTL: p.CookieTTL,
+		Rules:     make([]Rule, 0, len(p.Rules)),
+		rules:     make([]compiledRule, 0, len(p.Rules)),
 	}
 	if out.CookieTTL <= 0 {
 		out.CookieTTL = defaultCookieTTL

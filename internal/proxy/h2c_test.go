@@ -67,7 +67,7 @@ func TestH2CFallbackToHTTP1(t *testing.T) {
 	rp := proxy.New(proxy.Config{Target: target, Protocol: "h2", AllowHTTP1: true})
 	defer rp.Close()
 
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		rec := serveOnce(rp, http.MethodGet, "")
 		if rec.Code != http.StatusOK {
 			t.Fatalf("req %d status=%d", i, rec.Code)

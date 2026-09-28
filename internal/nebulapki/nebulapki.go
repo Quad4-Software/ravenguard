@@ -187,7 +187,7 @@ func AllocateIP(pool netip.Prefix, used map[string]struct{}) (netip.Prefix, erro
 	}
 	addr := pool.Masked().Addr().Next() // skip network address
 	last := lastAddr(pool)
-	for i := 0; i < maxScan; i++ {
+	for range maxScan {
 		if !addr.IsValid() || addr == last || !pool.Contains(addr) {
 			return netip.Prefix{}, fmt.Errorf("pool %s exhausted", pool)
 		}

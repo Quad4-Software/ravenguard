@@ -271,7 +271,7 @@ func (u *UI) handleUserAction(w http.ResponseWriter, r *http.Request, user *User
 
 func parseHosts(raw string) []string {
 	out := []string{}
-	for _, part := range strings.Split(raw, ",") {
+	for part := range strings.SplitSeq(raw, ",") {
 		s := strings.TrimSpace(part)
 		if s != "" {
 			out = append(out, s)
@@ -282,7 +282,7 @@ func parseHosts(raw string) []string {
 
 func parseLines(raw string) []string {
 	out := []string{}
-	for _, line := range strings.Split(raw, "\n") {
+	for line := range strings.SplitSeq(raw, "\n") {
 		s := strings.TrimSpace(line)
 		if s != "" {
 			out = append(out, s)

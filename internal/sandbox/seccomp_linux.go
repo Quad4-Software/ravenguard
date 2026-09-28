@@ -73,8 +73,7 @@ func isSeccompUnavailable(err error) bool {
 	if err == nil {
 		return false
 	}
-	var errno syscall.Errno
-	if errors.As(err, &errno) {
+	if errno, ok := errors.AsType[syscall.Errno](err); ok {
 		return errno == syscall.ENOSYS || errno == syscall.EPERM || errno == syscall.EINVAL
 	}
 	msg := strings.ToLower(err.Error())

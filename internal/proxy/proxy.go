@@ -780,10 +780,6 @@ func ParseUpstreamURL(raw string) (*url.URL, error) {
 	return url.Parse(raw)
 }
 
-type errString string
-
-func (e errString) Error() string { return string(e) }
-
 // BuildTLSClientConfig creates a TLS config from file paths.
 func BuildTLSClientConfig(caFile, clientCertFile, clientKeyFile string, insecureSkipVerify bool) (*tls.Config, error) {
 	cfg := &tls.Config{}

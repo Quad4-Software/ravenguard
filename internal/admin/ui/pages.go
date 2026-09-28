@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -211,7 +212,7 @@ func ruleSlots(p map[string]any, extra int) []map[string]any {
 		slots = append(slots, map[string]any{})
 	}
 	if len(slots) == 0 {
-		for i := 0; i < extra; i++ {
+		for range extra {
 			slots = append(slots, map[string]any{})
 		}
 	}
@@ -224,7 +225,7 @@ func parseAccessRules(r *http.Request, keepHash bool) []map[string]any {
 		return nil
 	}
 	out := []map[string]any{}
-	for i := 0; i < count; i++ {
+	for i := range count {
 		typ := strings.TrimSpace(r.FormValue(fmt.Sprintf("rule_type_%d", i)))
 		if typ == "" || typ == "none" {
 			continue
@@ -302,9 +303,7 @@ func (u *UI) renderSettings(w http.ResponseWriter, r *http.Request, user *User, 
 		"me":       me,
 		"sessions": sessions["sessions"],
 	}
-	for k, v := range extra {
-		data[k] = v
-	}
+	maps.Copy(data, extra)
 	u.render(w, r, "settings", PageData{User: user, CSRF: csrf, PageTitle: "Settings", Data: data})
 }
 
@@ -409,9 +408,7 @@ func (u *UI) renderBans(w http.ResponseWriter, r *http.Request, user *User, csrf
 		}
 	}
 	data := map[string]any{"bans": bans["bans"], "threat": threat}
-	for k, v := range extra {
-		data[k] = v
-	}
+	maps.Copy(data, extra)
 	u.render(w, r, "bans", PageData{User: user, CSRF: csrf, PageTitle: "Bans", Data: data})
 }
 
@@ -511,9 +508,7 @@ func (u *UI) renderBlocklists(w http.ResponseWriter, r *http.Request, user *User
 		}
 	}
 	data := map[string]any{"stats": stats, "kind": kind, "entries": entries}
-	for k, v := range extra {
-		data[k] = v
-	}
+	maps.Copy(data, extra)
 	u.render(w, r, "blocklists", PageData{User: user, CSRF: csrf, PageTitle: "Blocklists", Data: data})
 }
 
@@ -618,9 +613,7 @@ func (u *UI) renderConfig(w http.ResponseWriter, r *http.Request, user *User, cs
 		"live_json":      jsonPretty(live),
 		"restart_fields": view["restart_required"],
 	}
-	for k, v := range extra {
-		data[k] = v
-	}
+	maps.Copy(data, extra)
 	u.render(w, r, "config", PageData{User: user, CSRF: csrf, PageTitle: "Config", Data: data})
 }
 
@@ -690,9 +683,7 @@ func (u *UI) renderTokens(w http.ResponseWriter, r *http.Request, user *User, cs
 		return
 	}
 	data := map[string]any{"tokens": out["tokens"]}
-	for k, v := range extra {
-		data[k] = v
-	}
+	maps.Copy(data, extra)
 	u.render(w, r, "tokens", PageData{User: user, CSRF: csrf, PageTitle: "Tokens", Data: data})
 }
 
@@ -813,9 +804,7 @@ func (u *UI) renderQFeeds(w http.ResponseWriter, r *http.Request, user *User, cs
 		return
 	}
 	data := map[string]any{"view": view}
-	for k, v := range extra {
-		data[k] = v
-	}
+	maps.Copy(data, extra)
 	u.render(w, r, "qfeeds", PageData{User: user, CSRF: csrf, PageTitle: "Q-Feeds", Data: data})
 }
 
@@ -888,9 +877,7 @@ func (u *UI) renderUpstreams(w http.ResponseWriter, r *http.Request, user *User,
 			data["editing"] = editing
 		}
 	}
-	for k, v := range extra {
-		data[k] = v
-	}
+	maps.Copy(data, extra)
 	u.render(w, r, "upstreams", PageData{User: user, CSRF: csrf, PageTitle: "Upstreams", Data: data})
 }
 
@@ -1031,9 +1018,7 @@ func (u *UI) renderRoutes(w http.ResponseWriter, r *http.Request, user *User, cs
 			data["editing"] = editing
 		}
 	}
-	for k, v := range extra {
-		data[k] = v
-	}
+	maps.Copy(data, extra)
 	u.render(w, r, "routes", PageData{User: user, CSRF: csrf, PageTitle: "Routes", Data: data})
 }
 
@@ -1143,9 +1128,7 @@ func (u *UI) renderAccess(w http.ResponseWriter, r *http.Request, user *User, cs
 	} else {
 		data["rules"] = ruleSlots(map[string]any{}, 4)
 	}
-	for k, v := range extra {
-		data[k] = v
-	}
+	maps.Copy(data, extra)
 	u.render(w, r, "access", PageData{User: user, CSRF: csrf, PageTitle: "Access", Data: data})
 }
 
@@ -1233,9 +1216,7 @@ func (u *UI) renderSchemas(w http.ResponseWriter, r *http.Request, user *User, c
 			data["editing"] = editing
 		}
 	}
-	for k, v := range extra {
-		data[k] = v
-	}
+	maps.Copy(data, extra)
 	u.render(w, r, "schemas", PageData{User: user, CSRF: csrf, PageTitle: "API schemas", Data: data})
 }
 
@@ -1315,9 +1296,7 @@ func (u *UI) renderCerts(w http.ResponseWriter, r *http.Request, user *User, csr
 			data["detail"] = detail
 		}
 	}
-	for k, v := range extra {
-		data[k] = v
-	}
+	maps.Copy(data, extra)
 	u.render(w, r, "certs", PageData{User: user, CSRF: csrf, PageTitle: "Certificates", Data: data})
 }
 
@@ -1462,9 +1441,7 @@ func (u *UI) renderRequests(w http.ResponseWriter, r *http.Request, user *User, 
 			data["ray"] = ray
 		}
 	}
-	for k, v := range extra {
-		data[k] = v
-	}
+	maps.Copy(data, extra)
 	u.render(w, r, "requests", PageData{User: user, CSRF: csrf, PageTitle: "Requests", Data: data})
 }
 
@@ -1509,9 +1486,7 @@ func (u *UI) renderAppearance(w http.ResponseWriter, r *http.Request, user *User
 		"ui":      ui,
 		"stealth": stealth,
 	}
-	for k, v := range extra {
-		data[k] = v
-	}
+	maps.Copy(data, extra)
 	u.render(w, r, "appearance", PageData{User: user, CSRF: csrf, PageTitle: "Appearance", Data: data})
 }
 
@@ -1629,9 +1604,7 @@ func (u *UI) renderThreatIntel(w http.ResponseWriter, r *http.Request, user *Use
 		return
 	}
 	data := map[string]any{"cfg": cfg}
-	for k, v := range extra {
-		data[k] = v
-	}
+	maps.Copy(data, extra)
 	u.render(w, r, "threatintel", PageData{User: user, CSRF: csrf, PageTitle: "Threat intel", Data: data})
 }
 
@@ -1775,9 +1748,7 @@ func (u *UI) renderProxies(w http.ResponseWriter, r *http.Request, user *User, c
 		"hub_url":    out["hub_url"],
 		"hub_pubkey": out["hub_pubkey"],
 	}
-	for k, v := range extra {
-		data[k] = v
-	}
+	maps.Copy(data, extra)
 	u.render(w, r, "proxies", PageData{User: user, CSRF: csrf, PageTitle: "Proxies", Data: data})
 }
 
@@ -1900,9 +1871,7 @@ func (u *UI) renderMigrations(w http.ResponseWriter, r *http.Request, user *User
 			data["active"] = detail
 		}
 	}
-	for k, v := range extra {
-		data[k] = v
-	}
+	maps.Copy(data, extra)
 	u.render(w, r, "migrations", PageData{User: user, CSRF: csrf, PageTitle: "Move services", Data: data})
 }
 
@@ -1981,9 +1950,7 @@ func (u *UI) renderNebula(w http.ResponseWriter, r *http.Request, user *User, cs
 		"hosts":        hosts["hosts"],
 		"fingerprints": blocklist["fingerprints"],
 	}
-	for k, v := range extra {
-		data[k] = v
-	}
+	maps.Copy(data, extra)
 	u.render(w, r, "nebula", PageData{User: user, CSRF: csrf, PageTitle: "Nebula overlay", Data: data})
 }
 

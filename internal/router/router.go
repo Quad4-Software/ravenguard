@@ -292,10 +292,6 @@ func (t *Table) buildProxy(up Upstream, strip bool, prefix string) (*proxy.Proxy
 	return rp, hc, nil
 }
 
-type errString string
-
-func (e errString) Error() string { return string(e) }
-
 // Lookup finds the best matching route for the request.
 func (t *Table) Lookup(r *http.Request) (Match, bool) {
 	t.mu.RLock()

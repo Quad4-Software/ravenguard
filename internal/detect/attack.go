@@ -38,7 +38,7 @@ func AttackMatch(r *http.Request) string {
 // scanDecoded unescapes s up to two levels. Double encoding is a common WAF
 // evasion: %252e%252e%252f decodes once to %2e%2e%2f, then to ../.
 func scanDecoded(s string, unescape func(string) (string, error)) string {
-	for depth := 0; depth < 2; depth++ {
+	for range 2 {
 		if indexByte(s, '%') < 0 {
 			return ""
 		}

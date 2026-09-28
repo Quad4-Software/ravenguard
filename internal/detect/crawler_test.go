@@ -218,7 +218,7 @@ func TestCrawlerSweepBoundsCache(t *testing.T) {
 	v := newTestVerifier(&fakeResolver{addrErr: errors.New("no ptr")})
 	now := time.Now()
 	v.now = func() time.Time { return now }
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		ip := net.ParseIP("10.0.0." + string(rune('0'+i)))
 		v.Check(context.Background(), ip, "Googlebot/2.1")
 	}
