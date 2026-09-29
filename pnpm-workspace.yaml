@@ -23,7 +23,12 @@ overrides:
   image-size: npm:image-size-next@2.1.1
   fastq: 1.20.3
   js-yaml: ^4.3.2
-  vitest: ^4.1.11
+  vitest: ^5.0.1
+  # GHSA: fast-uri 3.1.6 pulled by ajv -> docusaurus. Pin to the fixed line.
+  fast-uri: ^3.1.8
+  # @vercel/oidc 3.8.x lost trusted-publisher evidence (pnpm trustPolicy
+  # blocks it). 3.7.1 is the last release with provenance.
+  "@vercel/oidc": "3.7.1"
   webpack-dev-middleware: 7.4.5
 
 minimumReleaseAgeExclude:
