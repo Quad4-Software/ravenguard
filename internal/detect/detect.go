@@ -80,6 +80,8 @@ var scannerUA = []string{
 	"seleniumbase", "undetected_chromedriver", "uc_chrome",
 	"rebrowser", "browserless", "steel-browser", "skyvern",
 	"langchain", "crewai", "autogen/", "openai-agents",
+	// Scraper platforms and headless browsers built for extraction.
+	"apify", "lightpanda", "crawlspace", "brightbot", "awario",
 }
 
 // aiUA matches documented AI training crawlers, answer-engine indexers,
@@ -99,6 +101,30 @@ var aiUA = []string{
 	"timpibot", "pangubot", "kangaroo bot", "kangaroobot",
 	"deepseekbot", "qwenbot", "iaskspider", "phindbot",
 	"notebooklm", "gemini-deep-research",
+	// Training and dataset crawlers.
+	"cohere-training-data-crawler", "mistralai-training",
+	"mistralai-index", "meta-webindexer", "amazon-kendra",
+	"amazon-qbusiness", "aiwebindex", "aihitbot", "img2dataset",
+	"laiondownloader", "panscient", "yandexadditional",
+	"terracotta", "sbintuitionsbot", "mycentralaiscraperbot",
+	// Agentic fetchers and answer engines (browsers, coding agents,
+	// and search APIs that retrieve pages on a user's behalf).
+	"chatgpt agent", "oai-adsbot", "manus-user", "novaact",
+	"devin", "cursor", "opencode", "qodercli", "trae",
+	"google-gemini-cli", "googleagent-urlcontext",
+	"exasearchbot", "tavilybot", "linerbot", "linkupbot",
+	"kagi-fetcher", "querit", "addsearchbot", "aranet-searchbot",
+	"bedrockbot", "azureai-searchbot", "quillbot",
+	"poseidon research crawler", "poggio-citations",
+	"wpbot", "wrtnbot",
+	// China and ByteDance model crawlers.
+	"kimibot", "kimi-user", "kimi-agent", "kimi-searchbot",
+	"doubaobot", "erniebot", "yiyanbot", "tongyibot",
+	"chatglm-spider", "tiktokspider",
+	"amzn-user", "amazonbuyforme", "echoboxbot", "andibot",
+	"bixelbot", "buddybot", "cotoyogi", "cragcrawler",
+	"agentdatabot", "agenttimes", "atlassian-bot", "nagetbot",
+	"zanistabot",
 }
 
 // forumWritePaths are path segments commonly abused by registration and comment spam bots.
