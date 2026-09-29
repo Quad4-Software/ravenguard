@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: 0BSD
+// SPDX-License-Identifier: LicenseRef-QSL-1.0-0BSD
 // Copyright (c) 2026 Quad4
 
 // Package notify fans WAF deny and challenge events out to a webhook URL,

@@ -83,4 +83,4 @@ Requires Node.js 22+ and pnpm 11+.
 
 ## License
 
-[0BSD](LICENSE).
+[QSL-1.0-0BSD](LICENSE).

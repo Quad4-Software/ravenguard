@@ -132,7 +132,7 @@ jobs:
             org.opencontainers.image.description=HTTP WAF and reverse proxy
             org.opencontainers.image.url=https://github.com/Quad4-Software/ravenguard
             org.opencontainers.image.documentation=https://github.com/Quad4-Software/ravenguard/tree/master/docs
-            org.opencontainers.image.licenses=0BSD
+            org.opencontainers.image.licenses=QSL-1.0-0BSD
             org.opencontainers.image.vendor=Quad4 Software
             org.opencontainers.image.base.name=gcr.io/distroless/static-debian12:nonroot
 

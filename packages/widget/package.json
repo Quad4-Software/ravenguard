@@ -2,7 +2,7 @@
   "name": "@quad4/ravenguard-widget",
   "version": "0.1.0",
   "description": "RavenGuard privacy-first proof-of-work captcha widget",
-  "license": "0BSD",
+  "license": "QSL-1.0-0BSD",
   "type": "module",
   "sideEffects": [
     "./dist/index.js",

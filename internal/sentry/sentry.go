@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: 0BSD
+// SPDX-License-Identifier: LicenseRef-QSL-1.0-0BSD
 // Copyright (c) 2026 Quad4
 
 // Package sentry wires the Sentry Go SDK for Sentry and GlitchTip backends.

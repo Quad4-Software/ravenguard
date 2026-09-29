@@ -337,7 +337,7 @@ jobs:
           fi
           labels="$(docker image inspect ravenguard:ci --format '{{json .Config.Labels}}')"
           echo "${labels}" | grep -F 'org.opencontainers.image.title'
-          echo "${labels}" | grep -F '0BSD'
+          echo "${labels}" | grep -F 'QSL-1.0-0BSD'
 
   goreleaser-check:
     name: GoReleaser check
