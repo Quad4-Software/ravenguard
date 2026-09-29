@@ -206,6 +206,37 @@ missing_uir_score = 10
 # describes the proxy connection, so it is ignored.
 sni_host_mismatch_score = 25
 
+# Trap paths the site never links to. Any hit applies the action to every
+# client, including allowlisted ones. enabled needs at least one path or
+# prefix entry.
+# [honeypot]
+# enabled = false
+# paths = ["/.git/config", "/.env", "/trap-door"]
+# prefixes = ["/wp-admin", "/wp-content"]
+# action = "ban"        # ban | deny | challenge | tarpit
+# ban_ttl = "1h"
+
+# Slow-drip response for the tarpit action (honeypot, high_404_action,
+# penalty_action). Pins a scanner's connection without upstream work.
+# [tarpit]
+# interval = "5s"
+# bytes_per_tick = 64
+# max_duration = "2m"
+
+# Bearer-token feed of live bans for external bouncers at
+# {challenge.path_prefix}/decisions. Token may come from RG_DECISIONS_TOKEN.
+# With privacy.hash_client_ip on, values are bind-key hashes.
+# [decisions]
+# enabled = false
+# token = ""
+
+# Posts deny and challenge events to a webhook as JSON. Empty events forwards
+# blocks only. Env: RG_NOTIFY_WEBHOOK_URL.
+# [notify]
+# webhook_url = ""
+# events = []
+# timeout = "5s"
+
 # crawler_verify validates self-declared good crawlers (Googlebot, GPTBot,
 # Bingbot, and similar) with forward-confirmed reverse DNS against published
 # operator hostname suffixes. Claimed identities that fail verification get

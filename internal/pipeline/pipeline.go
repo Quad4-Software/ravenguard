@@ -6,8 +6,11 @@ package pipeline
 import (
 	"bufio"
 	"context"
+	"crypto/rand"
+	"crypto/subtle"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"net/http"
@@ -28,6 +31,7 @@ import (
 	"github.com/Quad4-Software/ravenguard/internal/iputil"
 	"github.com/Quad4-Software/ravenguard/internal/logging"
 	"github.com/Quad4-Software/ravenguard/internal/ml"
+	"github.com/Quad4-Software/ravenguard/internal/notify"
 	"github.com/Quad4-Software/ravenguard/internal/privacy"
 	"github.com/Quad4-Software/ravenguard/internal/protect"
 	"github.com/Quad4-Software/ravenguard/internal/qfeeds"
@@ -82,6 +86,8 @@ type Handler struct {
 	ml              *ml.Scorer
 	threatOverlay   threatOverlay
 	threatReport    threatReporter
+	traps           *trapSet
+	notifier        *notify.Notifier
 }
 
 type threatOverlay interface {
@@ -100,17 +106,92 @@ const (
 	actionChallenge uint8 = 0
 	actionBlock     uint8 = 1
 	actionOff       uint8 = 2
+	actionTarpit    uint8 = 3
+	actionBan       uint8 = 4
 )
 
 func parseAction(s string) uint8 {
 	switch strings.ToLower(strings.TrimSpace(s)) {
-	case "block":
+	case "block", "deny":
 		return actionBlock
+	case "tarpit":
+		return actionTarpit
 	case "off":
 		return actionOff
 	default:
 		return actionChallenge
 	}
+}
+
+// trapSet is the resolved honeypot config: exact paths plus prefixes, all
+// lowercased for case-insensitive matching.
+type trapSet struct {
+	action   uint8
+	banTTL   time.Duration
+	exact    map[string]struct{}
+	prefixes []string
+}
+
+func buildTraps(cfg config.Config) *trapSet {
+	hc := cfg.Honeypot
+	if !hc.Enabled {
+		return nil
+	}
+	t := &trapSet{
+		banTTL:   hc.BanTTL.Duration,
+		exact:    make(map[string]struct{}, len(hc.Paths)),
+		prefixes: make([]string, 0, len(hc.Prefixes)),
+	}
+	for _, p := range hc.Paths {
+		if p = trapPath(p); p != "" {
+			t.exact[p] = struct{}{}
+		}
+	}
+	for _, p := range hc.Prefixes {
+		if p = trapPath(p); p != "" {
+			t.prefixes = append(t.prefixes, p)
+		}
+	}
+	if len(t.exact) == 0 && len(t.prefixes) == 0 {
+		return nil
+	}
+	switch strings.ToLower(strings.TrimSpace(hc.Action)) {
+	case "deny", "block":
+		t.action = actionBlock
+	case "challenge":
+		t.action = actionChallenge
+	case "tarpit":
+		t.action = actionTarpit
+	default:
+		t.action = actionBan
+	}
+	return t
+}
+
+func trapPath(p string) string {
+	p = strings.TrimSpace(p)
+	if p == "" {
+		return ""
+	}
+	if p[0] != '/' {
+		p = "/" + p
+	}
+	return strings.ToLower(p)
+}
+
+// Match reports whether path hits a trap. The request path is lowercased once
+// per call; only runs when the honeypot section is enabled.
+func (t *trapSet) Match(path string) bool {
+	low := strings.ToLower(path)
+	if _, ok := t.exact[low]; ok {
+		return true
+	}
+	for _, p := range t.prefixes {
+		if strings.HasPrefix(low, p) {
+			return true
+		}
+	}
+	return false
 }
 
 var bodyPool = sync.Pool{
@@ -166,6 +247,8 @@ func New(
 		challengeAlways: strings.EqualFold(cfg.Challenge.Mode, "always") || strings.EqualFold(cfg.Challenge.Mode, "attack"),
 		writeCost:       3,
 		forgeRateCost:   cfg.Detect.ForgeRateCost,
+		traps:           buildTraps(cfg),
+		notifier:        notify.New(cfg.Notify.WebhookURL, cfg.Notify.Events, cfg.Notify.Timeout.Duration),
 	}
 	if prot != nil {
 		h.writeCost = prot.WriteCost()
@@ -196,6 +279,7 @@ func New(
 	h.mux.HandleFunc(cfg.Challenge.PathPrefix+"/access", h.handleAccessPOST)
 	h.mux.HandleFunc(cfg.Challenge.PathPrefix+"/healthz", h.handleHealthz)
 	h.mux.HandleFunc("/healthz", h.handleHealthz)
+	h.mux.HandleFunc(cfg.Challenge.PathPrefix+"/decisions", h.handleDecisions)
 	if cfg.UI.TestMode {
 		h.mountTestRoutes()
 	}
@@ -365,8 +449,9 @@ func (h *Handler) reportThreatBan(bindID, reason string) {
 func (h *Handler) recordEvent(r *http.Request, ray, bindID, ipStr, host, ua, action, reason string, score int, details map[string]string) {
 	h.mu.RLock()
 	l := h.reqLog
+	n := h.notifier
 	h.mu.RUnlock()
-	if l == nil {
+	if l == nil && n == nil {
 		return
 	}
 	method, path := "", ""
@@ -376,7 +461,7 @@ func (h *Handler) recordEvent(r *http.Request, ray, bindID, ipStr, host, ua, act
 			path = r.URL.Path
 		}
 	}
-	l.Record(requestlog.Event{
+	ev := requestlog.Event{
 		Ray:     ray,
 		Action:  action,
 		Reason:  reason,
@@ -388,7 +473,13 @@ func (h *Handler) recordEvent(r *http.Request, ray, bindID, ipStr, host, ua, act
 		BindID:  bindID,
 		Score:   score,
 		Details: details,
-	})
+	}
+	if n != nil {
+		n.Notify(ev)
+	}
+	if l != nil {
+		l.Record(ev)
+	}
 }
 
 func (h *Handler) emitBlock(w http.ResponseWriter, r *http.Request, ray, bindID, ipStr, host, ua, reason string, score int, details map[string]string) {
@@ -422,6 +513,134 @@ func (h *Handler) denyLimited(w http.ResponseWriter, r *http.Request, ray, bindI
 	h.pages.RenderRateLimit(w, ray)
 }
 
+// serveTrap applies the configured honeypot action to a trap-path hit.
+func (h *Handler) serveTrap(w http.ResponseWriter, r *http.Request, ray, bindID, ipStr, host, ua string, tr *trapSet) {
+	details := map[string]string{"trap": r.URL.Path}
+	reason := "Honeypot path"
+	switch tr.action {
+	case actionBan:
+		if h.prot != nil && h.prot.Enabled() {
+			h.prot.BanUntil(bindID, time.Now().Add(tr.banTTL))
+			h.reportThreatBan(bindID, "honeypot ban")
+		}
+		h.emitBlock(w, r, ray, bindID, ipStr, host, ua, reason, 0, details)
+	case actionTarpit:
+		h.recordEvent(r, ray, bindID, ipStr, host, ua, requestlog.ActionBlock, reason, 0, details)
+		h.serveTarpit(w, r)
+	case actionChallenge:
+		h.serveChallenge(w, r, ray, bindID, challenge.RiskElevated)
+	default:
+		h.emitBlock(w, r, ray, bindID, ipStr, host, ua, reason, 0, details)
+	}
+}
+
+// serveTarpit streams a deliberately slow response, pinning the client's
+// connection and burning its time budget instead of answering outright. The
+// drip ends on the configured deadline or when the client disconnects.
+func (h *Handler) serveTarpit(w http.ResponseWriter, r *http.Request) {
+	tc := h.config().Tarpit
+	interval := tc.Interval.Duration
+	if interval <= 0 {
+		interval = 5 * time.Second
+	}
+	n := tc.BytesPerTick
+	if n <= 0 {
+		n = 64
+	}
+	maxDur := tc.MaxDuration.Duration
+	if maxDur <= 0 {
+		maxDur = 2 * time.Minute
+	}
+	// The payload is filler that looks like a slow HTML stream; one random
+	// block per response is enough since it only needs to keep flowing.
+	payload := make([]byte, n)
+	_, _ = rand.Read(payload)
+	for i := range payload {
+		payload[i] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"[payload[i]%36]
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	fl, _ := w.(http.Flusher)
+	_, _ = io.WriteString(w, "<!DOCTYPE html><html><head><title>Loading</title></head><body><!--")
+	if fl != nil {
+		fl.Flush()
+	}
+	deadline := time.Now().Add(maxDur)
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for time.Now().Before(deadline) {
+		select {
+		case <-r.Context().Done():
+			return
+		case <-ticker.C:
+		}
+		if _, err := w.Write(payload); err != nil {
+			return
+		}
+		if fl != nil {
+			fl.Flush()
+		}
+	}
+	_, _ = io.WriteString(w, "--></body></html>")
+}
+
+// handleDecisions is the bouncer feed: a CrowdSec-LAPI-style list of live
+// bans for external enforcement. Bearer-token gated; the values are client
+// bind keys, which are privacy hashes when privacy.hash_client_ip is on and
+// raw client IPs when off.
+func (h *Handler) handleDecisions(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	cfg := h.config()
+	if !cfg.Decisions.Enabled || cfg.Decisions.Token == "" {
+		http.NotFound(w, r)
+		return
+	}
+	want := "Bearer " + cfg.Decisions.Token
+	got := r.Header.Get("Authorization")
+	if subtle.ConstantTimeCompare([]byte(got), []byte(want)) != 1 {
+		w.Header().Set("WWW-Authenticate", `Bearer realm="ravenguard-decisions"`)
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	type decision struct {
+		Scope   string `json:"scope"`
+		Value   string `json:"value"`
+		Type    string `json:"type"`
+		Until   string `json:"until"`
+		Strikes int    `json:"strikes"`
+		Bans    int    `json:"bans"`
+	}
+	out := struct {
+		GeneratedAt time.Time  `json:"generated_at"`
+		Decisions   []decision `json:"decisions"`
+	}{
+		GeneratedAt: time.Now().UTC(),
+		Decisions:   []decision{},
+	}
+	if h.prot != nil {
+		for _, b := range h.prot.ListBans() {
+			if !b.Active {
+				continue
+			}
+			out.Decisions = append(out.Decisions, decision{
+				Scope:   "client",
+				Value:   b.Key,
+				Type:    "ban",
+				Until:   b.BannedUntil.UTC().Format(time.RFC3339),
+				Strikes: b.Strikes,
+				Bans:    b.Bans,
+			})
+		}
+	}
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	_ = json.NewEncoder(w).Encode(out)
+}
+
 // ApplyConfig updates live-tunable config fields from the admin plane.
 func (h *Handler) ApplyConfig(cfg config.Config) {
 	h.mu.Lock()
@@ -452,6 +671,11 @@ func (h *Handler) ApplyConfig(cfg config.Config) {
 		h.crawlerVer = nil
 	}
 	h.forgeRateCost = cfg.Detect.ForgeRateCost
+	h.traps = buildTraps(cfg)
+	if old := h.notifier; old != nil {
+		old.Close()
+	}
+	h.notifier = notify.New(cfg.Notify.WebhookURL, cfg.Notify.Events, cfg.Notify.Timeout.Duration)
 	if nets, err := iputil.ParseCIDRs(cfg.Trust.TrustedProxies); err == nil {
 		h.trusted = nets
 	}
@@ -767,6 +991,17 @@ func (h *Handler) guard(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Trap paths are never linked by the site, so any hit is hostile. This
+	// check runs for every client, including allowlisted ones: a declared trap
+	// has no legitimate visitors.
+	h.mu.RLock()
+	tr := h.traps
+	h.mu.RUnlock()
+	if tr != nil && tr.Match(r.URL.Path) {
+		h.serveTrap(w, r, ray, bindID, ipStr, host, ua, tr)
+		return
+	}
+
 	if !h.upstreamHealthy(r) {
 		h.pages.RenderUpstream(w, ray)
 		return
@@ -948,6 +1183,13 @@ func (h *Handler) guard(w http.ResponseWriter, r *http.Request) {
 				}
 				h.emitBlock(w, r, ray, bindID, ipStr, host, ua, "Too many missing pages", 0, nil)
 				return
+			case actionTarpit:
+				if h.prot != nil && h.prot.Enabled() {
+					h.prot.Strike(bindID)
+				}
+				h.recordEvent(r, ray, bindID, ipStr, host, ua, requestlog.ActionBlock, "Too many missing pages", 0, nil)
+				h.serveTarpit(w, r)
+				return
 			case actionOff:
 			default:
 				needChallenge = true
@@ -960,6 +1202,13 @@ func (h *Handler) guard(w http.ResponseWriter, r *http.Request) {
 					h.prot.Strike(bindID)
 				}
 				h.emitBlock(w, r, ray, bindID, ipStr, host, ua, "Too many expensive responses", 0, nil)
+				return
+			case actionTarpit:
+				if h.prot != nil && h.prot.Enabled() {
+					h.prot.Strike(bindID)
+				}
+				h.recordEvent(r, ray, bindID, ipStr, host, ua, requestlog.ActionBlock, "Too many expensive responses", 0, nil)
+				h.serveTarpit(w, r)
 				return
 			case actionOff:
 			default:

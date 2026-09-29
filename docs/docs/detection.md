@@ -117,10 +117,44 @@ Privacy hashing applies when enabled. privacy.retention bounds how long this sta
 [detect]
 high_404_threshold = 20
 high_404_window = "1m"
-high_404_action = "challenge"   # or "block" / "off"
+high_404_action = "challenge"   # or "block" / "tarpit" / "off"
 ```
 
 Clients that produce many origin 404s in the window can be challenged or blocked.
+
+## Honeypot trap paths
+
+Trap paths are routes the site never links to. Any client touching one is
+hostile by definition, so the configured action applies to every client
+including allowlisted ones. This catches scanners early: one probe of a trap
+path and the client is out.
+
+```toml
+[honeypot]
+enabled = true
+paths = ["/.git/config", "/.env", "/trap-door"]
+prefixes = ["/wp-admin", "/wp-content"]
+action = "ban"        # ban | deny | challenge | tarpit
+ban_ttl = "1h"
+```
+
+Use prefixes for whole subtrees on sites that do not run the probed software
+(for example /wp-admin on a non-WordPress origin). Paths match
+case-insensitively.
+
+## Tarpit
+
+The tarpit action answers with a deliberately slow response, one chunk every
+interval until max_duration or client disconnect. It pins the scraper's
+connection and burns its request budget without spending upstream work.
+Available as a honeypot action and as high_404_action / penalty_action.
+
+```toml
+[tarpit]
+interval = "5s"
+bytes_per_tick = 64
+max_duration = "2m"
+```
 
 ## Crawler verification
 

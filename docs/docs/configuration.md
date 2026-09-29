@@ -275,6 +275,41 @@ forge_expensive_score applies to hot forge paths only (compare, blame, archive).
 
 Full knobs: [Detection](./detection.md).
 
+## Honeypot, tarpit, decisions, and notify
+
+```toml
+# Trap paths the site never links to; any hit applies the action to the
+# client. See [Detection](./detection.md#honeypot-trap-paths).
+[honeypot]
+enabled = false
+paths = []
+prefixes = []
+action = "ban"        # ban | deny | challenge | tarpit
+ban_ttl = "1h"
+
+# Slow-drip response used by the tarpit action.
+[tarpit]
+interval = "5s"
+bytes_per_tick = 64
+max_duration = "2m"
+
+# Bearer-token feed of live bans for external bouncers, served at
+# {challenge.path_prefix}/decisions on the edge listener. Token may also come
+# from RG_DECISIONS_TOKEN. Values are client bind keys: privacy hashes when
+# privacy.hash_client_ip is on, raw client IPs when off.
+[decisions]
+enabled = false
+token = ""
+
+# Posts deny and challenge events to a webhook as JSON (requestlog event
+# shape). events lists the actions to forward; empty forwards blocks only.
+# Env: RG_NOTIFY_WEBHOOK_URL.
+[notify]
+webhook_url = ""
+events = []
+timeout = "5s"
+```
+
 ## Challenge, UI, site, and stealth
 
 ```toml
@@ -431,6 +466,7 @@ See [Privacy](./privacy.md).
 - RG_SELFSIGNED_STORAGE_DIR, RG_SELFSIGNED_HOSTS
 - RG_QFEEDS_ENABLED, RG_QFEEDS_API_TOKEN (or QFEEDS_API_TOKEN)
 - RG_PRIVACY_HASH_CLIENT_IP, RG_PRIVACY_IP_HASH_SECRET, RG_PRIVACY_LOG_IP, RG_PRIVACY_NOTICE_URL
+- RG_HONEYPOT_ENABLED, RG_DECISIONS_TOKEN, RG_NOTIFY_WEBHOOK_URL
 
 ## Sandbox (Landlock + seccomp-bpf)
 

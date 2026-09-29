@@ -43,6 +43,10 @@ type Config struct {
 	Agent       AgentConfig       `toml:"agent"`
 	Nebula      NebulaConfig      `toml:"nebula"`
 	ThreatIntel ThreatIntelConfig `toml:"threatintel"`
+	Honeypot    HoneypotConfig    `toml:"honeypot"`
+	Tarpit      TarpitConfig      `toml:"tarpit"`
+	Decisions   DecisionsConfig   `toml:"decisions"`
+	Notify      NotifyConfig      `toml:"notify"`
 
 	runMode string `toml:"-"`
 }
@@ -390,6 +394,42 @@ type DetectProxySignals struct {
 	LowScorePoints  int    `toml:"low_score_points"`
 }
 
+// HoneypotConfig declares trap paths the site never links to. Any request to
+// one is hostile by definition, so the action applies to every client
+// including allowlisted ones. action is ban, deny, challenge, or tarpit.
+type HoneypotConfig struct {
+	Enabled  bool     `toml:"enabled"`
+	Paths    []string `toml:"paths"`
+	Prefixes []string `toml:"prefixes"`
+	Action   string   `toml:"action"`
+	BanTTL   Duration `toml:"ban_ttl"`
+}
+
+// TarpitConfig drives slow-drip responses for the tarpit action. The answer
+// trickles out a chunk every interval until max_duration or client disconnect,
+// holding the scraper's connection without spending upstream work.
+type TarpitConfig struct {
+	Interval     Duration `toml:"interval"`
+	BytesPerTick int      `toml:"bytes_per_tick"`
+	MaxDuration  Duration `toml:"max_duration"`
+}
+
+// DecisionsConfig exposes a bearer-token feed of live bans for external
+// bouncers (firewall scripts, edge filters). Served under the challenge path
+// prefix on the edge listener.
+type DecisionsConfig struct {
+	Enabled bool   `toml:"enabled"`
+	Token   string `toml:"token"`
+}
+
+// NotifyConfig posts deny and challenge events to a webhook, CrowdSec-style
+// alert fan-out for external SOCs.
+type NotifyConfig struct {
+	WebhookURL string   `toml:"webhook_url"`
+	Events     []string `toml:"events"`
+	Timeout    Duration `toml:"timeout"`
+}
+
 type ChallengeConfig struct {
 	Enabled    bool   `toml:"enabled"`
 	Mode       string `toml:"mode"`
@@ -717,6 +757,18 @@ func Default() Config {
 			IngestInterval:         Duration{time.Hour},
 			DefaultTTL:             Duration{24 * time.Hour},
 		},
+		Honeypot: HoneypotConfig{
+			Action: "ban",
+			BanTTL: Duration{time.Hour},
+		},
+		Tarpit: TarpitConfig{
+			Interval:     Duration{5 * time.Second},
+			BytesPerTick: 64,
+			MaxDuration:  Duration{2 * time.Minute},
+		},
+		Notify: NotifyConfig{
+			Timeout: Duration{5 * time.Second},
+		},
 	}
 }
 
@@ -978,6 +1030,9 @@ func applyEnv(c *Config) {
 	setStr(&c.Nebula.CACertFile, "RG_NEBULA_CA_CRT")
 	setStr(&c.Nebula.CAKeyFile, "RG_NEBULA_CA_KEY")
 	setStr(&c.Nebula.CIDR, "RG_NEBULA_CIDR")
+	setBool(&c.Honeypot.Enabled, "RG_HONEYPOT_ENABLED")
+	setStr(&c.Decisions.Token, "RG_DECISIONS_TOKEN")
+	setStr(&c.Notify.WebhookURL, "RG_NOTIFY_WEBHOOK_URL")
 	if v := os.Getenv("RG_ADMIN_SESSION_TTL"); v != "" {
 		if d, err := time.ParseDuration(v); err == nil {
 			c.Admin.SessionTTL = Duration{d}
@@ -1499,14 +1554,14 @@ func (c Config) Validate() error {
 			return fmt.Errorf("detect.block_score must be >= detect.challenge_score")
 		}
 		switch strings.ToLower(c.Detect.High404Action) {
-		case "challenge", "block", "off", "":
+		case "challenge", "block", "tarpit", "off", "":
 		default:
-			return fmt.Errorf("detect.high_404_action must be challenge, block, or off")
+			return fmt.Errorf("detect.high_404_action must be challenge, block, tarpit, or off")
 		}
 		switch strings.ToLower(c.Detect.PenaltyAction) {
-		case "challenge", "block", "off", "":
+		case "challenge", "block", "tarpit", "off", "":
 		default:
-			return fmt.Errorf("detect.penalty_action must be challenge, block, or off")
+			return fmt.Errorf("detect.penalty_action must be challenge, block, tarpit, or off")
 		}
 		if c.Detect.CrawlerVerify.Enabled {
 			if c.Detect.CrawlerVerify.Timeout.Duration < 0 || c.Detect.CrawlerVerify.Timeout.Duration > 10*time.Second {
@@ -1516,6 +1571,28 @@ func (c Config) Validate() error {
 				return fmt.Errorf("detect.crawler_verify.spoof_score must be >= 0")
 			}
 		}
+	}
+	if c.Honeypot.Enabled {
+		switch strings.ToLower(c.Honeypot.Action) {
+		case "ban", "deny", "block", "challenge", "tarpit", "":
+		default:
+			return fmt.Errorf("honeypot.action must be ban, deny, challenge, or tarpit")
+		}
+		if len(c.Honeypot.Paths) == 0 && len(c.Honeypot.Prefixes) == 0 {
+			return fmt.Errorf("honeypot.paths or honeypot.prefixes required when honeypot is enabled")
+		}
+		if c.Honeypot.BanTTL.Duration <= 0 {
+			return fmt.Errorf("honeypot.ban_ttl must be > 0")
+		}
+	}
+	if c.Tarpit.Interval.Duration < 0 || c.Tarpit.BytesPerTick < 0 || c.Tarpit.MaxDuration.Duration < 0 {
+		return fmt.Errorf("tarpit intervals, bytes_per_tick, and max_duration must be >= 0")
+	}
+	if c.Tarpit.MaxDuration.Duration > 10*time.Minute {
+		return fmt.Errorf("tarpit.max_duration must be <= 10m")
+	}
+	if c.Decisions.Enabled && strings.TrimSpace(c.Decisions.Token) == "" {
+		return fmt.Errorf("decisions.token is required when decisions is enabled")
 	}
 	if c.RateLimit.Enabled {
 		if c.RateLimit.SubnetRequests < 0 || c.RateLimit.SubnetBurst < 0 {
