@@ -512,7 +512,12 @@ func (p *Pages) ServeChallenge(w http.ResponseWriter, data Data) {
 		data.PrivacyNoticeURL = site.PrivacyNoticeURL
 	}
 	if data.ChallengeSubtitle == "" {
-		data.ChallengeSubtitle = site.ChallengeSubtitle
+		if data.Gate == "invisible" {
+			// no checkbox exists at this gate, the widget solves on load
+			data.ChallengeSubtitle = "Verifying your browser. This page will continue automatically."
+		} else {
+			data.ChallengeSubtitle = site.ChallengeSubtitle
+		}
 	}
 	if data.ChallengeTitle == "" {
 		data.ChallengeTitle = site.ChallengeTitle

@@ -107,10 +107,10 @@ func TestAdaptiveRisk(t *testing.T) {
 	if low.Algorithm != challenge.AlgoSHA256 {
 		t.Fatalf("low=%s", low.Algorithm)
 	}
-	if elev.Algorithm != challenge.AlgoPBKDF2SHA256 {
+	if elev.Algorithm != challenge.AlgoSHA256 {
 		t.Fatalf("elev=%s", elev.Algorithm)
 	}
-	if high.Algorithm != challenge.AlgoPBKDF2SHA256 || high.Difficulty < elev.Difficulty {
+	if high.Algorithm != challenge.AlgoSHA256 || high.Difficulty < elev.Difficulty {
 		t.Fatalf("high=%+v elev=%+v", high, elev)
 	}
 }

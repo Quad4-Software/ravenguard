@@ -207,14 +207,21 @@ func (m *Manager) selectEffort(risk RiskLevel) (algo string, diff int, params ma
 	default:
 		// adaptive
 	}
+	// Adaptive tiers stay on SHA-256: the browser solves through WebCrypto
+	// where every attempt crosses an async boundary, while a scripted solver
+	// runs native code. Iterated KDFs amplify that gap roughly 100x against
+	// the honest user, so difficulty carries the escalation instead.
 	switch risk {
 	case RiskHigh:
-		if diff >= 24 {
-			return AlgoPBKDF2SHA256, 28, map[string]int{"iterations": 50000}
+		if diff >= 18 {
+			return AlgoSHA256, 22, nil
 		}
-		return AlgoPBKDF2SHA256, diff + 4, map[string]int{"iterations": 50000}
+		return AlgoSHA256, diff + 4, nil
 	case RiskElevated:
-		return AlgoPBKDF2SHA256, diff, map[string]int{"iterations": 10000}
+		if diff >= 18 {
+			return AlgoSHA256, 20, nil
+		}
+		return AlgoSHA256, diff + 2, nil
 	default:
 		return AlgoSHA256, diff, nil
 	}
