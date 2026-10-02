@@ -27,7 +27,7 @@ LABEL org.opencontainers.image.title="RavenGuard" \
 	org.opencontainers.image.version="${VERSION}" \
 	org.opencontainers.image.revision="${REVISION}" \
 	org.opencontainers.image.created="${CREATED}" \
-	org.opencontainers.image.licenses="0BSD" \
+	org.opencontainers.image.licenses="QSL-1.0-0BSD" \
 	org.opencontainers.image.vendor="Quad4 Software" \
 	org.opencontainers.image.base.name="gcr.io/distroless/static-debian12:nonroot"
 
