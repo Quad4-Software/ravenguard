@@ -42,7 +42,9 @@ The signed challenge JSON includes gate so clients cannot self-downgrade interac
 
 ## No-JS browsers
 
-Lynx, Links, ELinks, w3m, Dillo, NetSurf, Browsh, edbrowse, and SerenityOS browse fine when clean. The browser-shape signals only fire for UAs that look like a graphical browser, so a text-mode client scores near zero. When one is challenged anyway (forge hot path, behavior burst, mode=always), the challenge page shows a "Continue without JavaScript" link in a noscript block that mints a clearance cookie bound to the client.
+Lynx, Links, ELinks, w3m, Dillo, NetSurf, Browsh, edbrowse, and SerenityOS browse fine when clean. The browser-shape signals only fire for UAs that look like a graphical browser, so a text-mode client scores near zero. When one is challenged anyway (forge hot path, behavior burst, mode=always), the challenge page shows a "Continue without JavaScript" link in a noscript block.
+
+The link lands on a page with a meta-refresh carrying a timed token. The token is bound to the client and destination, and must age no_js_delay seconds (default 3s) before it redeems for a clearance cookie. One scripted GET cannot mint clearance, matching Anubis metarefresh challenge behavior.
 
 Every request after clearance still runs through detection and behavior scoring, so a bot spoofing a text-browser UA buys nothing once it starts crawling hard. Disable with `no_js_fallback = false` under `[challenge]`.
 

@@ -5,10 +5,10 @@ HTTP web application firewall and reverse proxy. RavenGuard terminates TLS, rout
 ## Features
 
 - Host and path routing to multiple upstreams, with automatic Let's Encrypt, static PEM, or self-signed certificates
-- Bot and scanner scoring: request-shape signals, behavior bursts, UA tables, and verified-crawler rDNS checks
+- Bot and scanner scoring: request-shape signals, behavior bursts, UA tables, verified-crawler rDNS, and Web Bot Auth signature checks (RFC 9421, Signature-Agent key directories)
 - Forge-aware scoring for Gitea, Forgejo, GitLab, cgit, and Sourcehut paths. Git smart HTTP passes through untouched
-- Proof-of-work challenge with invisible and interactive gates, plus a no-JS fallback for text-mode browsers (Lynx, w3m, Links, Dillo, NetSurf)
-- Per-route access gates by password, PIN, IP, header, or User-Agent
+- Proof-of-work challenge with invisible and interactive gates, plus a timed no-JS fallback for text-mode browsers (Lynx, w3m, Links, Dillo, NetSurf)
+- AI crawler policy: allow, challenge, block, or pay (HTTP 402 x402 documents), plus robots.txt Content-Signal and training-crawler Disallow groups, RSL, and llms.txt
 - Optional Coraza / OWASP CRS engine, per-route OpenAPI schema gates, semantic payload analysis, and pure-Go ML scoring
 - Hub-and-proxy fleet mode over Nebula overlay, with threat sharing and STIX, CSV, AbuseIPDB, and MISP ingest
 - Server-rendered admin UI, request log lookup by Request ID, Linux Landlock and seccomp sandbox

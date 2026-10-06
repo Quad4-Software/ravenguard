@@ -42,7 +42,6 @@ path_prefix = "/_rg"
 enabled = false
 
 [privacy]
-hash_client_ip = false
 log_ip = "off"
 
 [ui]

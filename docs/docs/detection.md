@@ -182,6 +182,57 @@ are cached per IP and claimed identity (24h positive, 1h negative) and each
 lookup is bounded by timeout. Crawlers that publish IP ranges instead of PTR
 hostnames (OpenAI, Anthropic, Perplexity) are not verified this way.
 
+## AI crawler policy
+
+ai_crawler_policy governs requests whose User-Agent matches a known AI
+crawler or agent:
+
+```toml
+[detect]
+ai_crawler_policy = "challenge"   # allow | challenge | block | pay
+```
+
+| Policy | Effect |
+|--------|--------|
+| allow | AI UAs do not add ai_ua points |
+| challenge | ai_ua_score applies (default) |
+| block | AI crawlers are denied outright |
+| pay | AI crawlers get HTTP 402 with an x402 payment document |
+
+For pay, declare a price and recipient:
+
+```toml
+[detect.ai_pay]
+pay_to = "0x..."    # required
+amount = "10000"    # asset base units, 10000 is 0.01 USDC
+network = "base"
+asset = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02993"
+# facilitator = ""  # optional x402 verification endpoint
+```
+
+With a facilitator configured, requests carrying a PAYMENT-SIGNATURE or
+X-PAYMENT header are validated through it. Without one, every pay-policy
+request returns 402.
+
+## Signed agents (Web Bot Auth)
+
+web_bot_auth verifies HTTP Message Signatures per the IETF webbotauth
+draft. Agents advertise a Signature-Agent URL that publishes an ed25519
+key directory.
+
+```toml
+[detect.web_bot_auth]
+enabled = true
+timeout = "2s"
+spoof_score = 40
+```
+
+A verified signature adds the wba_verified reason and suppresses ai_ua and
+scanner_ua scoring unless ai_crawler_policy is block or pay. Malformed or
+failed signatures add spoof_score. Key directory fetches go over HTTPS only
+and are cached with singleflight, so verification adds no steady-state
+cost for unsigned traffic.
+
 ## Proxy bot signals
 
 ```toml

@@ -256,7 +256,7 @@ timeout = "3s"
 
 - Replace the example challenge secret
 - Keep ui.test_mode = false
-- Keep privacy.hash_client_ip = true unless raw addresses are required
+- Client IPs are always hashed into bind keys. Keep log_ip at hash or off
 - Store blocklist files on durable storage
 - Confirm the proxy forwards X-Forwarded-Proto (or the configured proto header)
 - Keep admin.listen on loopback or a private overlay. Never expose it like the public WAF port

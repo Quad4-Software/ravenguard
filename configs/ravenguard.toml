@@ -209,6 +209,25 @@ missing_uir_score = 10
 # meaningful at the edge (mode "edge" or "both"); behind a proxy the TLS state
 # describes the proxy connection, so it is ignored.
 sni_host_mismatch_score = 25
+# ai_crawler_policy governs known AI crawler and agent User-Agents:
+# challenge (default), allow, block, or pay. pay answers every AI crawl
+# request with HTTP 402 and an x402 payment document.
+# ai_crawler_policy = "challenge"
+# [detect.ai_pay]
+# pay_to = "0x..."        # recipient address, required for pay
+# amount = "10000"        # asset base units, 10000 is 0.01 USDC
+# network = "base"
+# asset = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02993"   # USDC on Base
+# facilitator = ""        # optional x402 verification endpoint
+
+# web_bot_auth verifies signed automated traffic per the IETF webbotauth
+# draft (HTTP Message Signatures over Signature-Agent key directories).
+# Verified agents get a wba_verified reason and skip ai_ua scoring unless
+# the policy is block or pay. Invalid signatures add spoof_score.
+# [detect.web_bot_auth]
+# enabled = true
+# timeout = "2s"
+# spoof_score = 40
 
 # Trap paths the site never links to. Any hit applies the action to every
 # client, including allowlisted ones. enabled needs at least one path or
@@ -229,7 +248,7 @@ sni_host_mismatch_score = 25
 
 # Bearer-token feed of live bans for external bouncers at
 # {challenge.path_prefix}/decisions. Token may come from RG_DECISIONS_TOKEN.
-# With privacy.hash_client_ip on, values are bind-key hashes.
+# Client IP bind keys are always hashed.
 # [decisions]
 # enabled = false
 # token = ""
@@ -271,8 +290,10 @@ cookie_ttl = "24h"
 secret = "rg-dev-secret-replace-me!!"
 path_prefix = "/_rg"
 # Continue link on the challenge page for text-mode browsers (Lynx, w3m, links).
+# The token must age no_js_delay before it redeems for clearance.
 # Behavior scoring still applies after clearance.
 # no_js_fallback = true
+# no_js_delay = "3s"
 
 [challenge.captcha]
 enabled = false
@@ -281,7 +302,6 @@ enabled = false
 # token = "ok"
 
 [privacy]
-hash_client_ip = true
 # ip_hash_secret = ""  # empty derives from challenge.secret
 log_ip = "hash"
 retention = "30m"
@@ -324,6 +344,13 @@ test_mode = false
 # widget_input_name = "rg"
 
 [site]
+# robots_ai emits AI-crawl declarations in robots.txt: signal adds a
+# Content-Signal line, disallow also adds Disallow groups for known AI
+# training crawlers, off emits neither.
+# robots_ai = "signal"
+# content_signal = "search=yes, ai-input=yes, ai-train=no"
+# rsl_file = ""      # static RSL license served at /.well-known/rsl.xml
+# llms_file = ""     # static file served at /llms.txt
 # public_url = "https://example.com"
 description = "RavenGuard Web Application Firewall"
 # og_image = "https://example.com/_rg/static/raven.png"

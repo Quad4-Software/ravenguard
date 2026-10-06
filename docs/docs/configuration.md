@@ -248,6 +248,17 @@ forum_write_path_score = 25
 forge_flavor = "auto"
 forge_expensive_score = 40
 behavior_forge_burst_limit = 24
+# ai_crawler_policy = "challenge"   # allow | challenge | block | pay
+# [detect.ai_pay]
+# pay_to = "0x..."
+# amount = "10000"
+# network = "base"
+# asset = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02993"
+# facilitator = ""
+# [detect.web_bot_auth]
+# enabled = true
+# timeout = "2s"
+# spoof_score = 40
 behavior_forge_burst_score = 35
 forge_rate_cost = 4
 missing_accept_lang_score = 15
@@ -296,8 +307,8 @@ max_duration = "2m"
 
 # Bearer-token feed of live bans for external bouncers, served at
 # {challenge.path_prefix}/decisions on the edge listener. Token may also come
-# from RG_DECISIONS_TOKEN. Values are client bind keys: privacy hashes when
-# privacy.hash_client_ip is on, raw client IPs when off.
+# from RG_DECISIONS_TOKEN. Values are client bind keys, always privacy
+# hashes of the client IP.
 [decisions]
 enabled = false
 token = ""
@@ -359,6 +370,10 @@ description = "RavenGuard Web Application Firewall"
 theme_color = "#050505"
 robots = "noindex, nofollow"
 lang = "en"
+# robots_ai = "signal"    # off | signal | disallow
+# content_signal = "search=yes, ai-input=yes, ai-train=no"
+# rsl_file = ""           # served at /.well-known/rsl.xml, adds License: line
+# llms_file = ""          # served at /llms.txt
 
 # Public fingerprint controls (optional)
 [stealth]
@@ -446,10 +461,12 @@ Hub-side overlay PKI. The hub keeps the CA under admin.data_dir/nebula by defaul
 
 ```toml
 [privacy]
-hash_client_ip = true
+# Client IPs are always hashed.
 # ip_hash_secret = ""   # empty derives from challenge.secret
-log_ip = "hash"         # off | hash | full
+log_ip = "hash"         # off | hash
+request_ids = true      # expose Request IDs on pages, headers, events
 retention = "30m"
+waf_events_ttl = "336h" # stored deny events, 14 days
 # privacy_notice_url = "https://example.com/privacy"
 
 [logging]

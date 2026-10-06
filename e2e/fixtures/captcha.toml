@@ -44,7 +44,6 @@ provider = "stub"
 token = "ok"
 
 [privacy]
-hash_client_ip = false
 log_ip = "off"
 
 [ui]

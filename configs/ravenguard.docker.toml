@@ -139,7 +139,8 @@ enabled = false
 # provider = "ravenguard"
 
 [privacy]
-hash_client_ip = true
+# Client IPs are always hashed. log_ip is hash or off.
+# request_ids = true
 log_ip = "hash"
 retention = "30m"
 
