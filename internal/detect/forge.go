@@ -72,6 +72,11 @@ func (f ForgeFlavor) Classify(path string) ForgeClass {
 				return cls
 			}
 		}
+		// GitLab marks repo routes with a "-" segment at any nesting depth:
+		// /{group}/{repo}/-/{action}.
+		if cls := gitlabDashClass(path); cls != ForgeNone {
+			return cls
+		}
 		if f == ForgeGitea {
 			return ForgeNone
 		}
@@ -96,6 +101,21 @@ func (f ForgeFlavor) Classify(path string) ForgeClass {
 		}
 		if cls := classifyCgitCmd(seg); cls != ForgeNone {
 			return cls
+		}
+	}
+	return ForgeNone
+}
+
+// ClassifyRequest is Classify plus the cgit non-virtual-root form where the
+// repo path lives in the url query parameter (/, /cgit, /index.cgi entry
+// points). Skipped for ForgeGitea, which has no query-mode layout.
+func (f ForgeFlavor) ClassifyRequest(path, rawQuery string) ForgeClass {
+	if cls := f.Classify(path); cls != ForgeNone || f == ForgeGitea {
+		return cls
+	}
+	if u, ok := rawQueryValue(rawQuery, "url"); ok && u != "" {
+		if _, rest := nextSeg(skipLeadSlash(path)); rest == "" {
+			return f.Classify("/" + u)
 		}
 	}
 	return ForgeNone
@@ -180,6 +200,25 @@ func nextSeg(p string) (seg, rest string) {
 	return p, ""
 }
 
+// gitlabDashClass finds a lone "-" segment and classifies the segment after
+// it. GitLab subgroups nest arbitrarily deep, so the marker can sit anywhere.
+func gitlabDashClass(path string) ForgeClass {
+	rest := path
+	for rest != "" {
+		var seg string
+		seg, rest = nextSeg(rest)
+		if seg != "-" {
+			continue
+		}
+		act, _ := nextSeg(rest)
+		if cls := classifyForgeAction(act); cls != ForgeNone {
+			return cls
+		}
+		return classifyCgitCmd(act)
+	}
+	return ForgeNone
+}
+
 // classifyForgeAction is the Gitea/Forgejo action table.
 func classifyForgeAction(seg string) ForgeClass {
 	switch len(seg) {
@@ -214,7 +253,7 @@ func classifyForgeAction(seg string) ForgeClass {
 func classifyCgitCmd(seg string) ForgeClass {
 	switch len(seg) {
 	case 3:
-		if eqFoldASCII(seg, "log") || eqFoldASCII(seg, "tag") || eqFoldASCII(seg, "ref") {
+		if eqFoldASCII(seg, "log") || eqFoldASCII(seg, "tag") {
 			return ForgeBrowse
 		}
 	case 4:

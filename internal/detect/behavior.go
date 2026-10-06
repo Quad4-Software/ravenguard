@@ -93,7 +93,7 @@ const maxTrackedUAs = 64
 
 // Record notes a request for burst, fan-out, write-spam, and UA-churn
 // scoring. ua is hashed so raw agent strings are not retained.
-func (t *BehaviorTracker) Record(key, path, method, ua string) {
+func (t *BehaviorTracker) Record(key, path, rawQuery, method, ua string) {
 	if t == nil || key == "" {
 		return
 	}
@@ -137,7 +137,7 @@ func (t *BehaviorTracker) Record(key, path, method, ua string) {
 			e.samePathWrite = 0
 		}
 	}
-	if t.cfg.ForgeFlavor.Classify(path) != ForgeNone {
+	if t.cfg.ForgeFlavor.ClassifyRequest(path, rawQuery) != ForgeNone {
 		e.forgeHits++
 	}
 }

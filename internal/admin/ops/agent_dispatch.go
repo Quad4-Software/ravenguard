@@ -155,13 +155,16 @@ func (d *RuntimeDispatcher) Handle(ctx context.Context, op string, payload json.
 			return []any{}, nil
 		}
 		return rt.LogSnapshot(p.Limit, p.Level), nil
-	case agentprotocol.OpRequestByID:
+	case agentprotocol.OpRequestByID, agentprotocol.OpRequestByRayLegacy:
 		var p agentprotocol.RequestByIDPayload
 		if err := json.Unmarshal(payload, &p); err != nil {
 			return nil, err
 		}
 		if rt.RequestByID == nil {
 			return nil, fmt.Errorf("request log unavailable")
+		}
+		if p.RequestID == "" {
+			p.RequestID = p.Ray
 		}
 		ev, ok := rt.RequestByID(p.RequestID)
 		if !ok {

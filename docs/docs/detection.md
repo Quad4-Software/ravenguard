@@ -61,6 +61,8 @@ forge_rate_cost = 4
 
 forge_flavor selects the URL layout: `auto` (default) covers Gitea/Forgejo `/{owner}/{repo}/{action}` plus cgit `/{repo}/{cmd}` and `/{group}/{repo}/{cmd}`; `gitea` restricts to Gitea/Forgejo; `cgit` scans every segment for a cgit command, which deep-nested cgit trees need (for example /pub/scm/linux/kernel/git/torvalds/linux.git/commit).
 
+Both auto and cgit also recognize the non-virtual-root cgit form where the repo path rides in the url query parameter on a bare entry path, such as `/cgit?url=repo/snapshot/x.tar.gz`. The url parameter is only read on single-segment paths so ordinary pages carrying an url argument do not score.
+
 | Tier | Gitea/Forgejo | cgit | Default effect |
 |------|---------------|------|----------------|
 | Hot | `/{owner}/{repo}/compare`, blame, archive, API git/trees, git/blobs | snapshot, diff, patch, blame | Per-request score (default 40) plus elevated rate-limit cost |

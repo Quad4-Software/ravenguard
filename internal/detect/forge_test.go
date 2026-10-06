@@ -67,6 +67,15 @@ func TestForgePathClassCgitAuto(t *testing.T) {
 		{"/repo/patch", detect.ForgeHot},
 		{"/repo/blame/README", detect.ForgeHot},
 		{"/group/repo/snapshot/x.tar.zst", detect.ForgeHot},
+		// GitLab /-/ routes.
+		{"/group/sub/repo/-/archive/main/x.tar.gz", detect.ForgeHot},
+		{"/o/r/-/compare/main...dev", detect.ForgeHot},
+		{"/o/r/-/blame/main/f.go", detect.ForgeHot},
+		{"/o/r/-/tree/main", detect.ForgeBrowse},
+		{"/o/r/-/blob/main/f.go", detect.ForgeBrowse},
+		{"/o/r/-/commit/abc", detect.ForgeBrowse},
+		{"/o/r/-/commits/main", detect.ForgeBrowse},
+		{"/o/r/-/issues", detect.ForgeNone},
 		{"/repo/tree/src/main.c", detect.ForgeBrowse},
 		{"/repo.git/plain/README.md", detect.ForgeBrowse},
 		{"/repo/commit", detect.ForgeBrowse},
@@ -124,6 +133,35 @@ func TestForgePathClassFlavors(t *testing.T) {
 	}
 	if detect.ParseForgeFlavor("") != detect.ForgeAuto || detect.ParseForgeFlavor("bogus") != detect.ForgeAuto {
 		t.Fatal("unknown flavors should parse to auto")
+	}
+}
+
+func TestClassifyRequestQueryMode(t *testing.T) {
+	cases := []struct {
+		flavor detect.ForgeFlavor
+		path   string
+		query  string
+		want   detect.ForgeClass
+	}{
+		// Non-virtual-root cgit: repo and cmd ride in the url parameter.
+		{detect.ForgeAuto, "/", "url=repo/snapshot/x.tar.gz", detect.ForgeHot},
+		{detect.ForgeAuto, "/cgit", "url=repo/tree/src", detect.ForgeBrowse},
+		{detect.ForgeAuto, "/index.cgi", "url=repo/diff", detect.ForgeHot},
+		{detect.ForgeCgit, "/", "url=group/sub/repo/commit", detect.ForgeBrowse},
+		// The url parameter is ignored on multi-segment paths so ordinary
+		// pages carrying an url= argument do not score.
+		{detect.ForgeAuto, "/o/r/issues", "url=a/snapshot/x", detect.ForgeNone},
+		{detect.ForgeGitea, "/", "url=repo/snapshot/x", detect.ForgeNone},
+		// Path classification still wins when it hits.
+		{detect.ForgeAuto, "/repo/snapshot/x.tar.gz", "url=o/r/src", detect.ForgeHot},
+		{detect.ForgeAuto, "/cgit", "", detect.ForgeNone},
+		{detect.ForgeAuto, "/cgit", "other=1", detect.ForgeNone},
+	}
+	for _, tc := range cases {
+		got := tc.flavor.ClassifyRequest(tc.path, tc.query)
+		if got != tc.want {
+			t.Fatalf("flavor=%v path=%q query=%q got=%v want=%v", tc.flavor, tc.path, tc.query, got, tc.want)
+		}
 	}
 }
 

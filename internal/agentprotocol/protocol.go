@@ -39,17 +39,20 @@ const (
 	OpQFeedsRefresh    = "qfeeds.refresh"
 	OpLogsSnapshot     = "logs.snapshot"
 	OpRequestByID      = "request.by_id"
-	OpRequestsRecent   = "requests.recent"
-	OpCertsStatus      = "certs.status"
-	OpCertsDetail      = "certs.detail"
-	OpCertsPut         = "certs.put"
-	OpCertsDelete      = "certs.delete"
-	OpCertsExport      = "certs.export"
-	OpCertsRenew       = "certs.renew"
-	OpCertsManage      = "certs.manage"
-	OpThreatReport     = "threat.report"
-	OpThreatPull       = "threat.pull"
-	OpThreatApply      = "threat.apply"
+	// OpRequestByRayLegacy is the pre-rename operation name, accepted for
+	// compatibility with agents built before the Request ID rename.
+	OpRequestByRayLegacy = "request.by_ray"
+	OpRequestsRecent     = "requests.recent"
+	OpCertsStatus        = "certs.status"
+	OpCertsDetail        = "certs.detail"
+	OpCertsPut           = "certs.put"
+	OpCertsDelete        = "certs.delete"
+	OpCertsExport        = "certs.export"
+	OpCertsRenew         = "certs.renew"
+	OpCertsManage        = "certs.manage"
+	OpThreatReport       = "threat.report"
+	OpThreatPull         = "threat.pull"
+	OpThreatApply        = "threat.apply"
 )
 
 // Envelope is a versioned JSON RPC frame over the agent WebSocket.
@@ -128,6 +131,8 @@ type LogsPayload struct {
 
 type RequestByIDPayload struct {
 	RequestID string `json:"request_id"`
+	// Ray carries the legacy field name from pre-rename peers.
+	Ray string `json:"ray,omitempty"`
 }
 
 type RequestsRecentPayload struct {

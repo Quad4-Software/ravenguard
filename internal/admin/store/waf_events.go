@@ -42,7 +42,7 @@ func (s *Store) InsertWAFEvent(e requestlog.Event) error {
 	return err
 }
 
-// GetWAFEventByID loads one event by reqID id.
+// GetWAFEventByID loads one event by request ID.
 func (s *Store) GetWAFEventByID(reqID string) (requestlog.Event, bool, error) {
 	row := s.db.QueryRow(
 		`SELECT request_id, created_at, action, reason, method, path, host, ua, ip_hash, bind_id, score, detail_json

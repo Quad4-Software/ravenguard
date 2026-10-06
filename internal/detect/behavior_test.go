@@ -24,7 +24,7 @@ func TestBehaviorBurstAndFanout(t *testing.T) {
 	})
 	key := "client-a"
 	for i := range 5 {
-		beh.Record(key, "/p/"+strconv.Itoa(i), "GET", "test-agent")
+		beh.Record(key, "/p/"+strconv.Itoa(i), "", "GET", "test-agent")
 	}
 	res := beh.Score(key)
 	if res.Score < 35 {
@@ -44,7 +44,7 @@ func TestBehaviorWriteBurstAndRepeat(t *testing.T) {
 	})
 	key := "spammer"
 	for range 4 {
-		beh.Record(key, "/comment", "POST", "test-agent")
+		beh.Record(key, "/comment", "", "POST", "test-agent")
 	}
 	res := beh.Score(key)
 	if res.Score < 40 {
@@ -70,7 +70,7 @@ func TestBehaviorWriteRepeatSkipsGeneralAPI(t *testing.T) {
 	})
 	key := "autosave"
 	for range 6 {
-		beh.Record(key, "/api/v1/documents/save", "POST", "test-agent")
+		beh.Record(key, "/api/v1/documents/save", "", "POST", "test-agent")
 	}
 	res := beh.Score(key)
 	if containsReason(res.Reasons, "behavior_write_repeat") {
@@ -111,13 +111,13 @@ func TestBehaviorForgeBurst(t *testing.T) {
 	})
 	key := "forge-browser"
 	for i := range 23 {
-		beh.Record(key, "/o/r/src/branch/main/f"+strconv.Itoa(i), "GET", "test-agent")
+		beh.Record(key, "/o/r/src/branch/main/f"+strconv.Itoa(i), "", "GET", "test-agent")
 	}
 	res := beh.Score(key)
 	if containsReason(res.Reasons, "behavior_forge_burst") {
 		t.Fatalf("23 browse hits must not forge-burst reasons=%v", res.Reasons)
 	}
-	beh.Record(key, "/o/r/src/branch/main/f23", "GET", "test-agent")
+	beh.Record(key, "/o/r/src/branch/main/f23", "", "GET", "test-agent")
 	res = beh.Score(key)
 	if !containsReason(res.Reasons, "behavior_forge_burst") {
 		t.Fatalf("24 browse hits should forge-burst reasons=%v score=%d", res.Reasons, res.Score)
@@ -136,11 +136,11 @@ func TestBehaviorForgeBurstMixHotBrowse(t *testing.T) {
 		ForgeBurstScore: 35,
 	})
 	key := "mix"
-	beh.Record(key, "/o/r/compare/a...b", "GET", "test-agent")
-	beh.Record(key, "/o/r/src/branch/main", "GET", "test-agent")
-	beh.Record(key, "/o/r/blame/branch/f", "GET", "test-agent")
-	beh.Record(key, "/o/r/commits/branch/main", "GET", "test-agent")
-	beh.Record(key, "/o/r/archive/main.zip", "GET", "test-agent")
+	beh.Record(key, "/o/r/compare/a...b", "", "GET", "test-agent")
+	beh.Record(key, "/o/r/src/branch/main", "", "GET", "test-agent")
+	beh.Record(key, "/o/r/blame/branch/f", "", "GET", "test-agent")
+	beh.Record(key, "/o/r/commits/branch/main", "", "GET", "test-agent")
+	beh.Record(key, "/o/r/archive/main.zip", "", "GET", "test-agent")
 	res := beh.Score(key)
 	if !containsReason(res.Reasons, "behavior_forge_burst") {
 		t.Fatalf("mixed hot+browse should burst reasons=%v", res.Reasons)
@@ -157,7 +157,7 @@ func TestBehaviorForgeIgnoresNonForge(t *testing.T) {
 	})
 	key := "issues"
 	for range 10 {
-		beh.Record(key, "/o/r/issues", "GET", "test-agent")
+		beh.Record(key, "/o/r/issues", "", "GET", "test-agent")
 	}
 	res := beh.Score(key)
 	if containsReason(res.Reasons, "behavior_forge_burst") {
@@ -174,13 +174,13 @@ func TestBehaviorUAVariety(t *testing.T) {
 		UAVarietyScore: 30,
 	})
 	key := "ua-rotator"
-	beh.Record(key, "/a", "GET", "agent-one")
-	beh.Record(key, "/a", "GET", "agent-two")
+	beh.Record(key, "/a", "", "GET", "agent-one")
+	beh.Record(key, "/a", "", "GET", "agent-two")
 	res := beh.Score(key)
 	if containsReason(res.Reasons, "behavior_ua_variety") {
 		t.Fatalf("two agents must not trigger variety score reasons=%v", res.Reasons)
 	}
-	beh.Record(key, "/a", "GET", "agent-three")
+	beh.Record(key, "/a", "", "GET", "agent-three")
 	res = beh.Score(key)
 	if !containsReason(res.Reasons, "behavior_ua_variety") {
 		t.Fatalf("three agents must trigger variety score reasons=%v", res.Reasons)
@@ -200,7 +200,7 @@ func TestBehaviorUAVarietySameAgentNoScore(t *testing.T) {
 	})
 	key := "steady"
 	for i := range 10 {
-		beh.Record(key, "/p/"+strconv.Itoa(i), "GET", "one-agent")
+		beh.Record(key, "/p/"+strconv.Itoa(i), "", "GET", "one-agent")
 	}
 	res := beh.Score(key)
 	if containsReason(res.Reasons, "behavior_ua_variety") {

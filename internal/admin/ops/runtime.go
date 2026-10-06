@@ -527,6 +527,7 @@ type DetectSafe struct {
 	BehaviorWriteRepeatScore int              `json:"behavior_write_repeat_score"`
 	EmptyFormContextScore    int              `json:"empty_form_context_score"`
 	ForumWritePathScore      int              `json:"forum_write_path_score"`
+	ForgeFlavor              string           `json:"forge_flavor"`
 	ForgeExpensiveScore      int              `json:"forge_expensive_score"`
 	BehaviorForgeBurstLimit  int              `json:"behavior_forge_burst_limit"`
 	BehaviorForgeBurstScore  int              `json:"behavior_forge_burst_score"`
@@ -660,6 +661,7 @@ func (r *Runtime) ConfigView() ConfigView {
 				BehaviorWriteBurstLimit: cfg.Detect.BehaviorWriteBurstLimit, BehaviorWriteBurstScore: cfg.Detect.BehaviorWriteBurstScore,
 				BehaviorWriteRepeatLimit: cfg.Detect.BehaviorWriteRepeatLimit, BehaviorWriteRepeatScore: cfg.Detect.BehaviorWriteRepeatScore,
 				EmptyFormContextScore: cfg.Detect.EmptyFormContextScore, ForumWritePathScore: cfg.Detect.ForumWritePathScore,
+				ForgeFlavor:             cfg.Detect.ForgeFlavor,
 				ForgeExpensiveScore:     cfg.Detect.ForgeExpensiveScore,
 				BehaviorForgeBurstLimit: cfg.Detect.BehaviorForgeBurstLimit, BehaviorForgeBurstScore: cfg.Detect.BehaviorForgeBurstScore,
 				ForgeRateCost: cfg.Detect.ForgeRateCost,
@@ -1020,6 +1022,13 @@ func validateSafeConfig(safe SafeConfig) error {
 			return fmt.Errorf("ml.mode must be off, shadow, challenge, or block")
 		}
 	}
+	if safe.Detect.ForgeFlavor != "" {
+		switch strings.ToLower(strings.TrimSpace(safe.Detect.ForgeFlavor)) {
+		case "auto", "gitea", "forgejo", "cgit":
+		default:
+			return fmt.Errorf("detect.forge_flavor must be auto, gitea, or cgit")
+		}
+	}
 	if safe.Coraza.Paranoia != 0 && (safe.Coraza.Paranoia < 1 || safe.Coraza.Paranoia > 4) {
 		return fmt.Errorf("coraza.paranoia must be between 1 and 4")
 	}
@@ -1140,6 +1149,7 @@ func applyDetectSafe(cfg *config.Config, safe DetectSafe) {
 	if safe.ForumWritePathScore > 0 {
 		cfg.Detect.ForumWritePathScore = safe.ForumWritePathScore
 	}
+	setNonEmpty(&cfg.Detect.ForgeFlavor, safe.ForgeFlavor)
 	if safe.ForgeExpensiveScore > 0 {
 		cfg.Detect.ForgeExpensiveScore = safe.ForgeExpensiveScore
 	}

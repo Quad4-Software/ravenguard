@@ -75,6 +75,42 @@ func TestForgeNormalBrowsingPasses(t *testing.T) {
 	}
 }
 
+func TestForgeCgitFlavor(t *testing.T) {
+	h := forgeTestHandler(t, func(cfg *config.Config) {
+		cfg.Detect.ForgeFlavor = "cgit"
+	})
+	// Deep-nested cgit repo: the command segment sits past segment 2.
+	req := httptest.NewRequest(http.MethodGet, "/pub/scm/linux/kernel/git/torvalds/linux.git/snapshot/linux-6.9.tar.gz", nil)
+	forgeBrowserHeaders(req)
+	req.RemoteAddr = "192.0.2.210:1"
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code == http.StatusOK {
+		t.Fatal("deep cgit snapshot should challenge under forge_flavor=cgit")
+	}
+
+	// Non-virtual-root query mode: /?url=repo/snapshot/x scores hot.
+	req = httptest.NewRequest(http.MethodGet, "/?url=repo/snapshot/x.tar.gz", nil)
+	forgeBrowserHeaders(req)
+	req.RemoteAddr = "192.0.2.211:1"
+	rr = httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code == http.StatusOK {
+		t.Fatal("query-mode cgit snapshot should challenge")
+	}
+
+	// Auto flavor does not reach past segment 2 for cgit.
+	hAuto := forgeTestHandler(t, nil)
+	req = httptest.NewRequest(http.MethodGet, "/pub/scm/linux/kernel/git/torvalds/linux.git/snapshot/x.tar.gz", nil)
+	forgeBrowserHeaders(req)
+	req.RemoteAddr = "192.0.2.212:1"
+	rr = httptest.NewRecorder()
+	hAuto.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("deep cgit path should pass under auto, got %d", rr.Code)
+	}
+}
+
 func TestForgeHotPathChallenges(t *testing.T) {
 	h := forgeTestHandler(t, nil)
 	for _, p := range []string{

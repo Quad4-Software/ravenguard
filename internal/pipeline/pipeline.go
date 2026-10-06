@@ -935,7 +935,7 @@ func (h *Handler) guard(w http.ResponseWriter, r *http.Request) {
 	allowed := h.allows != nil && h.allows.Match(clientIP, ua, r.Header)
 	isGitSmartHTTP := detect.IsGitSmartHTTP(r)
 	isStream := detect.IsStreamProtocol(r)
-	isHotForge := h.forgeFlavor.Classify(r.URL.Path) == detect.ForgeHot
+	isHotForge := h.forgeFlavor.ClassifyRequest(r.URL.Path, r.URL.RawQuery) == detect.ForgeHot
 	// SSE is the only stream that can soft-pass without clearance: EventSource is an
 	// HTTP subresource and browsers do not perform a pre-flight handshake. WebSocket
 	// and WebTransport require a prior page load, so they must present a clearance cookie.
@@ -1069,7 +1069,7 @@ func (h *Handler) guard(w http.ResponseWriter, r *http.Request) {
 		if h.prot != nil && h.prot.Enabled() {
 			cost = protect.MethodCost(r.Method, h.writeCost)
 		}
-		if h.forgeFlavor.Classify(r.URL.Path) == detect.ForgeHot && h.forgeRateCost > cost {
+		if h.forgeFlavor.ClassifyRequest(r.URL.Path, r.URL.RawQuery) == detect.ForgeHot && h.forgeRateCost > cost {
 			cost = h.forgeRateCost
 		}
 		h.mu.RLock()
@@ -1122,7 +1122,7 @@ func (h *Handler) guard(w http.ResponseWriter, r *http.Request) {
 		cspoof := h.crawlerSpoof
 		h.mu.RUnlock()
 		if h.beh != nil {
-			h.beh.Record(bindID, r.URL.Path, r.Method, ua)
+			h.beh.Record(bindID, r.URL.Path, r.URL.RawQuery, r.Method, ua)
 			if h.beh.StrikesExceeded(bindID) {
 				if h.prot != nil && h.prot.Enabled() {
 					h.prot.BanNow(bindID)
@@ -1685,12 +1685,14 @@ func (h *Handler) serveChallenge(w http.ResponseWriter, r *http.Request, reqID, 
 }
 
 type challengeBody struct {
-	Payload   string              `json:"payload"`
-	Token     string              `json:"token"`
-	Solution  string              `json:"solution"`
-	RequestID string              `json:"request_id"`
-	Captcha   string              `json:"captcha"`
-	Env       challenge.EnvReport `json:"env"`
+	Payload   string `json:"payload"`
+	Token     string `json:"token"`
+	Solution  string `json:"solution"`
+	RequestID string `json:"request_id"`
+	// Ray accepts the pre-rename field name from cached challenge pages.
+	Ray     string              `json:"ray,omitempty"`
+	Captcha string              `json:"captcha"`
+	Env     challenge.EnvReport `json:"env"`
 }
 
 func (h *Handler) handleChallengeV1GET(w http.ResponseWriter, r *http.Request) {
@@ -1769,6 +1771,9 @@ func (h *Handler) handleChallengePOST(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
+	}
+	if body.RequestID == "" {
+		body.RequestID = body.Ray
 	}
 	if reqIDFromBody := strings.TrimSpace(body.RequestID); reqIDFromBody != "" && reqIDFromBody != reqID {
 		// Allow challenge UI to continue the issued request ID, but refuse spoofing a request ID

@@ -373,7 +373,7 @@ func score(r *http.Request, cfg Config, wantReasons bool) Result {
 			break
 		}
 	}
-	if cfg.ForgeExpensiveScore > 0 && cfg.ForgeFlavor.Classify(path) == ForgeHot {
+	if cfg.ForgeExpensiveScore > 0 && cfg.ForgeFlavor.ClassifyRequest(path, r.URL.RawQuery) == ForgeHot {
 		res.Score += cfg.ForgeExpensiveScore
 		if wantReasons {
 			res.Reasons = append(res.Reasons, "forge_expensive")
