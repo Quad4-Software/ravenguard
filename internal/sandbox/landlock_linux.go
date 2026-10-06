@@ -38,7 +38,17 @@ func applyLandlock(cfg LandlockConfig, mode Mode) (string, error) {
 	}
 
 	if cfg.RestrictNet {
-		if err := base.RestrictNet(netRules...); err != nil {
+		netBase := base
+		if cfg.UnrestrictedUDPConnect {
+			// V10 marks the UDP rights handled, and a handled right with
+			// no matching rule denies it. QUIC must send to arbitrary
+			// client ports, so restrict to the V5 TCP-only net rights.
+			netBase = landlock.V5
+			if mode == ModeBestEffort || mode == ModeTry {
+				netBase = netBase.BestEffort()
+			}
+		}
+		if err := netBase.RestrictNet(netRules...); err != nil {
 			return "", fmt.Errorf("restrict net: %w", err)
 		}
 		parts = append(parts, "net")
@@ -103,14 +113,16 @@ func splitLandlockRules(cfg LandlockConfig) (paths []landlock.Rule, nets []landl
 		for _, p := range cfg.BindTCP {
 			nets = append(nets, landlock.BindTCP(p))
 		}
-		for _, p := range cfg.BindUDP {
-			nets = append(nets, landlock.BindUDP(p))
-		}
 		for _, p := range cfg.ConnectTCP {
 			nets = append(nets, landlock.ConnectTCP(p))
 		}
-		for _, p := range cfg.ConnectUDP {
-			nets = append(nets, landlock.ConnectSendUDP(p))
+		if !cfg.UnrestrictedUDPConnect {
+			for _, p := range cfg.BindUDP {
+				nets = append(nets, landlock.BindUDP(p))
+			}
+			for _, p := range cfg.ConnectUDP {
+				nets = append(nets, landlock.ConnectSendUDP(p))
+			}
 		}
 	}
 	return paths, nets

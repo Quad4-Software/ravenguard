@@ -129,6 +129,9 @@ func DerivePaths(cfg *Config, configPath string, listenHTTP, listenHTTPS, listen
 	}
 	if p, ok := udpPort(listenQUIC); ok {
 		addUnique16(&cfg.Landlock.BindUDP, p)
+		// QUIC replies target arbitrary client ports. connect_send_udp must
+		// stay out of the handled rights or the handshake cannot complete.
+		cfg.Landlock.UnrestrictedUDPConnect = true
 	}
 
 	addUnique16(&cfg.Landlock.ConnectTCP, 53, 80, 443)

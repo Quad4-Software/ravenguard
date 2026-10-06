@@ -23,7 +23,13 @@ type LandlockConfig struct {
 	BindUDP        []uint16
 	ConnectTCP     []uint16
 	ConnectUDP     []uint16
-	IgnoreMissing  bool
+	// UnrestrictedUDPConnect keeps the UDP rights (bind_udp and
+	// connect_send_udp) out of the handled net rights. Required when a
+	// QUIC listener is bound, since HTTP/3 replies go to ephemeral client
+	// ports no allowlist can cover and a handled right with no rules
+	// denies every send.
+	UnrestrictedUDPConnect bool
+	IgnoreMissing          bool
 }
 
 // SeccompConfig configures in-process seccomp-bpf filtering.
