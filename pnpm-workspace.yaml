@@ -7,6 +7,7 @@ packages:
 # https://pnpm.io/supply-chain-security
 minimumReleaseAge: 10080
 minimumReleaseAgeStrict: true
+
 trustPolicy: no-downgrade
 trustPolicyIgnoreAfter: 525600
 blockExoticSubdeps: true
@@ -27,6 +28,10 @@ overrides:
   tinypool: ^2.1.2
   # GHSA: postcss-selector-parser <7.1.6 pulled by cssnano plugins.
   postcss-selector-parser: ^7.1.6
+  # GHSA: source-map-js <1.2.2 via the docs and widget toolchains.
+  source-map-js: ^1.2.2
+  # GHSA: http-cache-semantics <=4.2.0 via got -> update-notifier.
+  http-cache-semantics: ^4.3.0
   vitest: ^5.0.1
   # GHSA: fast-uri 3.1.6 pulled by ajv -> docusaurus. Pin to the fixed line.
   fast-uri: ^3.1.8
@@ -38,6 +43,9 @@ overrides:
 minimumReleaseAgeExclude:
   - uuid
   - serialize-javascript
+  # Security fixes accepted ahead of the release-age window.
+  - source-map-js
+  - http-cache-semantics
   - qs
   - image-size-next
   - fastq
