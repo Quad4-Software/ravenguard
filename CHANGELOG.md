@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 1.0.0 - 2026-10-06
+
 ### Added
 
 - Web Bot Auth: signed automated traffic is verified per the IETF
