@@ -647,3 +647,54 @@ func TestScoreCleanBrowserNoNewSignals(t *testing.T) {
 		}
 	}
 }
+
+func TestIsTextBrowserUA(t *testing.T) {
+	for _, ua := range []string{
+		"Lynx/2.9.2 libwww-FM/2.14 SSL-MM/1.4.1",
+		"Links (2.29; Linux 6.5 x86_64; GNU C 13.2; text)",
+		"ELinks/0.13.2 (textmode; Linux; -)",
+		"w3m/0.5.3+git20230716",
+		"Dillo/3.2.0",
+		"NetSurf/3.11",
+		"edbrowse/3.8.10",
+	} {
+		if !detect.IsTextBrowserUA(ua) {
+			t.Fatalf("ua=%q should be a text browser", ua)
+		}
+	}
+	for _, ua := range []string{
+		"",
+		"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/130.0.0.0 Safari/537.36",
+		"curl/8.5.0",
+		"python-requests/2.31",
+		"GPTBot/1.0",
+	} {
+		if detect.IsTextBrowserUA(ua) {
+			t.Fatalf("ua=%q must not be a text browser", ua)
+		}
+	}
+}
+
+func TestTextBrowserCleanScore(t *testing.T) {
+	cfg := detect.Config{
+		MissingUAScore: 25, ScannerUAScore: 50, AIUAScore: 55,
+		ProbePathScore: 40, OddMethodScore: 30, MissingAcceptScore: 10,
+		MissingAcceptLangScore: 15, MissingSecFetchScore: 20,
+		SecCHUAMismatchScore: 25, StarAcceptBrowserScore: 15,
+		ForgeExpensiveScore: 40,
+	}
+	r := httptest.NewRequest(http.MethodGet, "/products/shoes", nil)
+	r.Header.Set("User-Agent", "Lynx/2.9.2 libwww-FM/2.14 SSL-MM/1.4.1")
+	r.Header.Set("Accept", "text/html")
+	res := detect.Score(r, cfg)
+	if res.Score != 0 {
+		t.Fatalf("lynx clean browse scored %d reasons=%v", res.Score, res.Reasons)
+	}
+	r = httptest.NewRequest(http.MethodGet, "/repo/snapshot/x.tar.gz", nil)
+	r.Header.Set("User-Agent", "Lynx/2.9.2 libwww-FM/2.14 SSL-MM/1.4.1")
+	r.Header.Set("Accept", "text/html")
+	res = detect.Score(r, cfg)
+	if res.Score < 40 {
+		t.Fatalf("lynx on forge-hot path should still score, got %d", res.Score)
+	}
+}

@@ -117,6 +117,10 @@ type Data struct {
 	CaptchaEnabled   bool
 	PrivacyNoticeURL string
 	Next             string
+	// NoJSContinue renders the noscript clearance link for text-mode and
+	// no-JavaScript browsers. NoJSURL is the prefilled continue target.
+	NoJSContinue bool
+	NoJSURL      string
 }
 
 // PageData is a status page view model.

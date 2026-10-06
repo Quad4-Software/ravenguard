@@ -14,6 +14,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"sync"
@@ -181,7 +182,7 @@ func trapPath(p string) string {
 }
 
 // Match reports whether path hits a trap. The request path is lowercased once
-// per call; only runs when the honeypot section is enabled.
+// per call, and only runs when the honeypot section is enabled.
 func (t *trapSet) Match(path string) bool {
 	low := strings.ToLower(path)
 	if _, ok := t.exact[low]; ok {
@@ -276,6 +277,7 @@ func New(
 		h.mux.HandleFunc(cfg.Challenge.PathPrefix+"/site.webmanifest", h.pages.ServeManifest)
 	}
 	h.mux.HandleFunc(cfg.Challenge.PathPrefix+"/challenge", h.handleChallengePOST)
+	h.mux.HandleFunc(cfg.Challenge.PathPrefix+"/noscript", h.handleNoScriptGET)
 	h.mux.HandleFunc(cfg.Challenge.PathPrefix+"/v1/challenge", h.handleChallengeV1GET)
 	h.mux.HandleFunc(cfg.Challenge.PathPrefix+"/v1/verify", h.handleVerifyV1POST)
 	h.mux.HandleFunc(cfg.Challenge.PathPrefix+"/access", h.handleAccessPOST)
@@ -553,7 +555,7 @@ func (h *Handler) serveTarpit(w http.ResponseWriter, r *http.Request) {
 	if maxDur <= 0 {
 		maxDur = 2 * time.Minute
 	}
-	// The payload is filler that looks like a slow HTML stream; one random
+	// The payload is filler that looks like a slow HTML stream, one random
 	// block per response is enough since it only needs to keep flowing.
 	payload := make([]byte, n)
 	_, _ = rand.Read(payload)
@@ -588,7 +590,7 @@ func (h *Handler) serveTarpit(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleDecisions is the bouncer feed: a CrowdSec-LAPI-style list of live
-// bans for external enforcement. Bearer-token gated; the values are client
+// bans for external enforcement. Bearer-token gated. The values are client
 // bind keys, which are privacy hashes when privacy.hash_client_ip is on and
 // raw client IPs when off.
 func (h *Handler) handleDecisions(w http.ResponseWriter, r *http.Request) {
@@ -663,7 +665,7 @@ func (h *Handler) ApplyConfig(cfg config.Config) {
 	h.crawlerVerify = cfg.Detect.CrawlerVerify.Enabled
 	h.crawlerSpoof = cfg.Detect.CrawlerVerify.SpoofScore
 	if cfg.Detect.CrawlerVerify.Enabled {
-		// Rebuild so a changed timeout takes effect; reloads are rare and a
+		// Rebuild so a changed timeout takes effect. Reloads are rare and a
 		// fresh verdict cache is acceptable.
 		h.crawlerVer = detect.NewCrawlerVerifier(
 			cfg.Detect.CrawlerVerify.Timeout.Duration,
@@ -1094,7 +1096,7 @@ func (h *Handler) guard(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if detect.IsWebSocketUpgrade(r) {
-		// WebSocket handshakes cannot render a JS challenge; require a clearance cookie.
+		// WebSocket handshakes cannot render a JS challenge, require a clearance cookie.
 		if !allowed && cfg.Challenge.Enabled && h.chal != nil && !h.skipChallenge(r) && !h.chal.HasClearance(r, bindID) {
 			h.recordEvent(r, reqID, bindID, ipStr, host, ua, requestlog.ActionChallenge, "clearance required", 0, nil)
 			http.Error(w, "clearance required", http.StatusForbidden)
@@ -1113,7 +1115,7 @@ func (h *Handler) guard(w http.ResponseWriter, r *http.Request) {
 	needChallenge := false
 	detectScore := 0
 	if !allowed && !isGitSmartHTTP && cfg.Detect.Enabled {
-		// Snapshot the live-tunable detect fields once; ApplyConfig swaps
+		// Snapshot the live-tunable detect fields once. ApplyConfig swaps
 		// them under the write lock during admin reloads.
 		h.mu.RLock()
 		dcfg := h.detectCfg
@@ -1673,6 +1675,7 @@ func (h *Handler) serveChallenge(w http.ResponseWriter, r *http.Request, reqID, 
 		return
 	}
 
+	next := safeNextPath(r.URL.RequestURI())
 	h.pages.ServeChallenge(w, ui.Data{
 		StatusText:       h.cfg.UI.StatusText,
 		RequestID:        reqID,
@@ -1680,8 +1683,56 @@ func (h *Handler) serveChallenge(w http.ResponseWriter, r *http.Request, reqID, 
 		Gate:             gate,
 		CaptchaEnabled:   captchaOn,
 		PrivacyNoticeURL: h.cfg.Privacy.PrivacyNoticeURL,
-		Next:             safeNextPath(r.URL.RequestURI()),
+		Next:             next,
+		NoJSContinue:     h.cfg.Challenge.NoJSFallback && detect.IsTextBrowserUA(ua),
+		NoJSURL:          h.cfg.Challenge.PathPrefix + "/noscript?next=" + url.QueryEscape(next),
 	})
+}
+
+// handleNoScriptGET mints a clearance cookie for text-mode and no-JavaScript
+// browsers that cannot run the proof-of-work widget. The link only renders
+// for known text-browser User-Agents, the endpoint enforces the same client
+// binding as a solved challenge, and every later request still scores.
+func (h *Handler) handleNoScriptGET(w http.ResponseWriter, r *http.Request) {
+	reqID := requestid.New()
+	h.setRequestIDHeader(w, reqID)
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if h.chal == nil || !h.cfg.Challenge.NoJSFallback {
+		http.NotFound(w, r)
+		return
+	}
+	if !detect.IsTextBrowserUA(r.Header.Get("User-Agent")) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	clientIP := h.resolveClientIP(r)
+	ipStr := ""
+	if clientIP != nil {
+		ipStr = clientIP.String()
+	}
+	bindID := h.clientBind(ipStr)
+	if h.limiter != nil && h.cfg.RateLimit.Enabled {
+		if !h.limiter.AllowN(bindID, r.URL.Path, 1) {
+			http.Error(w, "too many requests", http.StatusTooManyRequests)
+			return
+		}
+	}
+	if h.globalOver() {
+		http.Error(w, "too many requests", http.StatusTooManyRequests)
+		return
+	}
+	h.recordEvent(r, reqID, bindID, ipStr, stripPort(r.Host), r.Header.Get("User-Agent"),
+		requestlog.ActionChallenge, "no-js clearance", 0, nil)
+	http.SetCookie(w, h.chal.ClearanceCookie(bindID, reqID, h.requestSecure(r)))
+	next := safeNextPath(r.URL.Query().Get("next"))
+	if next == "" {
+		next = "/"
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	http.Redirect(w, r, next, http.StatusSeeOther)
 }
 
 type challengeBody struct {

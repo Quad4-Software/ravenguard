@@ -11,6 +11,9 @@
     <div class="widget{{if eq .Gate "invisible"}} widget-invisible{{end}}">
       {{.WidgetHTML}}
     </div>
+    {{if .NoJSContinue}}
+    <noscript><p class="sub"><a href="{{.NoJSURL}}">Continue without JavaScript</a></p></noscript>
+    {{end}}
     {{if .CaptchaEnabled}}
     <label class="captcha" for="captcha">Confirm
       <input id="captcha" name="captcha" type="text" autocomplete="off" placeholder="type ok">

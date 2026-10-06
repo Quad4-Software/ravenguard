@@ -67,7 +67,7 @@ type ThreatIntelConfig struct {
 }
 
 // NebulaConfig configures hub-side Nebula PKI for fleet overlay enrollment.
-// The hub admin API signs host certificates for the overlay; Nebula itself
+// The hub admin API signs host certificates for the overlay. Nebula itself
 // runs as a separate daemon on each host.
 type NebulaConfig struct {
 	// CACertFile and CAKeyFile hold the overlay CA material. Empty paths
@@ -438,7 +438,12 @@ type ChallengeConfig struct {
 	// Algorithm is sha256, pbkdf2, argon2id, or adaptive (default).
 	Algorithm string `toml:"algorithm"`
 	// EnvProbe is on (default) or off. off skips automation refusal for e2e harnesses.
-	EnvProbe         string        `toml:"env_probe"`
+	EnvProbe string `toml:"env_probe"`
+	// NoJSFallback offers a continue link on the challenge page to clients
+	// whose User-Agent matches a known text-mode or no-JavaScript browser.
+	// The link mints a clearance cookie bound to the client. Behavior and
+	// detect scoring still apply to every request after it.
+	NoJSFallback     bool          `toml:"no_js_fallback"`
 	CookieName       string        `toml:"cookie_name"`
 	CookieTTL        Duration      `toml:"cookie_ttl"`
 	Secret           string        `toml:"secret"`
@@ -698,6 +703,7 @@ func Default() Config {
 		Challenge: ChallengeConfig{
 			Enabled: true, Mode: "detect", Difficulty: 16, Algorithm: "adaptive",
 			EnvProbe: "on", CookieName: "rg_clear", CookieTTL: Duration{24 * time.Hour}, PathPrefix: "/_rg",
+			NoJSFallback: true,
 		},
 		Stealth: StealthConfig{
 			RequestIDHeader:  "X-RavenGuard-Request-ID",

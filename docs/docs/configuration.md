@@ -28,7 +28,7 @@ Full example: [configs/ravenguard.toml](https://github.com/Quad4-Software/raveng
 | -test-mode | RG_UI_TEST_MODE | Enable /_rg/test UI previews |
 | -log-level | RG_LOG_LEVEL | debug / info / warn / error |
 | -log-format | RG_LOG_FORMAT | text / json |
-| -log-stats | RG_LOG_STATS | Periodic edge stats on stderr (default on; set false to disable) |
+| -log-stats | RG_LOG_STATS | Periodic edge stats on stderr (default on, set false to disable) |
 | -log-stats-interval | RG_LOG_STATS_INTERVAL | Stats interval (default 30s) |
 | -admin-enabled | RG_ADMIN_ENABLED | Enable admin control plane |
 | -admin-listen | RG_ADMIN_LISTEN | Admin HTTP bind (default 127.0.0.1:9090) |
@@ -132,7 +132,7 @@ timeout = "3s"
 
 ws:// and wss:// are scheme aliases for the same TCP origin as http:// and https://. WebSocket traffic is an HTTP upgrade on that connection. When [challenge] is enabled, upgrades require an existing clearance cookie from a prior page load (browsers cannot run the JS puzzle during a handshake). Forward WebSocket upgrades from your reverse proxy to RavenGuard.
 
-protocol selects the upstream HTTP version. The h2 value uses HTTP/2 and falls back to HTTP/1.1 when allow_http1 is true. The http1.1 value forces HTTP/1.1. The h3 value forces HTTP/3 over QUIC. The auto value probes QUIC in the background, then uses HTTP/3 when the origin supports it and HTTP/2 or HTTP/1.1 otherwise. The default is h2 with allow_http1 set to true, so TLS origins negotiate HTTP/2 or HTTP/1.1 through ALPN and plain http:// origins use h2c when the origin speaks it and HTTP/1.1 otherwise. Set allow_http1 to false only if the origin is strictly HTTP/2; cleartext origins then get prior-knowledge h2c only.
+protocol selects the upstream HTTP version. The h2 value uses HTTP/2 and falls back to HTTP/1.1 when allow_http1 is true. The http1.1 value forces HTTP/1.1. The h3 value forces HTTP/3 over QUIC. The auto value probes QUIC in the background, then uses HTTP/3 when the origin supports it and HTTP/2 or HTTP/1.1 otherwise. The default is h2 with allow_http1 set to true, so TLS origins negotiate HTTP/2 or HTTP/1.1 through ALPN and plain http:// origins use h2c when the origin speaks it and HTTP/1.1 otherwise. Set allow_http1 to false only if the origin is strictly HTTP/2. Cleartext origins then get prior-knowledge h2c only.
 
 `success_codes` overrides the default 2xx-only health check. This is useful for origins like Prosody that return 403 on `/` while serving real paths. Env: `RG_UPSTREAM_HEALTH_SUCCESS_CODES` (comma-separated).
 
@@ -325,6 +325,7 @@ cookie_ttl = "24h"
 secret = "rg-dev-secret-replace-me!!"
 path_prefix = "/_rg"
 # skip_path_prefixes = ["/xmpp-websocket", "/http-bind"]
+# no_js_fallback = true    # continue link for text-mode browsers
 
 [challenge.captcha]
 enabled = false
@@ -375,6 +376,8 @@ lang = "en"
 mode = "attack" forces the visible interactive gate for every challenged request. In detect / always, low and elevated risk use the invisible auto-PoW gate. High risk and failed invisible attempts escalate to interactive. When captcha is enabled the interactive gate is always issued so captcha cannot be skipped via API-only PoW.
 
 `skip_path_prefixes` disables challenge checks for matching paths. Use it for WebSocket/API/XMPP endpoints that cannot render the JS challenge and do not have a clearance cookie. You can also set `skip_challenge` per route in the admin API.
+
+`no_js_fallback` (default on) shows a continue link inside the noscript block of the challenge page when the User-Agent names a known text-mode browser (Lynx, Links, w3m, ELinks, Dillo, NetSurf, Browsh, edbrowse, SerenityOS). Following it mints a clearance cookie bound to the client. Behavior, rate-limit, and detect scoring still apply on every request after clearance, so a spoofed text-browser UA that crawls hard still trips burst and block thresholds. Set it false to keep the challenge strictly JavaScript-gated.
 
 | Stealth key | Default | Meaning |
 |-------------|---------|---------|

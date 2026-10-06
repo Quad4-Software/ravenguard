@@ -26,6 +26,7 @@ cookie_name = "rg_clear"
 cookie_ttl = "24h"
 secret = "rg-dev-secret-replace-me!!"
 path_prefix = "/_rg"
+# no_js_fallback = true
 ```
 
 algorithm may be adaptive (default), sha256, pbkdf2, or argon2id. Adaptive raises effort from detect score bands: SHA-256 for low risk, PBKDF2 for elevated or high risk.
@@ -38,6 +39,12 @@ algorithm may be adaptive (default), sha256, pbkdf2, or argon2id. Adaptive raise
 | interactive | attack mode, high risk, or after a failed invisible attempt | Visible checkbox (and captcha when enabled) |
 
 The signed challenge JSON includes gate so clients cannot self-downgrade interaction rules. Invisible solutions may omit checkbox interaction. Automation markers still refuse clearance when env_probe is on (default). Set env_probe to off only for automated browser harnesses.
+
+## No-JS browsers
+
+Lynx, Links, ELinks, w3m, Dillo, NetSurf, Browsh, edbrowse, and SerenityOS browse fine when clean. The browser-shape signals only fire for UAs that look like a graphical browser, so a text-mode client scores near zero. When one is challenged anyway (forge hot path, behavior burst, mode=always), the challenge page shows a "Continue without JavaScript" link in a noscript block that mints a clearance cookie bound to the client.
+
+Every request after clearance still runs through detection and behavior scoring, so a bot spoofing a text-browser UA buys nothing once it starts crawling hard. Disable with `no_js_fallback = false` under `[challenge]`.
 
 Override the secret in production with RG_CHALLENGE_SECRET (minimum 16 characters, not a change-me placeholder). Cookie name overrides: challenge.cookie_name or RG_CHALLENGE_COOKIE_NAME. Env probe: RG_CHALLENGE_ENV_PROBE.
 

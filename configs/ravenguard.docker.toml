@@ -130,6 +130,9 @@ cookie_ttl = "24h"
 # Set RG_CHALLENGE_SECRET in compose (min 16 chars)
 secret = "rg-docker-dev-secret!!"
 path_prefix = "/_rg"
+# Continue link on the challenge page for text-mode browsers (Lynx, w3m, links).
+# Behavior scoring still applies after clearance.
+# no_js_fallback = true
 
 [challenge.captcha]
 enabled = false
