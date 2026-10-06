@@ -181,7 +181,6 @@ func TestApplySafeConfigOldPayloadKeepsDefaults(t *testing.T) {
 	cfg.Challenge.Captcha.Enabled = true
 	cfg.Challenge.Captcha.Provider = "stub"
 	cfg.Stealth.ServeManifest = true
-	cfg.Privacy.HashClientIP = true
 	rt := ops.NewRuntime(cfg, nil, nil, nil, nil, nil, nil)
 	old := `{"ratelimit":{"enabled":true,"requests":120,"window":"1m","burst":60,"per_path":false,"challenge_over":true},"protect":{"enabled":true,"max_body_bytes":1048576,"max_header_bytes":16384,"max_url_bytes":8192,"max_concurrent_global":8192,"max_concurrent_per_client":32,"ban_after_strikes":5,"ban_ttl":"10m","attack_block":true,"attack_score":90,"write_method_cost":3},"detect":{"enabled":true,"challenge_score":40,"block_score":90},"challenge":{"enabled":true,"mode":"detect","difficulty":16,"cookie_ttl":"24h"},"ui":{"brand":"RavenGuard","status_text":"Checking your browser before accessing this site."}}`
 	safe, err := ops.DecodeSafeConfig(old)
@@ -192,9 +191,6 @@ func TestApplySafeConfigOldPayloadKeepsDefaults(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := rt.Config()
-	if !got.Privacy.HashClientIP {
-		t.Fatal("old payload wiped hash_client_ip")
-	}
 	if !got.Stealth.ServeManifest {
 		t.Fatal("old payload wiped serve_manifest")
 	}

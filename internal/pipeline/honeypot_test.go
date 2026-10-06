@@ -24,7 +24,6 @@ func trapHandler(t *testing.T, action string) (http.Handler, *protect.Guard) {
 	cfg.Challenge.Enabled = false
 	cfg.Detect.Enabled = false
 	cfg.RateLimit.Enabled = false
-	cfg.Privacy.HashClientIP = false
 	cfg.Honeypot.Enabled = true
 	cfg.Honeypot.Paths = []string{"/.git/config", "/trap-door"}
 	cfg.Honeypot.Prefixes = []string{"/wp-admin"}
@@ -53,7 +52,7 @@ func TestHoneypotBan(t *testing.T) {
 	if rr.Code != http.StatusForbidden {
 		t.Fatalf("code=%d", rr.Code)
 	}
-	if !prot.Banned("198.51.100.7") {
+	if !prot.Banned(testBind("198.51.100.7")) {
 		t.Fatal("trap hit should ban the client")
 	}
 	// A second request is denied by the active ban even on a clean path.
@@ -116,7 +115,6 @@ func TestDecisionsEndpoint(t *testing.T) {
 	cfg.Challenge.Enabled = false
 	cfg.Detect.Enabled = false
 	cfg.RateLimit.Enabled = false
-	cfg.Privacy.HashClientIP = false
 	cfg.Decisions.Enabled = true
 	cfg.Decisions.Token = "bouncer-secret"
 	pages, _ := ui.New(ui.Site{Brand: "RavenGuard", StatusText: "x", Prefix: "/_rg"})

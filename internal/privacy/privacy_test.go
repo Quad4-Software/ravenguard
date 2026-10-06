@@ -11,9 +11,8 @@ import (
 
 func TestClientKeyStable(t *testing.T) {
 	g := privacy.New(privacy.Config{
-		HashClientIP: true,
-		Secret:       []byte("hash-secret-16char"),
-		LogIP:        "hash",
+		Secret: []byte("hash-secret-16char"),
+		LogIP:  "hash",
 	})
 	a := g.ClientKey("203.0.113.10")
 	b := g.ClientKey("203.0.113.10")
@@ -28,25 +27,24 @@ func TestClientKeyStable(t *testing.T) {
 	}
 }
 
-func TestClientKeyPlain(t *testing.T) {
+func TestClientKeyAlwaysHashed(t *testing.T) {
 	g := privacy.New(privacy.Config{
-		HashClientIP: false,
-		Secret:       []byte("hash-secret-16char"),
-		LogIP:        "full",
+		Secret: []byte("hash-secret-16char"),
+		LogIP:  "hash",
 	})
-	if g.ClientKey("203.0.113.10") != "203.0.113.10" {
-		t.Fatal("expected plain ip")
+	key := g.ClientKey("203.0.113.10")
+	if key == "" || key == "203.0.113.10" {
+		t.Fatal("client key must always be hashed")
 	}
-	if g.LogIP("203.0.113.10") != "203.0.113.10" {
-		t.Fatal("expected full log ip")
+	if g.LogIP("203.0.113.10") == "203.0.113.10" {
+		t.Fatal("log ip must never be raw")
 	}
 }
 
 func TestLogIPModes(t *testing.T) {
 	g := privacy.New(privacy.Config{
-		HashClientIP: true,
-		Secret:       []byte("hash-secret-16char"),
-		LogIP:        "off",
+		Secret: []byte("hash-secret-16char"),
+		LogIP:  "off",
 	})
 	if g.LogIP("203.0.113.10") != "" {
 		t.Fatal("expected empty log ip")

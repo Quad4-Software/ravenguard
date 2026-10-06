@@ -29,7 +29,6 @@ func BenchmarkGuardAllow(b *testing.B) {
 	cfg.RateLimit.Requests = 10_000_000
 	cfg.RateLimit.Burst = 10_000_000
 	cfg.Protect.Enabled = true
-	cfg.Privacy.HashClientIP = false
 	cfg.Privacy.LogIP = "off"
 	cfg.UI.TestMode = false
 
@@ -47,7 +46,7 @@ func BenchmarkGuardAllow(b *testing.B) {
 	limiter := ratelimit.New(cfg.RateLimit.Requests, cfg.RateLimit.Burst, time.Minute, false)
 	prot := protect.New(protect.Config{Enabled: true})
 	beh := detect.NewBehaviorTracker(detect.BehaviorConfig{})
-	priv := privacy.New(privacy.Config{HashClientIP: false, LogIP: "off", Secret: []byte("x")})
+	priv := privacy.New(privacy.Config{Secret: []byte("x"), LogIP: "off"})
 	upstream := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
@@ -79,7 +78,6 @@ func BenchmarkGuardAllowParallel(b *testing.B) {
 	cfg.RateLimit.Requests = 10_000_000
 	cfg.RateLimit.Burst = 10_000_000
 	cfg.Protect.Enabled = true
-	cfg.Privacy.HashClientIP = false
 	cfg.Privacy.LogIP = "off"
 	cfg.UI.TestMode = false
 
@@ -101,7 +99,7 @@ func BenchmarkGuardAllowParallel(b *testing.B) {
 		MaxConcurrentClient: 10_000,
 	})
 	beh := detect.NewBehaviorTracker(detect.BehaviorConfig{BurstLimit: 10_000_000})
-	priv := privacy.New(privacy.Config{HashClientIP: false, LogIP: "off", Secret: []byte("x")})
+	priv := privacy.New(privacy.Config{Secret: []byte("x"), LogIP: "off"})
 	upstream := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})

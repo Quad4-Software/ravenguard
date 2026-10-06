@@ -31,7 +31,6 @@ func TestAttackModeColdGETForcesInteractive(t *testing.T) {
 	cfg.Detect.Enabled = false
 	cfg.RateLimit.Enabled = false
 	cfg.Trust.Mode = "edge"
-	cfg.Privacy.HashClientIP = false
 	pages, err := ui.New(ui.SiteFromConfig(cfg))
 	if err != nil {
 		t.Fatal(err)
@@ -132,7 +131,6 @@ func TestCaptchaEnabledForcesInteractiveIssue(t *testing.T) {
 	cfg.Detect.Enabled = false
 	cfg.RateLimit.Enabled = false
 	cfg.Trust.Mode = "edge"
-	cfg.Privacy.HashClientIP = false
 	pages, err := ui.New(ui.SiteFromConfig(cfg))
 	if err != nil {
 		t.Fatal(err)

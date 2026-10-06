@@ -14,16 +14,14 @@ import (
 )
 
 type Config struct {
-	HashClientIP bool
-	Secret       []byte
-	LogIP        string
+	Secret []byte
+	LogIP  string
 }
 
 type Guard struct {
-	hashClientIP bool
-	secret       []byte
-	logIP        string
-	macPool      sync.Pool
+	secret  []byte
+	logIP   string
+	macPool sync.Pool
 }
 
 func New(cfg Config) *Guard {
@@ -35,9 +33,8 @@ func New(cfg Config) *Guard {
 	}
 	secret := append([]byte(nil), cfg.Secret...)
 	g := &Guard{
-		hashClientIP: cfg.HashClientIP,
-		secret:       secret,
-		logIP:        logMode,
+		secret: secret,
+		logIP:  logMode,
 	}
 	g.macPool = sync.Pool{
 		New: func() any {
@@ -52,7 +49,7 @@ func (g *Guard) ClientKey(ip string) string {
 	if ip == "" {
 		return ""
 	}
-	if g == nil || !g.hashClientIP {
+	if g == nil {
 		return ip
 	}
 	return g.hash(ip)
@@ -66,8 +63,6 @@ func (g *Guard) LogIP(ip string) string {
 	switch g.logIP {
 	case "off":
 		return ""
-	case "full":
-		return ip
 	default:
 		if ip == "" {
 			return ""

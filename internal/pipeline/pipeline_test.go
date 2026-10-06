@@ -30,13 +30,18 @@ import (
 
 const testSecret = "integration-secret"
 
+// testBind computes the hashed client bind key the handler derives for ip
+// when the challenge secret is testSecret.
+func testBind(ip string) string {
+	return privacy.New(privacy.Config{Secret: []byte(testSecret), LogIP: "hash"}).ClientKey(ip)
+}
+
 func testPriv(cfg config.Config) *privacy.Guard {
 	sec := cfg.Privacy.IPHashSecret
 	if sec == "" {
 		sec = cfg.Challenge.Secret
 	}
 	return privacy.New(privacy.Config{
-		HashClientIP: cfg.Privacy.HashClientIP,
 		Secret:       []byte(sec),
 		LogIP:        cfg.Privacy.LogIP,
 	})
@@ -177,7 +182,6 @@ func TestChallengeAndClearance(t *testing.T) {
 	}
 
 	priv := privacy.New(privacy.Config{
-		HashClientIP: true,
 		Secret:       []byte(testSecret),
 		LogIP:        "hash",
 	})
@@ -222,9 +226,8 @@ func TestWebdriverEnvRefused(t *testing.T) {
 	h := testHandler(t, func(cfg *config.Config) {
 		cfg.Challenge.Mode = "always"
 		cfg.Detect.Enabled = false
-		cfg.Privacy.HashClientIP = false
 	})
-	bindID := "192.0.2.88"
+	bindID := testBind("192.0.2.88")
 	m := &challenge.Manager{Secret: []byte(testSecret), Difficulty: 8, CookieName: "rg_clear", CookieTTL: time.Hour, Algorithm: "sha256"}
 	raw := solvedPayload(t, m, bindID, challenge.GateInvisible, challenge.EnvAttestation{Webdriver: true, Interacted: true, SolveMs: 200, NoPlugins: true})
 	payloadJSON, _ := json.Marshal(map[string]any{"payload": raw})
@@ -467,9 +470,8 @@ func TestEnvProbeOffSkipsAutomation(t *testing.T) {
 		cfg.Challenge.Mode = "always"
 		cfg.Challenge.EnvProbe = "off"
 		cfg.Detect.Enabled = false
-		cfg.Privacy.HashClientIP = false
 	})
-	bindID := "192.0.2.91"
+	bindID := testBind("192.0.2.91")
 	m := &challenge.Manager{Secret: []byte(testSecret), Difficulty: 8, CookieName: "rg_clear", CookieTTL: time.Hour, Algorithm: "sha256"}
 	raw := solvedPayload(t, m, bindID, challenge.GateInvisible, challenge.EnvAttestation{Webdriver: true, Interacted: false, SolveMs: 200})
 	payloadJSON, _ := json.Marshal(map[string]any{"payload": raw})
@@ -487,7 +489,6 @@ func TestEscalateAfterFailedVerify(t *testing.T) {
 	h := testHandler(t, func(cfg *config.Config) {
 		cfg.Challenge.Mode = "always"
 		cfg.Detect.Enabled = false
-		cfg.Privacy.HashClientIP = false
 	})
 	creq := httptest.NewRequest(http.MethodPost, "/_rg/challenge", bytes.NewReader([]byte(`{"payload":"bad"}`)))
 	creq.Header.Set("Content-Type", "application/json")
@@ -513,12 +514,14 @@ func TestChallengeSecureFromProto(t *testing.T) {
 	h := testHandler(t, func(cfg *config.Config) {
 		cfg.Challenge.Mode = "always"
 		cfg.Detect.Enabled = false
-		cfg.Privacy.HashClientIP = false
 		cfg.Trust.Mode = "behind_proxy"
 		cfg.Trust.TrustedProxies = []string{"192.0.2.0/24"}
 		cfg.Trust.ProtoHeader = "X-Forwarded-Proto"
 	})
-	priv := privacy.New(privacy.Config{HashClientIP: false, Secret: []byte(testSecret), LogIP: "off"})
+	priv := privacy.New(privacy.Config{
+		Secret: []byte(testSecret),
+		LogIP:  "hash",
+	})
 	bindID := priv.ClientKey("192.0.2.77")
 	m := &challenge.Manager{Secret: []byte(testSecret), Difficulty: 8, CookieName: "rg_clear", CookieTTL: time.Hour, Algorithm: "sha256"}
 	raw := solvedPayload(t, m, bindID, challenge.GateInvisible, challenge.EnvAttestation{Interacted: true, SolveMs: 200})
@@ -578,7 +581,6 @@ func TestAllowlistSkipsChallenge(t *testing.T) {
 		cfg.Challenge.Enabled = true
 		cfg.Detect.Enabled = true
 		cfg.RateLimit.Enabled = false
-		cfg.Privacy.HashClientIP = false
 		pages, err := ui.New(ui.Site{Brand: "RavenGuard", StatusText: "x", Prefix: "/_rg"})
 		if err != nil {
 			t.Fatal(err)
@@ -672,7 +674,6 @@ func TestWebSocketWithClearance(t *testing.T) {
 	cfg.Detect.Enabled = false
 	cfg.RateLimit.Enabled = false
 	cfg.Trust.Mode = "edge"
-	cfg.Privacy.HashClientIP = false
 	root := filepath.Join("..", "..")
 	lists := blocklist.New()
 	_ = lists.Load(
@@ -702,7 +703,7 @@ func TestWebSocketWithClearance(t *testing.T) {
 	})
 	h := pipeline.New(cfg, lists, nil, nil, chal, pages, upstream, nil, nil, nil, testPriv(cfg), nil, nil)
 
-	bindID := "192.0.2.41"
+	bindID := testBind("192.0.2.41")
 	cookie := chal.ClearanceCookie(bindID, "reqID-ws", false)
 	req := wsUpgradeRequest("/ws", "192.0.2.41:1")
 	req.AddCookie(cookie)
@@ -746,7 +747,6 @@ func TestHigh404Block(t *testing.T) {
 	cfg.Detect.High404Window = config.Duration{Duration: time.Minute}
 	cfg.Detect.High404Action = "block"
 	cfg.RateLimit.Enabled = false
-	cfg.Privacy.HashClientIP = false
 	pages, _ := ui.New(ui.Site{Brand: "RavenGuard", StatusText: "x", Prefix: "/_rg"})
 	nf := detect.NewNotFoundTracker(3, time.Minute)
 	upstream := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -827,7 +827,6 @@ func TestAttackBlocked(t *testing.T) {
 	cfg.RateLimit.Enabled = false
 	cfg.Protect.Enabled = true
 	cfg.Protect.AttackBlock = true
-	cfg.Privacy.HashClientIP = false
 	pages, _ := ui.New(ui.Site{Brand: "RavenGuard", StatusText: "x", Prefix: "/_rg"})
 	prot := protect.New(protect.Config{
 		Enabled:     true,
@@ -847,7 +846,7 @@ func TestAttackBlocked(t *testing.T) {
 	if rr.Code != http.StatusForbidden {
 		t.Fatalf("code=%d body=%s", rr.Code, rr.Body.String())
 	}
-	if !prot.Banned("192.0.2.99") {
+	if !prot.Banned(testBind("192.0.2.99")) {
 		t.Fatal("expected temp ban")
 	}
 }
@@ -862,7 +861,6 @@ func TestRateLimit(t *testing.T) {
 	cfg.RateLimit.Burst = 1
 	cfg.RateLimit.Window = config.Duration{Duration: time.Minute}
 	cfg.RateLimit.ChallengeOver = false
-	cfg.Privacy.HashClientIP = false
 	pages, _ := ui.New(ui.Site{Brand: "RavenGuard", StatusText: "x", Prefix: "/_rg"})
 	limiter := ratelimit.New(1, 1, time.Minute, false)
 	upstream := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -971,7 +969,6 @@ func TestCaptchaStubGate(t *testing.T) {
 	cfg.Detect.Enabled = false
 	cfg.RateLimit.Enabled = false
 	cfg.Trust.Mode = "edge"
-	cfg.Privacy.HashClientIP = false
 	pages, err := ui.New(ui.SiteFromConfig(cfg))
 	if err != nil {
 		t.Fatal(err)
@@ -991,7 +988,7 @@ func TestCaptchaStubGate(t *testing.T) {
 	})
 	h := pipeline.New(cfg, lists, nil, nil, chal, pages, upstream, nil, nil, nil, testPriv(cfg), nil, nil)
 
-	bindID := "192.0.2.55"
+	bindID := testPriv(cfg).ClientKey("192.0.2.55")
 	raw := solvedPayload(t, chal, bindID, challenge.GateInteractive, challenge.EnvAttestation{Interacted: true, SolveMs: 200})
 	bad, _ := json.Marshal(map[string]any{"payload": raw, "captcha": "nope"})
 	creq := httptest.NewRequest(http.MethodPost, "/_rg/challenge", bytes.NewReader(bad))
@@ -1161,7 +1158,6 @@ func TestStreamProtocolRateLimit(t *testing.T) {
 	cfg.RateLimit.Burst = 1
 	cfg.RateLimit.Window = config.Duration{Duration: time.Minute}
 	cfg.RateLimit.ChallengeOver = true
-	cfg.Privacy.HashClientIP = false
 	pages, _ := ui.New(ui.Site{Brand: "RavenGuard", StatusText: "x", Prefix: "/_rg"})
 	limiter := ratelimit.New(1, 1, time.Minute, false)
 	upstream := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

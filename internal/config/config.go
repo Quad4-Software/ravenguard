@@ -221,9 +221,15 @@ type TrustConfig struct {
 }
 
 type PrivacyConfig struct {
-	HashClientIP     bool     `toml:"hash_client_ip"`
-	IPHashSecret     string   `toml:"ip_hash_secret"`
-	LogIP            string   `toml:"log_ip"`
+	// Client IPs are always hashed for bind keys and event logging. There
+	// is no opt-out. LogIP controls whether the hashed IP appears in logs
+	// at all: hash (default) or off.
+	IPHashSecret string `toml:"ip_hash_secret"`
+	LogIP        string `toml:"log_ip"`
+	// RequestIDs attaches an opaque identifier to responses, pages, and
+	// stored events so operators can correlate and look requests up. Set
+	// false to expose no request ID anywhere.
+	RequestIDs       bool     `toml:"request_ids"`
 	Retention        Duration `toml:"retention"`
 	WAFEventsTTL     Duration `toml:"waf_events_ttl"`
 	PrivacyNoticeURL string   `toml:"privacy_notice_url"`
@@ -377,6 +383,37 @@ type DetectConfig struct {
 	BehaviorUAVarietyScore   int                `toml:"behavior_ua_variety_score"`
 	CrawlerVerify            CrawlerVerify      `toml:"crawler_verify"`
 	ProxySignals             DetectProxySignals `toml:"proxy_signals"`
+	WebBotAuth               WebBotAuthConfig   `toml:"web_bot_auth"`
+	// AICrawlerPolicy governs requests whose User-Agent matches a known AI
+	// crawler or agent: challenge (default, score normally), allow (no
+	// ai_ua points), block (deny outright), or pay (HTTP 402 payment).
+	AICrawlerPolicy string `toml:"ai_crawler_policy"`
+	// AIPay configures the 402 Payment Required response for the pay
+	// policy, following the x402 wire format.
+	AIPay AIPayConfig `toml:"ai_pay"`
+}
+
+// WebBotAuthConfig verifies signed automated traffic per the IETF
+// webbotauth draft. Signed agents that verify get a wba_verified reason
+// and skip ai_ua and scanner_ua scores unless the AI policy blocks or
+// charges them anyway.
+type WebBotAuthConfig struct {
+	Enabled    bool     `toml:"enabled"`
+	Timeout    Duration `toml:"timeout"`
+	SpoofScore int      `toml:"spoof_score"`
+}
+
+// AIPayConfig declares a price for the HTTP 402 response. Amount is in
+// the smallest unit of Asset (USDC base units).
+type AIPayConfig struct {
+	PayTo       string `toml:"pay_to"`
+	Amount      string `toml:"amount"`
+	Network     string `toml:"network"`
+	Asset       string `toml:"asset"`
+	Description string `toml:"description"`
+	// Facilitator is an optional x402 verification endpoint. When set,
+	// requests presenting a payment signature are validated through it.
+	Facilitator string `toml:"facilitator"`
 }
 
 // CrawlerVerify enables forward-confirmed reverse-DNS verification of
@@ -441,9 +478,13 @@ type ChallengeConfig struct {
 	EnvProbe string `toml:"env_probe"`
 	// NoJSFallback offers a continue link on the challenge page to clients
 	// whose User-Agent matches a known text-mode or no-JavaScript browser.
-	// The link mints a clearance cookie bound to the client. Behavior and
-	// detect scoring still apply to every request after it.
-	NoJSFallback     bool          `toml:"no_js_fallback"`
+	// The link leads to a timed token that must age out before clearance
+	// is minted. Behavior and detect scoring still apply to every request
+	// after it.
+	NoJSFallback bool `toml:"no_js_fallback"`
+	// NoJSDelay is the minimum seconds the no-JS token must age before it
+	// redeems. Anubis-style meta refresh raises one click into a real wait.
+	NoJSDelay        Duration      `toml:"no_js_delay"`
 	CookieName       string        `toml:"cookie_name"`
 	CookieTTL        Duration      `toml:"cookie_ttl"`
 	Secret           string        `toml:"secret"`
@@ -501,6 +542,18 @@ type SiteConfig struct {
 	ThemeColor  string `toml:"theme_color"`
 	Robots      string `toml:"robots"`
 	Lang        string `toml:"lang"`
+	// RobotsAI controls AI-crawl declarations in robots.txt: signal emits a
+	// Content-Signal line, disallow also adds Disallow groups for known
+	// AI training crawlers, off emits neither.
+	RobotsAI string `toml:"robots_ai"`
+	// ContentSignal is the Content-Signal directive value. Defaults to
+	// search=yes, ai-input=yes, ai-train=no when RobotsAI is not off.
+	ContentSignal string `toml:"content_signal"`
+	// RSLFile is a static RSL license document served at
+	// /.well-known/rsl.xml and referenced from robots.txt via License:.
+	RSLFile string `toml:"rsl_file"`
+	// LLMSFile is a static file served at /llms.txt.
+	LLMSFile string `toml:"llms_file"`
 }
 
 type LoggingConfig struct {
@@ -693,6 +746,17 @@ func Default() Config {
 				Timeout:    Duration{250 * time.Millisecond},
 				SpoofScore: 40,
 			},
+			WebBotAuth: WebBotAuthConfig{
+				Enabled:    true,
+				Timeout:    Duration{2 * time.Second},
+				SpoofScore: 40,
+			},
+			AICrawlerPolicy: "challenge",
+			AIPay: AIPayConfig{
+				Network: "base",
+				Asset:   "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02993",
+				Amount:  "10000",
+			},
 			ProxySignals: DetectProxySignals{
 				BotScoreHeader:  "CF-Bot-Score",
 				BotScoreHeader2: "X-Bot-Score",
@@ -704,6 +768,7 @@ func Default() Config {
 			Enabled: true, Mode: "detect", Difficulty: 16, Algorithm: "adaptive",
 			EnvProbe: "on", CookieName: "rg_clear", CookieTTL: Duration{24 * time.Hour}, PathPrefix: "/_rg",
 			NoJSFallback: true,
+			NoJSDelay:    Duration{3 * time.Second},
 		},
 		Stealth: StealthConfig{
 			RequestIDHeader:  "X-RavenGuard-Request-ID",
@@ -715,19 +780,21 @@ func Default() Config {
 			WidgetInputName:  "rg",
 		},
 		Privacy: PrivacyConfig{
-			HashClientIP: true,
 			LogIP:        "hash",
+			RequestIDs:   true,
 			Retention:    Duration{30 * time.Minute},
-			WAFEventsTTL: Duration{24 * time.Hour},
+			WAFEventsTTL: Duration{14 * 24 * time.Hour},
 		},
 		UI: UIConfig{
 			Brand: "RavenGuard", StatusText: "Checking your browser before accessing this site.",
 		},
 		Site: SiteConfig{
-			Description: "RavenGuard Web Application Firewall",
-			ThemeColor:  "#050505",
-			Robots:      "noindex, nofollow",
-			Lang:        "en",
+			Description:   "RavenGuard Web Application Firewall",
+			ThemeColor:    "#050505",
+			Robots:        "noindex, nofollow",
+			Lang:          "en",
+			RobotsAI:      "signal",
+			ContentSignal: "search=yes, ai-input=yes, ai-train=no",
 		},
 		Logging: LoggingConfig{Level: "info", Format: "text", Stats: true, StatsInterval: Duration{30 * time.Second}},
 		Sentry: SentryConfig{
@@ -955,9 +1022,9 @@ func applyEnv(c *Config) {
 	setBool(&c.Challenge.Captcha.Enabled, "RG_CAPTCHA_ENABLED")
 	setStr(&c.Challenge.Captcha.Provider, "RG_CAPTCHA_PROVIDER")
 	setStr(&c.Challenge.Captcha.Token, "RG_CAPTCHA_TOKEN")
-	setBool(&c.Privacy.HashClientIP, "RG_PRIVACY_HASH_CLIENT_IP")
 	setStr(&c.Privacy.IPHashSecret, "RG_PRIVACY_IP_HASH_SECRET")
 	setStr(&c.Privacy.LogIP, "RG_PRIVACY_LOG_IP")
+	setBool(&c.Privacy.RequestIDs, "RG_PRIVACY_REQUEST_IDS")
 	setStr(&c.Privacy.PrivacyNoticeURL, "RG_PRIVACY_NOTICE_URL")
 	setStr(&c.UI.Brand, "RG_UI_BRAND")
 	setStr(&c.UI.StatusText, "RG_UI_STATUS_TEXT")
@@ -1207,7 +1274,25 @@ func normalize(c *Config) {
 		c.Privacy.Retention = Duration{30 * time.Minute}
 	}
 	if c.Privacy.WAFEventsTTL.Duration <= 0 {
-		c.Privacy.WAFEventsTTL = Duration{24 * time.Hour}
+		c.Privacy.WAFEventsTTL = Duration{14 * 24 * time.Hour}
+	}
+	if c.Detect.AICrawlerPolicy == "" {
+		c.Detect.AICrawlerPolicy = "challenge"
+	}
+	if c.Detect.WebBotAuth.Timeout.Duration <= 0 {
+		c.Detect.WebBotAuth.Timeout = Duration{2 * time.Second}
+	}
+	if c.Detect.WebBotAuth.SpoofScore <= 0 {
+		c.Detect.WebBotAuth.SpoofScore = 40
+	}
+	if c.Detect.AIPay.Network == "" {
+		c.Detect.AIPay.Network = "base"
+	}
+	if c.Detect.AIPay.Asset == "" {
+		c.Detect.AIPay.Asset = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02993"
+	}
+	if c.Detect.AIPay.Amount == "" {
+		c.Detect.AIPay.Amount = "10000"
 	}
 	if c.Coraza.Mode == "" {
 		c.Coraza.Mode = "block"
@@ -1271,6 +1356,12 @@ func normalize(c *Config) {
 	}
 	if c.Site.ThemeColor == "" {
 		c.Site.ThemeColor = "#050505"
+	}
+	if c.Site.RobotsAI == "" {
+		c.Site.RobotsAI = "signal"
+	}
+	if c.Site.ContentSignal == "" {
+		c.Site.ContentSignal = "search=yes, ai-input=yes, ai-train=no"
 	}
 	if c.Site.Lang == "" {
 		c.Site.Lang = "en"
@@ -1465,9 +1556,9 @@ func (c Config) Validate() error {
 		}
 	}
 	switch strings.ToLower(strings.TrimSpace(c.Privacy.LogIP)) {
-	case "off", "hash", "full":
+	case "off", "hash":
 	default:
-		return fmt.Errorf("privacy.log_ip must be off, hash, or full")
+		return fmt.Errorf("privacy.log_ip must be off or hash")
 	}
 	if !hubOnly && c.Challenge.Enabled {
 		if weakChallengeSecret(c.Challenge.Secret) {
@@ -1575,6 +1666,14 @@ func (c Config) Validate() error {
 		case "auto", "gitea", "forgejo", "cgit", "":
 		default:
 			return fmt.Errorf("detect.forge_flavor must be auto, gitea, or cgit")
+		}
+		switch strings.ToLower(c.Detect.AICrawlerPolicy) {
+		case "allow", "challenge", "block", "pay", "":
+		default:
+			return fmt.Errorf("detect.ai_crawler_policy must be allow, challenge, block, or pay")
+		}
+		if strings.EqualFold(c.Detect.AICrawlerPolicy, "pay") && c.Detect.AIPay.PayTo == "" {
+			return fmt.Errorf("detect.ai_pay.pay_to is required when ai_crawler_policy is pay")
 		}
 		if c.Detect.CrawlerVerify.Enabled {
 			if c.Detect.CrawlerVerify.Timeout.Duration < 0 || c.Detect.CrawlerVerify.Timeout.Duration > 10*time.Second {

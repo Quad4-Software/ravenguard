@@ -230,9 +230,8 @@ func runEdge(cfg config.Config, proxyOnly bool, configPath string, sentryRep *rg
 		hashSecret = cfg.Challenge.Secret
 	}
 	priv := privacy.New(privacy.Config{
-		HashClientIP: cfg.Privacy.HashClientIP,
-		Secret:       []byte(hashSecret),
-		LogIP:        cfg.Privacy.LogIP,
+		Secret: []byte(hashSecret),
+		LogIP:  cfg.Privacy.LogIP,
 	})
 
 	secure := cfg.Listen.HTTPS != "" || cfg.Listen.QUIC != ""

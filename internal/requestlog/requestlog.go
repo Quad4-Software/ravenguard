@@ -19,6 +19,7 @@ const (
 	ActionAccess    = "access"
 	ActionSemantic  = "semantic"
 	ActionML        = "ml"
+	ActionPayment   = "payment"
 )
 
 // Event is one WAF deny (or challenge) outcome keyed by request ID.

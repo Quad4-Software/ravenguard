@@ -26,7 +26,6 @@ func TestChallengeSkipPathPrefixesConfig(t *testing.T) {
 	cfg.Detect.Enabled = false
 	cfg.RateLimit.Enabled = false
 	cfg.Trust.Mode = "edge"
-	cfg.Privacy.HashClientIP = false
 
 	pages, err := ui.New(ui.SiteFromConfig(cfg))
 	if err != nil {
@@ -85,7 +84,6 @@ func TestChallengeSkipRoute(t *testing.T) {
 	cfg.Detect.Enabled = false
 	cfg.RateLimit.Enabled = false
 	cfg.Trust.Mode = "edge"
-	cfg.Privacy.HashClientIP = false
 
 	pages, err := ui.New(ui.SiteFromConfig(cfg))
 	if err != nil {

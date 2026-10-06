@@ -40,7 +40,6 @@ func pbtConfig() config.Config {
 	cfg.Detect.Enabled = false
 	cfg.RateLimit.Enabled = false
 	cfg.Trust.Mode = "edge"
-	cfg.Privacy.HashClientIP = false
 	cfg.UI.StatusText = "x"
 	cfg.UI.Brand = "y"
 	return cfg
@@ -575,7 +574,7 @@ func TestDifferentialAccessPolicyChallengeDecision(t *testing.T) {
 			req.Header.Set("X-Token", "secret")
 		}
 		if c.hasClearance {
-			cookie := pbtChallengeManager(cfg).ClearanceCookie("192.0.2.1", "reqID", false)
+			cookie := pbtChallengeManager(cfg).ClearanceCookie(testBind("192.0.2.1"), "reqID", false)
 			req.AddCookie(cookie)
 		}
 

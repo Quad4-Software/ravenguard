@@ -528,6 +528,7 @@ type DetectSafe struct {
 	EmptyFormContextScore    int              `json:"empty_form_context_score"`
 	ForumWritePathScore      int              `json:"forum_write_path_score"`
 	ForgeFlavor              string           `json:"forge_flavor"`
+	AICrawlerPolicy          string           `json:"ai_crawler_policy"`
 	ForgeExpensiveScore      int              `json:"forge_expensive_score"`
 	BehaviorForgeBurstLimit  int              `json:"behavior_forge_burst_limit"`
 	BehaviorForgeBurstScore  int              `json:"behavior_forge_burst_score"`
@@ -603,10 +604,12 @@ type StealthSafe struct {
 }
 
 type PrivacySafe struct {
-	HashClientIP     bool   `json:"hash_client_ip"`
 	LogIP            string `json:"log_ip"`
 	Retention        string `json:"retention"`
 	PrivacyNoticeURL string `json:"privacy_notice_url"`
+	// RequestIDs is a pointer so old payloads that omit it do not
+	// accidentally disable request IDs on save.
+	RequestIDs *bool `json:"request_ids"`
 }
 
 type LoggingSafe struct {
@@ -662,6 +665,7 @@ func (r *Runtime) ConfigView() ConfigView {
 				BehaviorWriteRepeatLimit: cfg.Detect.BehaviorWriteRepeatLimit, BehaviorWriteRepeatScore: cfg.Detect.BehaviorWriteRepeatScore,
 				EmptyFormContextScore: cfg.Detect.EmptyFormContextScore, ForumWritePathScore: cfg.Detect.ForumWritePathScore,
 				ForgeFlavor:             cfg.Detect.ForgeFlavor,
+				AICrawlerPolicy:         cfg.Detect.AICrawlerPolicy,
 				ForgeExpensiveScore:     cfg.Detect.ForgeExpensiveScore,
 				BehaviorForgeBurstLimit: cfg.Detect.BehaviorForgeBurstLimit, BehaviorForgeBurstScore: cfg.Detect.BehaviorForgeBurstScore,
 				ForgeRateCost: cfg.Detect.ForgeRateCost,
@@ -744,8 +748,9 @@ func (r *Runtime) ConfigView() ConfigView {
 				WidgetInputName: cfg.Stealth.WidgetInputName,
 			},
 			Privacy: PrivacySafe{
-				HashClientIP: cfg.Privacy.HashClientIP, LogIP: cfg.Privacy.LogIP,
-				Retention: cfg.Privacy.Retention.String(), PrivacyNoticeURL: cfg.Privacy.PrivacyNoticeURL,
+				RequestIDs: boolPtr(cfg.Privacy.RequestIDs),
+				LogIP:      cfg.Privacy.LogIP,
+				Retention:  cfg.Privacy.Retention.String(), PrivacyNoticeURL: cfg.Privacy.PrivacyNoticeURL,
 			},
 			Logging: LoggingSafe{Level: cfg.Logging.Level, Format: cfg.Logging.Format},
 			QFeeds:  &qf,
@@ -989,9 +994,9 @@ func validateSafeConfig(safe SafeConfig) error {
 	}
 	if safe.Privacy.LogIP != "" {
 		switch strings.ToLower(strings.TrimSpace(safe.Privacy.LogIP)) {
-		case "off", "hash", "full":
+		case "off", "hash":
 		default:
-			return fmt.Errorf("privacy.log_ip must be off, hash, or full")
+			return fmt.Errorf("privacy.log_ip must be off or hash")
 		}
 	}
 	if safe.Logging.Level != "" {
@@ -1020,6 +1025,13 @@ func validateSafeConfig(safe SafeConfig) error {
 		case "off", "shadow", "challenge", "block":
 		default:
 			return fmt.Errorf("ml.mode must be off, shadow, challenge, or block")
+		}
+	}
+	if safe.Detect.AICrawlerPolicy != "" {
+		switch strings.ToLower(strings.TrimSpace(safe.Detect.AICrawlerPolicy)) {
+		case "allow", "challenge", "block", "pay":
+		default:
+			return fmt.Errorf("detect.ai_crawler_policy must be allow, challenge, block, or pay")
 		}
 	}
 	if safe.Detect.ForgeFlavor != "" {
@@ -1150,6 +1162,7 @@ func applyDetectSafe(cfg *config.Config, safe DetectSafe) {
 		cfg.Detect.ForumWritePathScore = safe.ForumWritePathScore
 	}
 	setNonEmpty(&cfg.Detect.ForgeFlavor, safe.ForgeFlavor)
+	setNonEmpty(&cfg.Detect.AICrawlerPolicy, safe.AICrawlerPolicy)
 	if safe.ForgeExpensiveScore > 0 {
 		cfg.Detect.ForgeExpensiveScore = safe.ForgeExpensiveScore
 	}
@@ -1247,10 +1260,12 @@ func applyStealthSafe(cfg *config.Config, safe StealthSafe) {
 }
 
 func applyPrivacySafe(cfg *config.Config, safe PrivacySafe) {
-	if safe.LogIP == "" && safe.Retention == "" && safe.PrivacyNoticeURL == "" {
+	if safe.LogIP == "" && safe.Retention == "" && safe.PrivacyNoticeURL == "" && safe.RequestIDs == nil {
 		return
 	}
-	cfg.Privacy.HashClientIP = safe.HashClientIP
+	if safe.RequestIDs != nil {
+		cfg.Privacy.RequestIDs = *safe.RequestIDs
+	}
 	setNonEmpty(&cfg.Privacy.LogIP, safe.LogIP)
 	if d, err := time.ParseDuration(safe.Retention); err == nil && d > 0 {
 		cfg.Privacy.Retention = config.Duration{Duration: d}
@@ -1336,3 +1351,5 @@ func MergeAndEncode(existing string, fn func(*SafeConfig)) (string, error) {
 	}
 	return EncodeSafeConfig(safe)
 }
+
+func boolPtr(b bool) *bool { return &b }

@@ -135,9 +135,8 @@ func TestForgeHotPathChallenges(t *testing.T) {
 
 func TestForgeHotClearancePasses(t *testing.T) {
 	h := forgeTestHandler(t, func(cfg *config.Config) {
-		cfg.Privacy.HashClientIP = false
 	})
-	bindID := "192.0.2.202"
+	bindID := testBind("192.0.2.202")
 	m := &challenge.Manager{Secret: []byte(testSecret), Difficulty: 8, CookieName: "rg_clear", CookieTTL: time.Hour, Algorithm: "sha256"}
 	raw := solvedPayload(t, m, bindID, challenge.GateInteractive, challenge.EnvAttestation{Interacted: true, SolveMs: 200})
 	payloadJSON, _ := json.Marshal(map[string]any{"payload": raw})
@@ -184,7 +183,6 @@ func TestForgeHotAllowlistPasses(t *testing.T) {
 	cfg.Detect.ChallengeScore = 40
 	cfg.RateLimit.Enabled = false
 	cfg.Trust.Mode = "edge"
-	cfg.Privacy.HashClientIP = false
 
 	pages, err := ui.New(ui.SiteFromConfig(cfg))
 	if err != nil {

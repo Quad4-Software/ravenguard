@@ -29,7 +29,6 @@ func spamTestHandler(t *testing.T, mutate func(*config.Config), beh *detect.Beha
 	cfg.Detect.BlockScore = 90
 	cfg.RateLimit.Enabled = false
 	cfg.Trust.Mode = "edge"
-	cfg.Privacy.HashClientIP = false
 	if mutate != nil {
 		mutate(&cfg)
 	}
