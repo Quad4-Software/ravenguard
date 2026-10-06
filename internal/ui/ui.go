@@ -24,14 +24,20 @@ var staticFS embed.FS
 
 // Site holds live-tunable branding and theme tokens for public pages.
 type Site struct {
-	Brand            string
-	StatusText       string
-	Description      string
-	PublicURL        string
-	OGImage          string
-	ThemeColor       string
-	Robots           string
-	Lang             string
+	Brand       string
+	StatusText  string
+	Description string
+	PublicURL   string
+	OGImage     string
+	ThemeColor  string
+	Robots      string
+	Lang        string
+	// RobotsAI is off, signal, or disallow. ContentSignal is the raw
+	// Content-Signal directive. RSLLicenseURL, when set, adds a License
+	// line pointing at the RSL document.
+	RobotsAI         string
+	ContentSignal    string
+	RSLLicenseURL    string
 	Prefix           string
 	PrivacyNoticeURL string
 
@@ -174,8 +180,15 @@ var bufPool = sync.Pool{
 
 // SiteFromConfig maps runtime config into UI site tokens.
 func SiteFromConfig(cfg config.Config) Site {
+	rsl := ""
+	if cfg.Site.RSLFile != "" {
+		rsl = "/.well-known/rsl.xml"
+	}
 	return Site{
 		Brand:             cfg.UI.Brand,
+		RobotsAI:          cfg.Site.RobotsAI,
+		ContentSignal:     cfg.Site.ContentSignal,
+		RSLLicenseURL:     rsl,
 		StatusText:        cfg.UI.StatusText,
 		Description:       cfg.Site.Description,
 		PublicURL:         cfg.Site.PublicURL,
@@ -703,18 +716,58 @@ func noDirListing(next http.Handler, dirRedirect string) http.Handler {
 	})
 }
 
+// aiTrainingAgents are robots.txt User-agent tokens for AI training and
+// indexing crawlers, emitted as Disallow groups when robots_ai is
+// "disallow". User-triggered agent fetchers are intentionally absent.
+var aiTrainingAgents = []string{
+	"GPTBot", "OAI-SearchBot", "ClaudeBot", "Claude-SearchBot", "CCBot",
+	"Bytespider", "Google-Extended", "meta-externalagent", "meta-webindexer",
+	"PerplexityBot", "Amazonbot", "Applebot-Extended", "Diffbot",
+	"Omgilibot", "cohere-training-data-crawler", "mistralai-training",
+	"AIWebIndex", "img2dataset", "LAIONDownloader", "FacebookBot",
+	"youBot", "Timpibot", "PanguBot", "KimiBot", "DeepSeekBot", "QwenBot",
+	"iaskspider",
+}
+
 func (p *Pages) ServeRobots(w http.ResponseWriter, _ *http.Request) {
 	site := p.Site()
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.Header().Set("Cache-Control", "public, max-age=3600")
-	body := "User-agent: *\nDisallow: /\n"
-	if strings.Contains(strings.ToLower(site.Robots), "index") && !strings.Contains(strings.ToLower(site.Robots), "noindex") {
-		body = "User-agent: *\nAllow: /\n"
-		if site.PublicURL != "" {
-			body += "Sitemap: " + strings.TrimRight(site.PublicURL, "/") + "/sitemap.xml\n"
+	var b strings.Builder
+	b.WriteString("User-agent: *\n")
+	indexable := strings.Contains(strings.ToLower(site.Robots), "index") && !strings.Contains(strings.ToLower(site.Robots), "noindex")
+	if indexable {
+		b.WriteString("Allow: /\n")
+	} else {
+		b.WriteString("Disallow: /\n")
+	}
+	switch strings.ToLower(strings.TrimSpace(site.RobotsAI)) {
+	case "disallow":
+		for _, a := range aiTrainingAgents {
+			b.WriteString("\nUser-agent: ")
+			b.WriteString(a)
+			b.WriteString("\nDisallow: /\n")
+		}
+		fallthrough
+	case "signal":
+		if site.ContentSignal != "" {
+			b.WriteString("\nContent-Signal: ")
+			b.WriteString(site.ContentSignal)
+			b.WriteString("\n")
 		}
 	}
-	_, _ = w.Write([]byte(body))
+	if site.RSLLicenseURL != "" && site.PublicURL != "" {
+		b.WriteString("License: ")
+		b.WriteString(strings.TrimRight(site.PublicURL, "/"))
+		b.WriteString(site.RSLLicenseURL)
+		b.WriteString("\n")
+	}
+	if indexable && site.PublicURL != "" {
+		b.WriteString("Sitemap: ")
+		b.WriteString(strings.TrimRight(site.PublicURL, "/"))
+		b.WriteString("/sitemap.xml\n")
+	}
+	_, _ = w.Write([]byte(b.String()))
 }
 
 func (p *Pages) ServeManifest(w http.ResponseWriter, _ *http.Request) {

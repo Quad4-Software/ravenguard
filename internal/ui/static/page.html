@@ -8,7 +8,7 @@
     <p class="code">{{.Code}}</p>
     <p class="status">{{.Title}}</p>
     {{if .Detail}}<p class="sub">{{.Detail}}</p>{{end}}
-    <p class="rid">{{.RequestIDLabel}}: <span>{{.RequestID}}</span></p>
+    {{if .RequestID}}<p class="rid">{{.RequestIDLabel}}: <span>{{.RequestID}}</span></p>{{end}}
     {{if .Contact}}
     <p class="sub">{{if .ContactHref}}<a href="{{.ContactHref}}">{{.Contact}}</a>{{else}}{{.Contact}}{{end}}</p>
     {{end}}

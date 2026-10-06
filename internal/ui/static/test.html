@@ -13,7 +13,7 @@
       <li><a href="{{.Href}}">{{.Label}}</a><span>{{.Hint}}</span></li>
       {{end}}
     </ul>
-    <p class="rid">{{.RequestIDLabel}}: <span>{{.RequestID}}</span></p>
+    {{if .RequestID}}<p class="rid">{{.RequestIDLabel}}: <span>{{.RequestID}}</span></p>{{end}}
   </main>
   <footer>
     {{if .ShowBrandMark}}<img class="raven" src="{{.LogoURL}}" alt="{{.Brand}}">{{end}}

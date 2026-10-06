@@ -6,8 +6,11 @@ package pipeline
 import (
 	"bufio"
 	"context"
+	"crypto/hmac"
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/subtle"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -80,6 +83,11 @@ type Handler struct {
 	writeCost       int
 	forgeRateCost   int
 	forgeFlavor     detect.ForgeFlavor
+	wba             *detect.WebBotVerifier
+	wbaSpoof        int
+	aiPolicy        string
+	rslBody         []byte
+	llmsBody        []byte
 	redirectHTTP    bool
 	reqLog          *requestlog.Logger
 	coraza          *corazaeng.Engine
@@ -246,10 +254,13 @@ func New(
 		),
 		crawlerVerify:   cfg.Detect.CrawlerVerify.Enabled,
 		crawlerSpoof:    cfg.Detect.CrawlerVerify.SpoofScore,
+		wba:             newWebBotVerifier(cfg),
 		challengeAlways: strings.EqualFold(cfg.Challenge.Mode, "always") || strings.EqualFold(cfg.Challenge.Mode, "attack"),
 		writeCost:       3,
 		forgeRateCost:   cfg.Detect.ForgeRateCost,
 		forgeFlavor:     detect.ParseForgeFlavor(cfg.Detect.ForgeFlavor),
+		wbaSpoof:        cfg.Detect.WebBotAuth.SpoofScore,
+		aiPolicy:        strings.ToLower(strings.TrimSpace(cfg.Detect.AICrawlerPolicy)),
 		traps:           buildTraps(cfg),
 		notifier:        notify.New(cfg.Notify.WebhookURL, cfg.Notify.Events, cfg.Notify.Timeout.Duration),
 	}
@@ -258,6 +269,8 @@ func New(
 	}
 	h.high404Action = parseAction(cfg.Detect.High404Action)
 	h.penAction = parseAction(cfg.Detect.PenaltyAction)
+	h.rslBody = readOptionalFile(cfg.Site.RSLFile)
+	h.llmsBody = readOptionalFile(cfg.Site.LLMSFile)
 	h.subnetV4 = cfg.RateLimit.SubnetV4Prefix
 	if h.subnetV4 <= 0 || h.subnetV4 > 32 {
 		h.subnetV4 = 24
@@ -272,12 +285,15 @@ func New(
 	}
 	pages.MountStaticTo(h.mux, testURL)
 	h.mux.HandleFunc("/robots.txt", h.pages.ServeRobots)
+	h.mux.HandleFunc("/.well-known/rsl.xml", h.servePolicyFile(&h.rslBody, "application/xml"))
+	h.mux.HandleFunc("/llms.txt", h.servePolicyFile(&h.llmsBody, "text/markdown; charset=utf-8"))
 	if cfg.Stealth.ServeManifest {
 		h.mux.HandleFunc("/site.webmanifest", h.pages.ServeManifest)
 		h.mux.HandleFunc(cfg.Challenge.PathPrefix+"/site.webmanifest", h.pages.ServeManifest)
 	}
 	h.mux.HandleFunc(cfg.Challenge.PathPrefix+"/challenge", h.handleChallengePOST)
 	h.mux.HandleFunc(cfg.Challenge.PathPrefix+"/noscript", h.handleNoScriptGET)
+	h.mux.HandleFunc(cfg.Challenge.PathPrefix+"/noscript/finish", h.handleNoScriptFinish)
 	h.mux.HandleFunc(cfg.Challenge.PathPrefix+"/v1/challenge", h.handleChallengeV1GET)
 	h.mux.HandleFunc(cfg.Challenge.PathPrefix+"/v1/verify", h.handleVerifyV1POST)
 	h.mux.HandleFunc(cfg.Challenge.PathPrefix+"/access", h.handleAccessPOST)
@@ -466,7 +482,7 @@ func (h *Handler) recordEvent(r *http.Request, reqID, bindID, ipStr, host, ua, a
 		}
 	}
 	ev := requestlog.Event{
-		RequestID: reqID,
+		RequestID: h.pubReqID(reqID),
 		Action:    action,
 		Reason:    reason,
 		Method:    method,
@@ -488,12 +504,12 @@ func (h *Handler) recordEvent(r *http.Request, reqID, bindID, ipStr, host, ua, a
 
 func (h *Handler) emitBlock(w http.ResponseWriter, r *http.Request, reqID, bindID, ipStr, host, ua, reason string, score int, details map[string]string) {
 	h.recordEvent(r, reqID, bindID, ipStr, host, ua, requestlog.ActionBlock, reason, score, details)
-	h.pages.RenderBlock(w, reqID, reason)
+	h.pages.RenderBlock(w, h.pubReqID(reqID), reason)
 }
 
 func (h *Handler) emitRateLimit(w http.ResponseWriter, r *http.Request, reqID, bindID, ipStr, host, ua string) {
 	h.recordEvent(r, reqID, bindID, ipStr, host, ua, requestlog.ActionRateLimit, "Rate limited", 0, nil)
-	h.pages.RenderRateLimit(w, reqID)
+	h.pages.RenderRateLimit(w, h.pubReqID(reqID))
 }
 
 // denyLimited is the shared rate-limit response path. If strike is true and the
@@ -514,7 +530,7 @@ func (h *Handler) denyLimited(w http.ResponseWriter, r *http.Request, reqID, bin
 		return
 	}
 	h.recordEvent(r, reqID, bindID, ipStr, host, ua, requestlog.ActionRateLimit, reason, 0, nil)
-	h.pages.RenderRateLimit(w, reqID)
+	h.pages.RenderRateLimit(w, h.pubReqID(reqID))
 }
 
 // serveTrap applies the configured honeypot action to a trap-path hit.
@@ -591,8 +607,7 @@ func (h *Handler) serveTarpit(w http.ResponseWriter, r *http.Request) {
 
 // handleDecisions is the bouncer feed: a CrowdSec-LAPI-style list of live
 // bans for external enforcement. Bearer-token gated. The values are client
-// bind keys, which are privacy hashes when privacy.hash_client_ip is on and
-// raw client IPs when off.
+// bind keys, which are privacy hashes of the client IP.
 func (h *Handler) handleDecisions(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -676,6 +691,11 @@ func (h *Handler) ApplyConfig(cfg config.Config) {
 	}
 	h.forgeRateCost = cfg.Detect.ForgeRateCost
 	h.forgeFlavor = detect.ParseForgeFlavor(cfg.Detect.ForgeFlavor)
+	h.wba = newWebBotVerifier(cfg)
+	h.wbaSpoof = cfg.Detect.WebBotAuth.SpoofScore
+	h.aiPolicy = strings.ToLower(strings.TrimSpace(cfg.Detect.AICrawlerPolicy))
+	h.rslBody = readOptionalFile(cfg.Site.RSLFile)
+	h.llmsBody = readOptionalFile(cfg.Site.LLMSFile)
 	h.traps = buildTraps(cfg)
 	if old := h.notifier; old != nil {
 		old.Close()
@@ -762,10 +782,20 @@ func (h *Handler) resolveClientIP(r *http.Request) net.IP {
 
 func (h *Handler) setRequestIDHeader(w http.ResponseWriter, reqID string) {
 	name := strings.TrimSpace(h.config().Stealth.RequestIDHeader)
-	if name == "" {
+	if name == "" || !h.config().Privacy.RequestIDs {
 		return
 	}
 	w.Header().Set(name, reqID)
+}
+
+// pubReqID returns the request ID to expose in pages and stored events, or
+// an empty string when privacy.request_ids is off. The internal ID still
+// exists for challenge and clearance binding.
+func (h *Handler) pubReqID(reqID string) string {
+	if !h.config().Privacy.RequestIDs {
+		return ""
+	}
+	return reqID
 }
 
 func (h *Handler) config() config.Config {
@@ -818,29 +848,29 @@ func (h *Handler) mountTestRoutes() {
 	h.mux.HandleFunc(base+"/block", func(w http.ResponseWriter, r *http.Request) {
 		reqID := requestid.New()
 		h.setRequestIDHeader(w, reqID)
-		h.pages.RenderBlock(w, reqID, "Test mode: sample block page")
+		h.pages.RenderBlock(w, h.pubReqID(reqID), "Test mode: sample block page")
 	})
 	h.mux.HandleFunc(base+"/ratelimit", func(w http.ResponseWriter, r *http.Request) {
 		reqID := requestid.New()
 		h.setRequestIDHeader(w, reqID)
-		h.pages.RenderRateLimit(w, reqID)
+		h.pages.RenderRateLimit(w, h.pubReqID(reqID))
 	})
 	h.mux.HandleFunc(base+"/upstream", func(w http.ResponseWriter, r *http.Request) {
 		reqID := requestid.New()
 		h.setRequestIDHeader(w, reqID)
-		h.pages.RenderUpstream(w, reqID)
+		h.pages.RenderUpstream(w, h.pubReqID(reqID))
 	})
 	h.mux.HandleFunc(base+"/error", func(w http.ResponseWriter, r *http.Request) {
 		reqID := requestid.New()
 		h.setRequestIDHeader(w, reqID)
-		h.pages.RenderError(w, reqID, "Internal error", "Test mode: sample error page for unexpected failures.", http.StatusInternalServerError)
+		h.pages.RenderError(w, h.pubReqID(reqID), "Internal error", "Test mode: sample error page for unexpected failures.", http.StatusInternalServerError)
 	})
 }
 
 func (h *Handler) handleTestIndex(w http.ResponseWriter, r *http.Request) {
 	reqID := requestid.New()
 	h.setRequestIDHeader(w, reqID)
-	h.pages.RenderTestIndex(w, reqID)
+	h.pages.RenderTestIndex(w, h.pubReqID(reqID))
 }
 
 func (h *Handler) clientBind(ipStr string) string {
@@ -1009,7 +1039,7 @@ func (h *Handler) guard(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !h.upstreamHealthy(r) {
-		h.pages.RenderUpstream(w, reqID)
+		h.pages.RenderUpstream(w, h.pubReqID(reqID))
 		return
 	}
 
@@ -1028,7 +1058,7 @@ func (h *Handler) guard(w http.ResponseWriter, r *http.Request) {
 					h.reportThreatBan(bindID, "auto ban")
 				}
 				h.recordEvent(r, reqID, bindID, ipStr, host, ua, requestlog.ActionCoraza, "Coraza rule matched", 0, details)
-				h.pages.RenderBlock(w, reqID, "Request blocked by WAF rules")
+				h.pages.RenderBlock(w, h.pubReqID(reqID), "Request blocked by WAF rules")
 				return
 			}
 			h.recordEvent(r, reqID, bindID, ipStr, host, ua, requestlog.ActionCoraza, "Coraza detect match", 0, details)
@@ -1122,7 +1152,18 @@ func (h *Handler) guard(w http.ResponseWriter, r *http.Request) {
 		cver := h.crawlerVer
 		cverify := h.crawlerVerify
 		cspoof := h.crawlerSpoof
+		wba := h.wba
 		h.mu.RUnlock()
+
+		// Signed agents: verify Web Bot Auth signatures before scoring so a
+		// verified identity can suppress the AI-UA heuristics.
+		wbaV := detect.WebBotNone
+		if wba != nil && r.Header.Get("Signature-Agent") != "" {
+			wbaV = wba.Check(r.Context(), r)
+		}
+		if wbaV == detect.WebBotVerified && h.aiPolicy != "block" && h.aiPolicy != "pay" {
+			dcfg.AIUAAction = "allow"
+		}
 		if h.beh != nil {
 			h.beh.Record(bindID, r.URL.Path, r.URL.RawQuery, r.Method, ua)
 			if h.beh.StrikesExceeded(bindID) {
@@ -1135,6 +1176,13 @@ func (h *Handler) guard(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		res := detect.Score(r, dcfg)
+		switch wbaV {
+		case detect.WebBotVerified:
+			res.Reasons = append(res.Reasons, "wba_verified")
+		case detect.WebBotInvalid:
+			res.Score += h.wbaSpoof
+			res.Reasons = append(res.Reasons, "wba_invalid")
+		}
 		if h.beh != nil {
 			br := h.beh.Score(bindID)
 			res.Score += br.Score
@@ -1177,6 +1225,21 @@ func (h *Handler) guard(w http.ResponseWriter, r *http.Request) {
 			}
 			h.emitBlock(w, r, reqID, bindID, ipStr, host, ua, "Request blocked", res.Score, details)
 			return
+		}
+		if aiMatch := detect.IsAIUA(ua); aiMatch {
+			switch h.aiPolicy {
+			case "block":
+				if h.prot != nil && h.prot.Enabled() {
+					h.prot.Strike(bindID)
+				}
+				h.emitBlock(w, r, reqID, bindID, ipStr, host, ua, "AI crawlers not allowed", res.Score, nil)
+				return
+			case "pay":
+				if !h.aiPaymentValid(r) {
+					h.emitPaymentRequired(w, r, reqID, bindID, ipStr, host, ua)
+					return
+				}
+			}
 		}
 		if res.Score >= cfg.Detect.ChallengeScore {
 			needChallenge = true
@@ -1314,7 +1377,7 @@ func (h *Handler) runSemanticML(w http.ResponseWriter, r *http.Request, reqID, b
 					h.reportThreatBan(bindID, "auto ban")
 				}
 				h.recordEvent(r, reqID, bindID, ipStr, host, ua, requestlog.ActionSemantic, "Semantic payload match", semRes.Score, details)
-				h.pages.RenderBlock(w, reqID, "Request blocked by semantic analysis")
+				h.pages.RenderBlock(w, h.pubReqID(reqID), "Request blocked by semantic analysis")
 				return 0, false, true
 			}
 			if semRes.Matched {
@@ -1379,7 +1442,7 @@ func (h *Handler) runSemanticML(w http.ResponseWriter, r *http.Request, reqID, b
 			h.prot.BanNow(bindID)
 			h.reportThreatBan(bindID, "auto ban")
 		}
-		h.pages.RenderBlock(w, reqID, "Request blocked by ML score")
+		h.pages.RenderBlock(w, h.pubReqID(reqID), "Request blocked by ML score")
 		return 0, false, true
 	}
 	if mr.Points > 0 || mr.NeedChal {
@@ -1431,7 +1494,7 @@ func (h *Handler) checkOpenAPI(w http.ResponseWriter, r *http.Request, reqID, bi
 			http.Error(w, "openapi schema violation", http.StatusForbidden)
 			return false
 		}
-		h.pages.RenderBlock(w, reqID, "OpenAPI schema violation")
+		h.pages.RenderBlock(w, h.pubReqID(reqID), "OpenAPI schema violation")
 		return false
 	}
 	h.recordEvent(r, reqID, bindID, ipStr, host, ua, requestlog.ActionOpenAPI, res.Reason, 0, details)
@@ -1509,7 +1572,7 @@ func (h *Handler) checkAccess(w http.ResponseWriter, r *http.Request, reqID, bin
 		return false
 	}
 	h.recordEvent(r, reqID, bindID, ipStr, host, ua, requestlog.ActionAccess, res.Reason, 0, details)
-	h.pages.RenderBlock(w, reqID, res.Reason)
+	h.pages.RenderBlock(w, h.pubReqID(reqID), res.Reason)
 	return false
 }
 
@@ -1633,7 +1696,7 @@ func (s *statusRecorder) Flush() {
 
 func (h *Handler) serveChallenge(w http.ResponseWriter, r *http.Request, reqID, bindID string, risk challenge.RiskLevel) {
 	if h.chal == nil {
-		h.pages.RenderError(w, reqID, "Challenge unavailable", "Browser challenge is not configured on this edge.", http.StatusInternalServerError)
+		h.pages.RenderError(w, h.pubReqID(reqID), "Challenge unavailable", "Browser challenge is not configured on this edge.", http.StatusInternalServerError)
 		return
 	}
 	ipStr := ""
@@ -1678,7 +1741,7 @@ func (h *Handler) serveChallenge(w http.ResponseWriter, r *http.Request, reqID, 
 	next := safeNextPath(r.URL.RequestURI())
 	h.pages.ServeChallenge(w, ui.Data{
 		StatusText:       h.cfg.UI.StatusText,
-		RequestID:        reqID,
+		RequestID:        h.pubReqID(reqID),
 		ChallengeURL:     h.cfg.Challenge.PathPrefix + "/v1/challenge",
 		Gate:             gate,
 		CaptchaEnabled:   captchaOn,
@@ -1689,10 +1752,11 @@ func (h *Handler) serveChallenge(w http.ResponseWriter, r *http.Request, reqID, 
 	})
 }
 
-// handleNoScriptGET mints a clearance cookie for text-mode and no-JavaScript
-// browsers that cannot run the proof-of-work widget. The link only renders
-// for known text-browser User-Agents, the endpoint enforces the same client
-// binding as a solved challenge, and every later request still scores.
+// handleNoScriptGET renders a meta-refresh page carrying a timed token for
+// text-mode and no-JavaScript browsers that cannot run the proof-of-work
+// widget. The token must age no_js_delay seconds before /noscript/finish
+// redeems it for a clearance cookie, which turns a single scripted GET
+// into a real wait. Every request after clearance still scores.
 func (h *Handler) handleNoScriptGET(w http.ResponseWriter, r *http.Request) {
 	reqID := requestid.New()
 	h.setRequestIDHeader(w, reqID)
@@ -1700,13 +1764,74 @@ func (h *Handler) handleNoScriptGET(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	bindID, ok := h.noJSClient(w, r)
+	if !ok {
+		return
+	}
+	next := safeNextPath(r.URL.Query().Get("next"))
+	if next == "" {
+		next = "/"
+	}
+	tok := h.noJSMint(bindID, next, time.Now().UnixMilli())
+	finish := h.cfg.Challenge.PathPrefix + "/noscript/finish?tok=" + tok + "&next=" + url.QueryEscape(next)
+	delay := int(h.cfg.Challenge.NoJSDelay.Seconds())
+	if delay < 1 {
+		delay = 3
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	_, _ = fmt.Fprintf(w, `<!DOCTYPE html><html><head><meta charset="utf-8"><meta http-equiv="refresh" content="%d;url=%s"><title>Verifying</title></head><body><p>Verifying your client. <a href="%s">Continue</a></p></body></html>`, delay, finish, finish)
+}
+
+// handleNoScriptFinish redeems an aged no-JS token for a clearance cookie.
+func (h *Handler) handleNoScriptFinish(w http.ResponseWriter, r *http.Request) {
+	reqID := requestid.New()
+	h.setRequestIDHeader(w, reqID)
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	bindID, ok := h.noJSClient(w, r)
+	if !ok {
+		return
+	}
+	next := safeNextPath(r.URL.Query().Get("next"))
+	tok := r.URL.Query().Get("tok")
+	issued, ok := h.noJSVerify(tok, bindID, next)
+	if !ok {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	age := time.Since(time.UnixMilli(issued))
+	delay := h.cfg.Challenge.NoJSDelay.Duration
+	if delay <= 0 {
+		delay = 3 * time.Second
+	}
+	if age < delay || age > 10*time.Minute {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	ipStr := ""
+	if clientIP := h.resolveClientIP(r); clientIP != nil {
+		ipStr = clientIP.String()
+	}
+	h.recordEvent(r, reqID, bindID, ipStr, stripPort(r.Host), r.Header.Get("User-Agent"),
+		requestlog.ActionChallenge, "no-js clearance", 0, nil)
+	http.SetCookie(w, h.chal.ClearanceCookie(bindID, reqID, h.requestSecure(r)))
+	w.Header().Set("Cache-Control", "no-store")
+	http.Redirect(w, r, next, http.StatusSeeOther) // #nosec G710 -- next is limited to local paths by safeNextPath
+}
+
+// noJSClient gates the noscript endpoints on the text-browser UA table
+// and the per-client rate limit, returning the client bind key.
+func (h *Handler) noJSClient(w http.ResponseWriter, r *http.Request) (string, bool) {
 	if h.chal == nil || !h.cfg.Challenge.NoJSFallback {
 		http.NotFound(w, r)
-		return
+		return "", false
 	}
 	if !detect.IsTextBrowserUA(r.Header.Get("User-Agent")) {
 		http.Error(w, "forbidden", http.StatusForbidden)
-		return
+		return "", false
 	}
 	clientIP := h.resolveClientIP(r)
 	ipStr := ""
@@ -1717,22 +1842,47 @@ func (h *Handler) handleNoScriptGET(w http.ResponseWriter, r *http.Request) {
 	if h.limiter != nil && h.cfg.RateLimit.Enabled {
 		if !h.limiter.AllowN(bindID, r.URL.Path, 1) {
 			http.Error(w, "too many requests", http.StatusTooManyRequests)
-			return
+			return "", false
 		}
 	}
 	if h.globalOver() {
 		http.Error(w, "too many requests", http.StatusTooManyRequests)
-		return
+		return "", false
 	}
-	h.recordEvent(r, reqID, bindID, ipStr, stripPort(r.Host), r.Header.Get("User-Agent"),
-		requestlog.ActionChallenge, "no-js clearance", 0, nil)
-	http.SetCookie(w, h.chal.ClearanceCookie(bindID, reqID, h.requestSecure(r)))
-	next := safeNextPath(r.URL.Query().Get("next"))
-	if next == "" {
-		next = "/"
+	return bindID, true
+}
+
+// noJSMint produces ts.mac for the no-JS continue token, bound to the
+// client and the destination path.
+func (h *Handler) noJSMint(bindID, next string, ts int64) string {
+	payload := fmt.Sprintf("nojs|%d|%s|%s", ts, bindID, next)
+	mac := hmac.New(sha256.New, []byte(h.cfg.Challenge.Secret))
+	mac.Write([]byte(payload))
+	return fmt.Sprintf("%d.%x", ts, mac.Sum(nil))
+}
+
+// noJSVerify parses and authenticates a no-JS token, returning the issue
+// time.
+func (h *Handler) noJSVerify(tok, bindID, next string) (int64, bool) {
+	tsStr, hexMac, found := strings.Cut(tok, ".")
+	if !found {
+		return 0, false
 	}
-	w.Header().Set("Cache-Control", "no-store")
-	http.Redirect(w, r, next, http.StatusSeeOther)
+	ts, err := strconv.ParseInt(tsStr, 10, 64)
+	if err != nil {
+		return 0, false
+	}
+	got, err := hex.DecodeString(hexMac)
+	if err != nil {
+		return 0, false
+	}
+	expect := h.noJSMint(bindID, next, ts)
+	_, expectMac, _ := strings.Cut(expect, ".")
+	expBytes, err := hex.DecodeString(expectMac)
+	if err != nil || !hmac.Equal(got, expBytes) {
+		return 0, false
+	}
+	return ts, true
 }
 
 type challengeBody struct {

@@ -19,7 +19,7 @@
       <input id="captcha" name="captcha" type="text" autocomplete="off" placeholder="type ok">
     </label>
     {{end}}
-    <p class="rid">{{.RequestIDLabel}}: <span id="request-id">{{.RequestID}}</span></p>
+    {{if .RequestID}}<p class="rid">{{.RequestIDLabel}}: <span id="request-id">{{.RequestID}}</span></p>{{end}}
     {{if .PrivacyNoticeURL}}
     <p class="sub"><a href="{{.PrivacyNoticeURL}}">Privacy notice</a></p>
     {{end}}

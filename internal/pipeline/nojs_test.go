@@ -6,8 +6,10 @@ package pipeline_test
 import (
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Quad4-Software/ravenguard/internal/config"
 )
@@ -18,7 +20,9 @@ func lynxHeaders(req *http.Request) {
 }
 
 func TestNoJSChallengeLinkAndClearance(t *testing.T) {
-	h := forgeTestHandler(t, nil)
+	h := forgeTestHandler(t, func(cfg *config.Config) {
+		cfg.Challenge.NoJSDelay = config.Duration{Duration: 200 * time.Millisecond}
+	})
 
 	// A text browser on a forge-hot path is challenged, and the page offers
 	// the noscript continue link.
@@ -35,21 +39,46 @@ func TestNoJSChallengeLinkAndClearance(t *testing.T) {
 		t.Fatalf("challenge page missing no-js continue link: %s", body[:min(400, len(body))])
 	}
 
-	// The endpoint mints a clearance cookie and redirects.
+	// The first hop renders a meta-refresh page with a timed token.
 	req = httptest.NewRequest(http.MethodGet, "/_rg/noscript?next=/repo/snapshot/x.tar.gz", nil)
 	lynxHeaders(req)
 	req.RemoteAddr = "192.0.2.220:1"
 	rr = httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
-	if rr.Code != http.StatusSeeOther {
+	if rr.Code != http.StatusOK {
 		t.Fatalf("noscript get: code=%d", rr.Code)
+	}
+	m := regexp.MustCompile(`finish\?tok=[^"&]+&next=[^"<]+`).FindString(rr.Body.String())
+	if m == "" {
+		t.Fatalf("pending page missing finish token: %s", rr.Body.String())
+	}
+
+	// Redeeming instantly is refused.
+	req = httptest.NewRequest(http.MethodGet, "/_rg/noscript/"+m, nil)
+	lynxHeaders(req)
+	req.RemoteAddr = "192.0.2.220:1"
+	rr = httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code == http.StatusSeeOther {
+		t.Fatal("fresh token must not redeem before the delay")
+	}
+	time.Sleep(250 * time.Millisecond)
+
+	// Aged token redeems into a clearance cookie and a redirect.
+	req = httptest.NewRequest(http.MethodGet, "/_rg/noscript/"+m, nil)
+	lynxHeaders(req)
+	req.RemoteAddr = "192.0.2.220:1"
+	rr = httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusSeeOther {
+		t.Fatalf("aged token: code=%d body=%s", rr.Code, rr.Body.String())
 	}
 	if loc := rr.Header().Get("Location"); loc != "/repo/snapshot/x.tar.gz" {
 		t.Fatalf("noscript redirect=%q", loc)
 	}
 	cookies := rr.Result().Cookies()
 	if len(cookies) == 0 {
-		t.Fatal("noscript did not set a clearance cookie")
+		t.Fatal("noscript finish did not set a clearance cookie")
 	}
 
 	// The cleared text browser now passes the hot path.
