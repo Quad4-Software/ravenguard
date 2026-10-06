@@ -53,6 +53,10 @@ type Config struct {
 	// a sign of domain fronting or off-target scanning. Only meaningful when
 	// RavenGuard terminates TLS. Leave unset behind a TLS-terminating proxy.
 	SNIHostMismatchScore int
+	// AIUAAction controls scoring of known AI crawler User-Agents. "allow"
+	// suppresses ai_ua points entirely. Anything else scores normally.
+	// block and pay policies are enforced by the caller.
+	AIUAAction string
 }
 
 type Result struct {
@@ -83,6 +87,9 @@ var scannerUA = []string{
 	"langchain", "crewai", "autogen/", "openai-agents",
 	// Scraper platforms and headless browsers built for extraction.
 	"apify", "lightpanda", "crawlspace", "brightbot", "awario",
+	// Agent-run browsers and hosted automation clouds (2026 refresh).
+	"hyperagent", "hyperbrowser", "browserbase", "anchor-browser",
+	"browsercat", "scrapybara", "self-operating-computer",
 }
 
 // aiUA matches documented AI training crawlers, answer-engine indexers,
@@ -126,6 +133,8 @@ var aiUA = []string{
 	"bixelbot", "buddybot", "cotoyogi", "cragcrawler",
 	"agentdatabot", "agenttimes", "atlassian-bot", "nagetbot",
 	"zanistabot",
+	// Standalone indexing outfits seen since 2026.
+	"aiwebindex", "lyrenth", "swurl", "rarebot",
 }
 
 // forumWritePaths are path segments commonly abused by registration and comment spam bots.
@@ -260,7 +269,7 @@ func score(r *http.Request, cfg Config, wantReasons bool) Result {
 				res.Reasons = append(res.Reasons, "scanner_ua")
 			}
 		}
-		if aiMatcher.Contains(lowUA) {
+		if aiMatcher.Contains(lowUA) && !strings.EqualFold(cfg.AIUAAction, "allow") {
 			score := cfg.AIUAScore
 			if score <= 0 {
 				score = cfg.ScannerUAScore
