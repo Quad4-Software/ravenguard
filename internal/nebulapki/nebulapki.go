@@ -3,7 +3,7 @@
 
 // Package nebulapki wraps Nebula certificate operations for the hub admin
 // API: CA bootstrap and host certificate signing. The Nebula daemon itself
-// runs outside ravenguard; this package only produces the PEM material each
+// runs outside ravenguard. This package only produces the PEM material each
 // host needs.
 package nebulapki
 

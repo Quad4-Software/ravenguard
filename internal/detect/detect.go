@@ -51,7 +51,7 @@ type Config struct {
 	MissingUIRScore int
 	// SNIHostMismatchScore applies when the TLS SNI and Host header disagree,
 	// a sign of domain fronting or off-target scanning. Only meaningful when
-	// RavenGuard terminates TLS; leave unset behind a TLS-terminating proxy.
+	// RavenGuard terminates TLS. Leave unset behind a TLS-terminating proxy.
 	SNIHostMismatchScore int
 }
 
@@ -622,7 +622,7 @@ func missingContentTypeOnWrite(r *http.Request) bool {
 }
 
 // sniHostMismatch reports whether the TLS SNI and the HTTP Host header name
-// different sites. Browsers send the same name for both; disagreement is a
+// different sites. Browsers send the same name for both. Disagreement is a
 // sign of domain fronting or scanners reusing a TLS session.
 func sniHostMismatch(r *http.Request) bool {
 	if r.TLS == nil || r.TLS.ServerName == "" {

@@ -103,8 +103,8 @@ func TestReverseProxyHTTP3(t *testing.T) {
 		t.Fatalf("body=%q", rec.Body.String())
 	}
 	if rec.Header().Get("X-Proto") != "" {
-		// h3 responses include :status pseudo headers; the server sets X-Proto.
-		// The recorder captures it; value should be HTTP/3.0 or similar.
+		// h3 responses include :status pseudo headers. The server sets X-Proto.
+		// The recorder captures it. Value should be HTTP/3.0 or similar.
 		if rec.Header().Get("X-Proto") == "" {
 			t.Fatalf("X-Proto not set")
 		}

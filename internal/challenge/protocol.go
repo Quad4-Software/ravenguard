@@ -277,7 +277,7 @@ func canonicalParams(p map[string]int) string {
 	for k := range p {
 		keys = append(keys, k)
 	}
-	// Insertion order is unstable; sort for HMAC stability.
+	// Insertion order is unstable. Sort for HMAC stability.
 	for i := 0; i < len(keys); i++ {
 		for j := i + 1; j < len(keys); j++ {
 			if keys[j] < keys[i] {

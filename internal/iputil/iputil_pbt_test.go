@@ -90,7 +90,7 @@ func netipRefForCIDR(s string) (netip.Prefix, error) {
 		}
 		if p.Masked().Addr().Is4In6() {
 			// IPv4-mapped CIDRs are treated specially by net.ParseCIDR. Skip
-			// them in differential checks; invariants are still tested.
+			// them in differential checks. Invariants are still tested.
 			return netip.Prefix{}, nil
 		}
 		return p.Masked(), nil

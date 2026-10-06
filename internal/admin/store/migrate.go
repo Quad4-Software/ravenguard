@@ -209,7 +209,7 @@ var migrations = []string{
 	// admin checkbox could never set the flag on, so these rows are accidental.
 	`UPDATE upstreams SET allow_http1 = 1 WHERE allow_http1 = 0
 		AND (url LIKE 'http://%' OR url LIKE 'ws://%' OR url LIKE 'unix:%' OR url LIKE 'tunnel:%')`,
-	// The connector tunnel is gone; tunnel:// upstreams can never be dialed.
+	// The connector tunnel is gone. tunnel:// upstreams can never be dialed.
 	`DELETE FROM routes WHERE upstream_id IN (SELECT id FROM upstreams WHERE url LIKE 'tunnel:%')`,
 	`DELETE FROM upstreams WHERE url LIKE 'tunnel:%'`,
 	`CREATE TABLE IF NOT EXISTS nebula_hosts (

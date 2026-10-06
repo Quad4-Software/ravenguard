@@ -134,7 +134,7 @@ func TestCrawlerSuffixTrickRejected(t *testing.T) {
 
 func TestCrawlerRealBrowserNotFlagged(t *testing.T) {
 	// Yandex Browser and Sogou browser UAs contain operator tokens but are
-	// real user browsers; they must not trigger verification at all.
+	// real user browsers. They must not trigger verification at all.
 	for _, ua := range []string{
 		"Mozilla/5.0 (Windows NT 10.0) YaBrowser/24.1 Chrome/120 Safari/537.36",
 		"Mozilla/5.0 (Linux; Android 13) SogouMobileBrowser/12.0",

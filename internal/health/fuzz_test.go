@@ -9,7 +9,7 @@ import (
 
 func FuzzCheckerHealthyStatus(f *testing.F) {
 	// Differential / metamorphic seed: any code in the configured success set
-	// should be healthy; any code outside an empty set should be unhealthy.
+	// should be healthy. Any code outside an empty set should be unhealthy.
 	for _, code := range []int{100, 199, 200, 201, 299, 300, 301, 400, 401, 403, 404, 500, 502, 503} {
 		f.Add(code, 0) // empty success set (default 2xx)
 		f.Add(code, 1) // success set {200, 403}
@@ -28,7 +28,7 @@ func FuzzCheckerHealthyStatus(f *testing.F) {
 			c.successCodes = []int{200}
 		}
 		got := c.healthyStatus(code)
-		// Oracle: 200 is always healthy; 500s are never healthy with these sets.
+		// Oracle: 200 is always healthy. 500s are never healthy with these sets.
 		if code == 200 && !got {
 			t.Fatalf("200 must always be healthy, got %v", got)
 		}

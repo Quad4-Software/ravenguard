@@ -137,7 +137,7 @@ func New(cfg Config) *Proxy {
 		}
 	}
 	if proto == ProtocolAuto && IsH3Scheme(cfg.Target) {
-		// An explicit h3:// target only speaks QUIC; TCP fallback is useless.
+		// An explicit h3:// target only speaks QUIC. TCP fallback is useless.
 		proto = ProtocolH3
 	}
 
@@ -568,7 +568,7 @@ type protoCacheEntry struct {
 
 func (a *h3AutoTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	if req.URL == nil || req.URL.Scheme != "https" {
-		// HTTP/3 always runs over TLS; cleartext targets go straight to TCP.
+		// HTTP/3 always runs over TLS. Cleartext targets go straight to TCP.
 		return a.fallback.RoundTrip(req)
 	}
 	host := req.URL.Host

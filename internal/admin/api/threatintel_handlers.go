@@ -404,7 +404,7 @@ func (s *Server) ingestIOCs(ctx context.Context, source string, iocs []threatint
 			}
 		}
 		if len(stored) == 0 {
-			// Fallback: re-pull by converting again is lossy; fan-out via full pull revision.
+			// Fallback: re-pull by converting again is lossy. Fan-out via full pull revision.
 			s.fanOutThreat(ctx, source, res.Revision, entries)
 		} else {
 			s.fanOutThreat(ctx, source, res.Revision, stored)

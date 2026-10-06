@@ -14,7 +14,7 @@ const penaltyShards = 64
 
 // PenaltyTracker counts expensive upstream responses per client: cache-miss
 // statuses such as redirects, missing pages, and 5xx errors. Attackers probe
-// for non-cacheable paths and hammer them; clients that accumulate too many
+// for non-cacheable paths and hammer them. Clients that accumulate too many
 // expensive responses get challenged or blocked by the caller.
 type PenaltyTracker struct {
 	threshold int
@@ -48,7 +48,7 @@ func NewPenaltyTracker(threshold int, window time.Duration) *PenaltyTracker {
 
 // ExpensiveStatus reports whether an upstream status is a cache-miss class
 // that attackers can weaponize. Redirects and missing pages are the classic
-// cache-bypass surfaces; 5xx reflects upstream work that is not a normal hit.
+// cache-bypass surfaces. 5xx reflects upstream work that is not a normal hit.
 func ExpensiveStatus(status int) int {
 	switch {
 	case status == 404 || status == 410:

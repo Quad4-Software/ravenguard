@@ -263,7 +263,7 @@ func TestReverseProxyWebSocketUsesHTTP1(t *testing.T) {
 		gotProto = r.Proto
 		gotUpgrade = r.Header.Get("Upgrade")
 		// Return 200 instead of 101 so we do not need a hijackable
-		// ResponseWriter in the test; the h1 transport will still be
+		// ResponseWriter in the test. The h1 transport will still be
 		// selected because of the Upgrade header.
 		w.Write([]byte("ok"))
 	}))

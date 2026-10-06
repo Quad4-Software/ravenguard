@@ -11,7 +11,7 @@ import (
 // Mode controls how sandbox failures are handled.
 //
 // off: do not apply the sandbox.
-// try: attempt to apply; any error is logged and ignored.
+// try: attempt to apply. Any error is logged and ignored.
 // best_effort: degrade gracefully when the kernel lacks features
 // (Landlock BestEffort, soft-fail when seccomp is unsupported).
 // enforce: require a successful apply or return an error.

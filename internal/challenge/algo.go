@@ -31,7 +31,7 @@ func VerifySolution(ch Challenge, sol uint64) error {
 		}
 		return nil
 	case AlgoArgon2id:
-		// Argon2id lands with the widget worker; reject until wired.
+		// Argon2id lands with the widget worker. Reject until wired.
 		return ErrBadAlgorithm
 	default:
 		return ErrBadAlgorithm

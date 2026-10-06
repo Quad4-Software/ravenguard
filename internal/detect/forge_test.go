@@ -87,7 +87,7 @@ func TestForgePathClassCgitAuto(t *testing.T) {
 		{"/about", detect.ForgeNone},
 		{"/repo.git/info/refs", detect.ForgeNone},
 		{"/repo.git/git-upload-pack", detect.ForgeNone},
-		// Deep nesting needs forge_flavor=cgit; auto only checks two depths.
+		// Deep nesting needs forge_flavor=cgit. Auto only checks two depths.
 		{"/pub/scm/linux/kernel/git/torvalds/linux.git/commit", detect.ForgeNone},
 	}
 	for _, tc := range cases {

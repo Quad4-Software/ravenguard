@@ -35,7 +35,7 @@ const (
 
 // crawlerSpec maps a User-Agent substring to the reverse-DNS suffixes the
 // operator publishes for its crawlers. Only crawlers with documented
-// verifiable rDNS are listed; operators that publish IP ranges instead
+// verifiable rDNS are listed. Operators that publish IP ranges instead
 // (OpenAI, Anthropic, Perplexity) cannot be checked this way.
 type crawlerSpec struct {
 	uaSub    string
@@ -207,7 +207,7 @@ func (v *CrawlerVerifier) Check(ctx context.Context, ip net.IP, ua string) Crawl
 }
 
 // sweep trims the verdict cache once it grows past maxCrawlerCache. Expired
-// entries go first; if the map is still oversized a slice of live entries is
+// entries go first. If the map is still oversized a slice of live entries is
 // evicted to keep memory bounded. The size counter is approximate (re-stores
 // of a live key inflate it slightly), which only makes the sweep run a bit
 // early.
@@ -275,7 +275,7 @@ func (v *CrawlerVerifier) verify(ctx context.Context, ip net.IP, spec crawlerSpe
 		return CrawlerSpoofed
 	}
 	if !sawForward {
-		// Every suffix-matching name failed to resolve; treat as inconclusive
+		// Every suffix-matching name failed to resolve. Treat as inconclusive
 		// rather than accusing on a resolver hiccup.
 		return CrawlerUnknown
 	}

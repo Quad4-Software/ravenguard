@@ -696,7 +696,7 @@ func TestLandlockBlockedConnectionAdversarial(t *testing.T) {
 
 func TestServeHTTPHugeBodyPBT(t *testing.T) {
 	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Read the full body before writing; interleaving reads and writes on
+		// Read the full body before writing. Interleaving reads and writes on
 		// HTTP/1.x can cause the server to close the request body early.
 		body, _ := io.ReadAll(r.Body)
 		w.Header().Set("Content-Type", "application/octet-stream")

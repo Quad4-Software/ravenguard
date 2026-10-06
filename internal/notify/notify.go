@@ -16,7 +16,7 @@ import (
 	"github.com/Quad4-Software/ravenguard/internal/requestlog"
 )
 
-// queueCap bounds buffered events; past that, new events are dropped rather
+// queueCap bounds buffered events. Past that, new events are dropped rather
 // than stalling the request path on a slow webhook.
 const queueCap = 256
 
@@ -32,7 +32,7 @@ type Notifier struct {
 }
 
 // New returns a notifier for url, or nil when url is empty. events lists the
-// requestlog actions to forward; empty forwards only blocks. The worker stops
+// requestlog actions to forward. Empty forwards only blocks. The worker stops
 // on Close.
 func New(url string, events []string, timeout time.Duration) *Notifier {
 	if url == "" {
@@ -65,7 +65,7 @@ func New(url string, events []string, timeout time.Duration) *Notifier {
 }
 
 // Notify queues e for delivery if its action is subscribed. Never blocks the
-// caller; events drop silently once the queue is full.
+// caller. Events drop silently once the queue is full.
 func (n *Notifier) Notify(e requestlog.Event) {
 	if n == nil {
 		return

@@ -32,7 +32,7 @@ type EnvVerdict struct {
 }
 
 // softRefuseThreshold is the number of soft automation signals that together
-// justify a refusal. Each alone has real-browser edge cases; two or more is a
+// justify a refusal. Each alone has real-browser edge cases. Two or more is a
 // reliable automation fingerprint.
 const softRefuseThreshold = 2
 
