@@ -63,7 +63,7 @@ header_files = ["/etc/ravenguard/allowlists/headers.txt"]
 reload_interval = "30s"
 ```
 
-Any single match is enough (IP **or** User-Agent substring **or** header). Empty lists have no effect.
+Any single match is enough (IP, User-Agent substring, or header). Empty lists have no effect.
 
 ### Header lists
 

@@ -158,7 +158,7 @@ RavenGuard can run as separate processes:
 
 Start with ravenguard hub or ravenguard proxy, or set RG_MODE when the process manager cannot pass a custom command. Optional RG_CONFIG selects the TOML path.
 
-**Threat share:** the Bans page lists fleet ledger entries (redacted). Creating a ban or posting to /api/v1/threat fans out to online proxies. The **Threat intel** page exports STIX/CSV, ingests feeds, and syncs AbuseIPDB or MISP into that ledger. Config saves also update fleet_defaults so privacy bind secrets stay aligned across edges.
+The Bans page lists fleet ledger entries (redacted). Creating a ban or posting to /api/v1/threat fans out to online proxies. The **Threat intel** page exports STIX/CSV, ingests feeds, and syncs AbuseIPDB or MISP into that ledger. Config saves also update fleet_defaults so privacy bind secrets stay aligned across edges.
 
 Preferred deploy keeps the hub on the Nebula overlay. Bind admin.listen to the overlay IP only. Proxies set agent.hub_url to that address. Operators open the panel from a machine on the same mesh. Nothing management-facing needs a public A record. The Nebula page on the hub issues and revokes overlay host certificates. See [Deployment](./deployment.md#nebula-overlay).
 
@@ -205,6 +205,7 @@ Environment:
 - RG_AGENT_HUB_PUBKEY
 - RG_AGENT_NAME
 - RG_AGENT_DATA_DIR
+
 ## Reverse proxy
 
 Serve the admin UI behind a private reverse proxy:

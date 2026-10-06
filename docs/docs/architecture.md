@@ -40,7 +40,7 @@ Private origins and the management plane sit on a Nebula overlay. Every host run
 Client -> Edge (WAF) -> origin app (overlay IP:port)
 ```
 
-Edge upstream URLs are plain http or https pointed at the origin's overlay address. Host identity and mutual authentication come from Nebula certificates, and each origin host's Nebula firewall rules decide which ports each group may reach. The hub signs host certs and tracks issued fingerprints through internal/nebulapki and the admin API. Revocation works through the pki.blocklist mechanism, not a CRL. The hub agent WebSocket stays control-plane only.
+Edge upstream URLs are plain http or https pointed at the origin's overlay address. Host identity and mutual authentication come from Nebula certificates, and each origin host's Nebula firewall rules decide which ports each group can reach. The hub signs host certs and tracks issued fingerprints through internal/nebulapki and the admin API. Revocation works through the pki.blocklist mechanism, not a CRL. The hub agent WebSocket stays control-plane only.
 
 Controls run at the HTTP application layer. Volumetric DDoS mitigation belongs at the network edge or CDN.
 

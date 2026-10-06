@@ -40,7 +40,7 @@ Then in the admin UI Nebula page (or the API):
 2. Issue a host certificate per node. The response includes `ca.crt`, `host.crt`, `host.key`, and a starter `config.yml`.
 3. Install `nebula` on the node (distro package or the `nebulaoss/nebula` image), write those files under `/etc/nebula/`, and start the daemon.
 
-Edges then reach private origins as ordinary upstreams (`http://<origin overlay ip>:<port>`). The origin host's Nebula firewall rules decide which ports each group may reach, which replaces the old connector allowlist. Run a lighthouse on a stable public address (the hub host works) so NATed nodes can punch through. Add a relay if two nodes sit behind symmetric NAT.
+Edges then reach private origins as ordinary upstreams (`http://<origin overlay ip>:<port>`). The origin host's Nebula firewall rules decide which ports each group can reach, which replaces the old connector allowlist. Run a lighthouse on a stable public address (the hub host works) so NATed nodes can punch through. Add a relay if two nodes sit behind symmetric NAT.
 
 Revoking a host in the UI adds its fingerprint to the blocklist. Put those fingerprints in `pki.blocklist` on every node so revoked tunnels drop.
 
