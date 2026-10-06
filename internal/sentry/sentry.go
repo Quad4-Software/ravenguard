@@ -159,14 +159,14 @@ func (r *Reporter) CaptureMessage(msg string) {
 }
 
 // CaptureUpstreamError reports an origin proxy failure when configured.
-func (r *Reporter) CaptureUpstreamError(err error, ray string) {
+func (r *Reporter) CaptureUpstreamError(err error, reqID string) {
 	if !r.CaptureUpstream() || err == nil {
 		return
 	}
 	sdk.WithScope(func(scope *sdk.Scope) {
 		scope.SetTag("component", "upstream")
-		if ray != "" {
-			scope.SetTag("ray", ray)
+		if reqID != "" {
+			scope.SetTag("request_id", reqID)
 		}
 		scope.SetLevel(sdk.LevelError)
 		sdk.CaptureException(err)

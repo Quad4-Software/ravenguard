@@ -174,10 +174,10 @@ func hashNonce(nonce string) uint32 {
 	return strhash.String(nonce)
 }
 
-func (m *Manager) ClearanceCookie(bindID, ray string, secure bool) *http.Cookie {
+func (m *Manager) ClearanceCookie(bindID, reqID string, secure bool) *http.Cookie {
 	ls := m.settings()
 	exp := time.Now().Add(ls.CookieTTL)
-	payload := fmt.Sprintf("%s|%d|%s", bindID, exp.Unix(), ray)
+	payload := fmt.Sprintf("%s|%d|%s", bindID, exp.Unix(), reqID)
 	mac := m.mac(payload)
 	val := base64.RawURLEncoding.EncodeToString([]byte(payload)) + "." + mac
 	return &http.Cookie{

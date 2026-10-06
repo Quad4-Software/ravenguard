@@ -26,6 +26,7 @@ type BehaviorConfig struct {
 	WriteRepeatScore int
 	ForgeBurstLimit  int
 	ForgeBurstScore  int
+	ForgeFlavor      ForgeFlavor
 	UAVarietyLimit   int
 	UAVarietyScore   int
 }
@@ -136,7 +137,7 @@ func (t *BehaviorTracker) Record(key, path, method, ua string) {
 			e.samePathWrite = 0
 		}
 	}
-	if ForgePathClass(path) != ForgeNone {
+	if t.cfg.ForgeFlavor.Classify(path) != ForgeNone {
 		e.forgeHits++
 	}
 }

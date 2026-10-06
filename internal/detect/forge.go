@@ -3,22 +3,52 @@
 
 package detect
 
-// ForgeClass classifies Gitea/Forgejo-family repository paths by cost.
+// ForgeClass classifies forge repository paths by cost.
 type ForgeClass int
 
 const (
 	// ForgeNone is not a forge expensive or browse path.
 	ForgeNone ForgeClass = iota
-	// ForgeBrowse is normal code browsing (src, raw, commit) scored only via burst.
+	// ForgeBrowse is normal code browsing (src, raw, tree, commit) scored only via burst.
 	ForgeBrowse
-	// ForgeHot is scraper-hot (compare, blame, archive) and scores per request.
+	// ForgeHot is scraper-hot (compare, blame, archive, snapshot, diff) and scores per request.
 	ForgeHot
 )
 
-// ForgePathClass returns the cost tier for a URL path.
-// Zero allocations. Segment-aware for /{owner}/{repo}/action and
-// /api/vN/repos/{owner}/{repo}/action. Skips git smart-HTTP.
+// ForgeFlavor selects which forge layouts Classify understands.
+type ForgeFlavor int
+
+const (
+	// ForgeAuto covers Gitea/Forgejo owner/repo/action paths plus cgit
+	// repo/cmd paths where the command sits in the first two segments.
+	ForgeAuto ForgeFlavor = iota
+	// ForgeGitea limits detection to Gitea/Forgejo layouts.
+	ForgeGitea
+	// ForgeCgit scans every segment for a cgit command, which suits cgit
+	// deployments that nest repos under group directories.
+	ForgeCgit
+)
+
+// ParseForgeFlavor maps a config string to a ForgeFlavor. Unknown or empty
+// values select ForgeAuto.
+func ParseForgeFlavor(s string) ForgeFlavor {
+	switch {
+	case eqFoldASCII(s, "gitea") || eqFoldASCII(s, "forgejo"):
+		return ForgeGitea
+	case eqFoldASCII(s, "cgit"):
+		return ForgeCgit
+	}
+	return ForgeAuto
+}
+
+// ForgePathClass returns the cost tier for a URL path under ForgeAuto.
 func ForgePathClass(path string) ForgeClass {
+	return ForgeAuto.Classify(path)
+}
+
+// Classify returns the cost tier for a URL path under this flavor.
+// Zero allocations. Skips git smart-HTTP.
+func (f ForgeFlavor) Classify(path string) ForgeClass {
 	if path == "" || path == "/" {
 		return ForgeNone
 	}
@@ -26,17 +56,49 @@ func ForgePathClass(path string) ForgeClass {
 		return ForgeNone
 	}
 
-	action, next := forgeActionSeg(path)
-	if action == "" {
-		return ForgeNone
-	}
-	if eqFoldASCII(action, "git") {
-		if eqFoldASCII(next, "trees") || eqFoldASCII(next, "blobs") {
-			return ForgeHot
+	if f != ForgeCgit {
+		// Gitea/Forgejo: /{owner}/{repo}/{action} and
+		// /api/vN/repos/{owner}/{repo}/{action}.
+		if action, next := forgeActionSeg(path); action != "" {
+			if eqFoldASCII(action, "git") {
+				if eqFoldASCII(next, "trees") || eqFoldASCII(next, "blobs") {
+					return ForgeHot
+				}
+			} else if cls := classifyForgeAction(action); cls != ForgeNone {
+				return cls
+			} else if cls := classifyCgitCmd(action); cls != ForgeNone {
+				// Auto also accepts a cgit command at the action position so
+				// one-level nested cgit repos (/{group}/{repo}/{cmd}) score.
+				return cls
+			}
+		}
+		if f == ForgeGitea {
+			return ForgeNone
+		}
+		// Flat cgit layout: /{repo}/{cmd}.
+		if _, rest := nextSeg(skipLeadSlash(path)); rest != "" {
+			if cmd, _ := nextSeg(rest); cmd != "" {
+				if cls := classifyCgitCmd(cmd); cls != ForgeNone {
+					return cls
+				}
+			}
 		}
 		return ForgeNone
 	}
-	return classifyForgeAction(action)
+
+	// cgit nests repos arbitrarily deep, so any segment may carry the command.
+	rest := path
+	for rest != "" {
+		var seg string
+		seg, rest = nextSeg(rest)
+		if seg == "" {
+			continue
+		}
+		if cls := classifyCgitCmd(seg); cls != ForgeNone {
+			return cls
+		}
+	}
+	return ForgeNone
 }
 
 func isSmartHTTPPath(path string) bool {
@@ -58,11 +120,15 @@ func hasPathSuffix(path, suffix string) bool {
 	return true
 }
 
-func forgeActionSeg(path string) (action, next string) {
-	p := path
-	if p[0] == '/' {
-		p = p[1:]
+func skipLeadSlash(p string) string {
+	if p != "" && p[0] == '/' {
+		return p[1:]
 	}
+	return p
+}
+
+func forgeActionSeg(path string) (action, next string) {
+	p := skipLeadSlash(path)
 	if p == "" {
 		return "", ""
 	}
@@ -114,6 +180,7 @@ func nextSeg(p string) (seg, rest string) {
 	return p, ""
 }
 
+// classifyForgeAction is the Gitea/Forgejo action table.
 func classifyForgeAction(seg string) ForgeClass {
 	switch len(seg) {
 	case 3:
@@ -137,6 +204,44 @@ func classifyForgeAction(seg string) ForgeClass {
 		}
 		if eqFoldASCII(seg, "commits") {
 			return ForgeBrowse
+		}
+	}
+	return ForgeNone
+}
+
+// classifyCgitCmd is the cgit command table. cgit commands sit at
+// /{repo}/{cmd}/... in virtual-root layouts.
+func classifyCgitCmd(seg string) ForgeClass {
+	switch len(seg) {
+	case 3:
+		if eqFoldASCII(seg, "log") || eqFoldASCII(seg, "tag") || eqFoldASCII(seg, "ref") {
+			return ForgeBrowse
+		}
+	case 4:
+		if eqFoldASCII(seg, "tree") || eqFoldASCII(seg, "blob") || eqFoldASCII(seg, "atom") || eqFoldASCII(seg, "refs") {
+			return ForgeBrowse
+		}
+		if eqFoldASCII(seg, "diff") {
+			return ForgeHot
+		}
+	case 5:
+		if eqFoldASCII(seg, "plain") || eqFoldASCII(seg, "about") || eqFoldASCII(seg, "clone") || eqFoldASCII(seg, "graph") || eqFoldASCII(seg, "stats") {
+			return ForgeBrowse
+		}
+		if eqFoldASCII(seg, "blame") || eqFoldASCII(seg, "patch") {
+			return ForgeHot
+		}
+	case 6:
+		if eqFoldASCII(seg, "commit") || eqFoldASCII(seg, "branch") {
+			return ForgeBrowse
+		}
+	case 7:
+		if eqFoldASCII(seg, "summary") {
+			return ForgeBrowse
+		}
+	case 8:
+		if eqFoldASCII(seg, "snapshot") {
+			return ForgeHot
 		}
 	}
 	return ForgeNone

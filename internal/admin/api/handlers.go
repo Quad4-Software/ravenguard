@@ -38,7 +38,7 @@ type Server struct {
 	CertStatus       func() any
 	CertRenew        func(ctx context.Context, host string) error
 	LogSnapshot      func(limit int, level string) any
-	RequestByRay     func(ray string) (any, bool)
+	RequestByID      func(reqID string) (any, bool)
 	RequestsRecent   func(limit int) any
 	ManualCertPut    func(hostname, certPEM, keyPEM string) error
 	ManualCertDelete func(hostname string) error
@@ -117,7 +117,7 @@ func (s *Server) Mount(mux *http.ServeMux, base string) {
 	mux.HandleFunc(api+"/certs/", s.auth(s.handleCertsPath))
 	mux.HandleFunc(api+"/logs", s.auth(s.handleLogs))
 	mux.HandleFunc(api+"/requests", s.auth(s.handleRequests))
-	mux.HandleFunc(api+"/requests/", s.auth(s.handleRequestRay))
+	mux.HandleFunc(api+"/requests/", s.auth(s.handleRequestByID))
 	mux.HandleFunc(api+"/ml/samples", s.auth(s.handleMLSamples))
 	mux.HandleFunc(api+"/ml/samples/", s.auth(s.handleMLSampleID))
 	mux.HandleFunc(api+"/ml/adapt", s.auth(s.csrf(s.handleMLAdapt)))

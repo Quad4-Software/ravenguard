@@ -361,6 +361,7 @@ type DetectConfig struct {
 	BehaviorWriteRepeatScore int                `toml:"behavior_write_repeat_score"`
 	EmptyFormContextScore    int                `toml:"empty_form_context_score"`
 	ForumWritePathScore      int                `toml:"forum_write_path_score"`
+	ForgeFlavor              string             `toml:"forge_flavor"`
 	ForgeExpensiveScore      int                `toml:"forge_expensive_score"`
 	BehaviorForgeBurstLimit  int                `toml:"behavior_forge_burst_limit"`
 	BehaviorForgeBurstScore  int                `toml:"behavior_forge_burst_score"`
@@ -454,7 +455,7 @@ type CaptchaConfig struct {
 
 // StealthConfig controls public fingerprints on the guard edge.
 type StealthConfig struct {
-	RayHeader        string `toml:"ray_header"`
+	RequestIDHeader  string `toml:"request_id_header"`
 	ElementName      string `toml:"element_name"`
 	BootstrapGlobal  string `toml:"bootstrap_global"`
 	AccessCookieName string `toml:"access_cookie_name"`
@@ -485,7 +486,7 @@ type UIConfig struct {
 	FooterText        string `toml:"footer_text"`
 	Contact           string `toml:"contact"`
 	CustomCSS         string `toml:"custom_css"`
-	RayLabel          string `toml:"ray_label"`
+	RequestIDLabel    string `toml:"request_id_label"`
 }
 
 type SiteConfig struct {
@@ -670,6 +671,7 @@ func Default() Config {
 			BehaviorWriteBurstLimit: 20, BehaviorWriteBurstScore: 35,
 			BehaviorWriteRepeatLimit: 8, BehaviorWriteRepeatScore: 40,
 			EmptyFormContextScore: 30, ForumWritePathScore: 25,
+			ForgeFlavor:         "auto",
 			ForgeExpensiveScore: 40, BehaviorForgeBurstLimit: 24, BehaviorForgeBurstScore: 35,
 			ForgeRateCost:           4,
 			MissingAcceptEncScore:   10,
@@ -698,7 +700,7 @@ func Default() Config {
 			EnvProbe: "on", CookieName: "rg_clear", CookieTTL: Duration{24 * time.Hour}, PathPrefix: "/_rg",
 		},
 		Stealth: StealthConfig{
-			RayHeader:        "X-RavenGuard-Ray",
+			RequestIDHeader:  "X-RavenGuard-Request-ID",
 			ElementName:      "rg-check",
 			BootstrapGlobal:  "__g__",
 			AccessCookieName: "rg_access",
@@ -923,7 +925,7 @@ func applyEnv(c *Config) {
 		}
 	}
 	setStr(&c.Challenge.CookieName, "RG_CHALLENGE_COOKIE_NAME")
-	setStr(&c.Stealth.RayHeader, "RG_STEALTH_RAY_HEADER")
+	setStr(&c.Stealth.RequestIDHeader, "RG_STEALTH_REQUEST_ID_HEADER")
 	setStr(&c.Stealth.ElementName, "RG_STEALTH_ELEMENT_NAME")
 	setStr(&c.Stealth.BootstrapGlobal, "RG_STEALTH_BOOTSTRAP_GLOBAL")
 	setStr(&c.Stealth.AccessCookieName, "RG_STEALTH_ACCESS_COOKIE_NAME")
@@ -1562,6 +1564,11 @@ func (c Config) Validate() error {
 		case "challenge", "block", "tarpit", "off", "":
 		default:
 			return fmt.Errorf("detect.penalty_action must be challenge, block, tarpit, or off")
+		}
+		switch strings.ToLower(c.Detect.ForgeFlavor) {
+		case "auto", "gitea", "forgejo", "cgit", "":
+		default:
+			return fmt.Errorf("detect.forge_flavor must be auto, gitea, or cgit")
 		}
 		if c.Detect.CrawlerVerify.Enabled {
 			if c.Detect.CrawlerVerify.Timeout.Duration < 0 || c.Detect.CrawlerVerify.Timeout.Duration > 10*time.Second {

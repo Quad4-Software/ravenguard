@@ -11,9 +11,9 @@ import (
 	"github.com/Quad4-Software/ravenguard/internal/requestlog"
 )
 
-// InsertWAFEvent persists a deny event (upsert by ray_id keeps newest).
+// InsertWAFEvent persists a deny event (upsert by request_id keeps newest).
 func (s *Store) InsertWAFEvent(e requestlog.Event) error {
-	if e.Ray == "" {
+	if e.RequestID == "" {
 		return nil
 	}
 	created := e.CreatedAt
@@ -21,9 +21,9 @@ func (s *Store) InsertWAFEvent(e requestlog.Event) error {
 		created = time.Now().UTC()
 	}
 	_, err := s.db.Exec(
-		`INSERT INTO waf_events(ray_id, created_at, action, reason, method, path, host, ua, ip_hash, bind_id, score, detail_json)
+		`INSERT INTO waf_events(request_id, created_at, action, reason, method, path, host, ua, ip_hash, bind_id, score, detail_json)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		 ON CONFLICT(ray_id) DO UPDATE SET
+		 ON CONFLICT(request_id) DO UPDATE SET
 		   created_at = excluded.created_at,
 		   action = excluded.action,
 		   reason = excluded.reason,
@@ -36,17 +36,17 @@ func (s *Store) InsertWAFEvent(e requestlog.Event) error {
 		   score = excluded.score,
 		   detail_json = excluded.detail_json
 		 WHERE waf_events.bind_id = '' OR waf_events.bind_id = excluded.bind_id`,
-		e.Ray, created.UTC().Format(time.RFC3339Nano), e.Action, e.Reason, e.Method, e.Path, e.Host, e.UA,
+		e.RequestID, created.UTC().Format(time.RFC3339Nano), e.Action, e.Reason, e.Method, e.Path, e.Host, e.UA,
 		e.IPHash, e.BindID, e.Score, requestlog.DetailsJSON(e.Details),
 	)
 	return err
 }
 
-// GetWAFEventByRay loads one event by ray id.
-func (s *Store) GetWAFEventByRay(ray string) (requestlog.Event, bool, error) {
+// GetWAFEventByID loads one event by reqID id.
+func (s *Store) GetWAFEventByID(reqID string) (requestlog.Event, bool, error) {
 	row := s.db.QueryRow(
-		`SELECT ray_id, created_at, action, reason, method, path, host, ua, ip_hash, bind_id, score, detail_json
-		 FROM waf_events WHERE ray_id = ?`, ray,
+		`SELECT request_id, created_at, action, reason, method, path, host, ua, ip_hash, bind_id, score, detail_json
+		 FROM waf_events WHERE request_id = ?`, reqID,
 	)
 	e, err := scanWAFEvent(row)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -64,7 +64,7 @@ func (s *Store) ListWAFEvents(limit int) ([]requestlog.Event, error) {
 		limit = 50
 	}
 	rows, err := s.db.Query(
-		`SELECT ray_id, created_at, action, reason, method, path, host, ua, ip_hash, bind_id, score, detail_json
+		`SELECT request_id, created_at, action, reason, method, path, host, ua, ip_hash, bind_id, score, detail_json
 		 FROM waf_events ORDER BY created_at DESC LIMIT ?`, limit,
 	)
 	if err != nil {
@@ -98,7 +98,7 @@ type wafScanner interface {
 func scanWAFEvent(row wafScanner) (requestlog.Event, error) {
 	var e requestlog.Event
 	var created, detail string
-	if err := row.Scan(&e.Ray, &created, &e.Action, &e.Reason, &e.Method, &e.Path, &e.Host, &e.UA, &e.IPHash, &e.BindID, &e.Score, &detail); err != nil {
+	if err := row.Scan(&e.RequestID, &created, &e.Action, &e.Reason, &e.Method, &e.Path, &e.Host, &e.UA, &e.IPHash, &e.BindID, &e.Score, &detail); err != nil {
 		return requestlog.Event{}, err
 	}
 	e.CreatedAt, _ = parseTime(created)

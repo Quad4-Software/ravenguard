@@ -164,7 +164,7 @@ func (s *Server) handleAppearancePreview(w http.ResponseWriter, r *http.Request)
 	switch page {
 	case "challenge":
 		pages.ServeChallenge(rec, ui.Data{
-			RayID:          "preview",
+			RequestID:      "preview",
 			ChallengeURL:   "#",
 			Token:          "preview",
 			Difficulty:     cfg.Challenge.Difficulty,

@@ -245,6 +245,7 @@ block_score = 90
 ai_ua_score = 55
 empty_form_context_score = 30
 forum_write_path_score = 25
+forge_flavor = "auto"
 forge_expensive_score = 40
 behavior_forge_burst_limit = 24
 behavior_forge_burst_score = 35
@@ -271,7 +272,7 @@ ja4_header = "X-JA4"
 low_score_points = 40
 ```
 
-forge_expensive_score applies to hot forge paths only (compare, blame, archive). Browse paths (src, raw, commit) count toward behavior_forge_burst_* only. See [Detection](./detection.md#forge-expensive-routes).
+forge_expensive_score applies to hot forge paths only (compare, blame, archive, snapshot, diff, patch). Browse paths (src, raw, tree, commit, log) count toward behavior_forge_burst_* only. See [Detection](./detection.md#forge-expensive-routes).
 
 Full knobs: [Detection](./detection.md).
 
@@ -349,7 +350,7 @@ test_mode = false
 # footer_text = ""
 # contact = ""  # email, phone, URL, or free text on block/denied pages
 # custom_css = ""
-# ray_label = ""
+# request_id_label = ""
 
 [site]
 # public_url = "https://example.com"
@@ -360,7 +361,7 @@ lang = "en"
 
 # Public fingerprint controls (optional)
 [stealth]
-# ray_header = "X-RavenGuard-Ray"  # empty string omits the header
+# request_id_header = "X-RavenGuard-Request-ID"  # empty string omits the header
 # element_name = "rg-check"
 # bootstrap_global = "__g__"
 # access_cookie_name = "rg_access"
@@ -377,7 +378,7 @@ mode = "attack" forces the visible interactive gate for every challenged request
 
 | Stealth key | Default | Meaning |
 |-------------|---------|---------|
-| ray_header | X-RavenGuard-Ray | Response header for ray IDs. Empty string omits the header |
+| request_id_header | X-RavenGuard-Request-ID | Response header carrying the request ID. Empty string omits the header |
 | element_name | rg-check | Custom element tag on the challenge page |
 | bootstrap_global | __g__ | window[...] bootstrap object name |
 | access_cookie_name | rg_access | Access-policy clearance cookie |
@@ -391,7 +392,7 @@ Appearance colors map to CSS variables --bg, --fg, --accent, --theme, --font-san
 
 ui.contact (env RG_UI_CONTACT) is optional free text shown on block, rate-limit, upstream, and error pages. Email addresses, phone numbers, and http(s) / mailto: / tel: values are rendered as links.
 
-Env: RG_CHALLENGE_ENABLED, RG_CHALLENGE_MODE, RG_CHALLENGE_ALGORITHM, RG_CHALLENGE_DIFFICULTY, RG_CHALLENGE_COOKIE_NAME, RG_CHALLENGE_PATH_PREFIX, RG_CAPTCHA_ENABLED, RG_CAPTCHA_PROVIDER, RG_CAPTCHA_TOKEN, RG_UI_BRAND, RG_UI_STATUS_TEXT, RG_UI_CONTACT, RG_SITE_DESCRIPTION, RG_SITE_OG_IMAGE, RG_SITE_THEME_COLOR, RG_SITE_ROBOTS, RG_SITE_LANG, RG_STEALTH_RAY_HEADER, RG_STEALTH_ELEMENT_NAME, RG_STEALTH_BOOTSTRAP_GLOBAL, RG_STEALTH_ACCESS_COOKIE_NAME, RG_STEALTH_HIDE_BRAND_MARK, RG_STEALTH_GENERIC_COPY.
+Env: RG_CHALLENGE_ENABLED, RG_CHALLENGE_MODE, RG_CHALLENGE_ALGORITHM, RG_CHALLENGE_DIFFICULTY, RG_CHALLENGE_COOKIE_NAME, RG_CHALLENGE_PATH_PREFIX, RG_CAPTCHA_ENABLED, RG_CAPTCHA_PROVIDER, RG_CAPTCHA_TOKEN, RG_UI_BRAND, RG_UI_STATUS_TEXT, RG_UI_CONTACT, RG_SITE_DESCRIPTION, RG_SITE_OG_IMAGE, RG_SITE_THEME_COLOR, RG_SITE_ROBOTS, RG_SITE_LANG, RG_STEALTH_REQUEST_ID_HEADER, RG_STEALTH_ELEMENT_NAME, RG_STEALTH_BOOTSTRAP_GLOBAL, RG_STEALTH_ACCESS_COOKIE_NAME, RG_STEALTH_HIDE_BRAND_MARK, RG_STEALTH_GENERIC_COPY.
 
 ## Coraza, semantic, and ML
 

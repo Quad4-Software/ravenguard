@@ -353,9 +353,9 @@ func TestAdaptiveAdversarialInputs(t *testing.T) {
 func TestClearanceCookieIndependentOracle(t *testing.T) {
 	m := &challenge.Manager{Secret: []byte("cookie-secret-16!"), CookieName: "rg_clear", CookieTTL: time.Hour}
 	bindID := "203.0.113.1"
-	ray := "ray-abc"
+	reqID := "reqID-abc"
 
-	c := m.ClearanceCookie(bindID, ray, true)
+	c := m.ClearanceCookie(bindID, reqID, true)
 	if c.Name != "rg_clear" {
 		t.Fatalf("cookie name=%s want rg_clear", c.Name)
 	}
@@ -393,8 +393,8 @@ func TestAdversarialHasClearance(t *testing.T) {
 	m := &challenge.Manager{Secret: []byte("cookie-secret-16!"), CookieName: "rg_clear", CookieTTL: time.Hour}
 	other := &challenge.Manager{Secret: []byte("other-secret-16!"), CookieName: "rg_clear", CookieTTL: time.Hour}
 	bindID := "203.0.113.1"
-	ray := "ray-abc"
-	valid := m.ClearanceCookie(bindID, ray, true)
+	reqID := "reqID-abc"
+	valid := m.ClearanceCookie(bindID, reqID, true)
 
 	type tc struct {
 		name   string
@@ -417,18 +417,18 @@ func TestAdversarialHasClearance(t *testing.T) {
 	}
 
 	// Expired but otherwise well-formed cookie.
-	expiredPayload := fmt.Sprintf("%s|%d|%s", bindID, time.Now().Add(-time.Hour).Unix(), ray)
+	expiredPayload := fmt.Sprintf("%s|%d|%s", bindID, time.Now().Add(-time.Hour).Unix(), reqID)
 	expiredValue := base64.RawURLEncoding.EncodeToString([]byte(expiredPayload)) + "." + refCookieMAC(m.Secret, expiredPayload)
 	cases = append(cases, tc{"expired", &http.Cookie{Name: "rg_clear", Value: expiredValue}, m, bindID, "/", false})
 
 	// Tampered payload with the original MAC (replay of a valid MAC on forged data).
-	tamperedPayload := fmt.Sprintf("%s|%d|%s", "other-bind", time.Now().Add(time.Hour).Unix(), ray)
+	tamperedPayload := fmt.Sprintf("%s|%d|%s", "other-bind", time.Now().Add(time.Hour).Unix(), reqID)
 	tamperedValue := base64.RawURLEncoding.EncodeToString([]byte(tamperedPayload)) + "." + strings.Split(valid.Value, ".")[1]
 	cases = append(cases, tc{"tampered-mac", &http.Cookie{Name: "rg_clear", Value: tamperedValue}, m, bindID, "/", false})
 
 	// Negative TTL cookie, issued with a past Expires.
 	neg := &challenge.Manager{Secret: []byte("cookie-secret-16!"), CookieName: "rg_clear", CookieTTL: -time.Hour}
-	negCookie := neg.ClearanceCookie(bindID, ray, false)
+	negCookie := neg.ClearanceCookie(bindID, reqID, false)
 	cases = append(cases, tc{"negative-ttl", negCookie, m, bindID, "/", false})
 
 	// Path bypass: the server must not restrict clearance by request path.

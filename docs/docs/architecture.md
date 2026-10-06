@@ -64,7 +64,7 @@ Controls run at the HTTP application layer. Volumetric DDoS mitigation belongs a
 16. **OpenAPI schema gate** when a schema is attached to the route
 17. **Proxy** to upstream
 
-Deny outcomes (block, challenge, rate limit, Coraza, semantic, ML, OpenAPI, access) are recorded under the response Ray ID for admin lookup.
+Deny outcomes (block, challenge, rate limit, Coraza, semantic, ML, OpenAPI, access) are recorded under the response request ID for admin lookup.
 
 WebSocket upgrades still pass blocklists, feeds, health, attack signatures, rate limits, and protect. Detect scoring is skipped. When challenge is enabled, upgrades need an existing clearance cookie or they receive 403 (not an HTML challenge page), unless the client is allowlisted. Access policies also apply to WebSocket upgrades.
 

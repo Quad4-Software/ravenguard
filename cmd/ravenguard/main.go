@@ -185,6 +185,7 @@ func runEdge(cfg config.Config, proxyOnly bool, configPath string, sentryRep *rg
 			WriteRepeatScore: cfg.Detect.BehaviorWriteRepeatScore,
 			ForgeBurstLimit:  cfg.Detect.BehaviorForgeBurstLimit,
 			ForgeBurstScore:  cfg.Detect.BehaviorForgeBurstScore,
+			ForgeFlavor:      detect.ParseForgeFlavor(cfg.Detect.ForgeFlavor),
 			UAVarietyLimit:   cfg.Detect.BehaviorUAVarietyLimit,
 			UAVarietyScore:   cfg.Detect.BehaviorUAVarietyScore,
 		})
@@ -287,25 +288,25 @@ func runEdge(cfg config.Config, proxyOnly bool, configPath string, sentryRep *rg
 		AllowHTTP1:            cfg.Upstream.AllowHTTP1,
 		TLSClientConfig:       upTLS,
 		ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
-			ray := r.Header.Get("X-RavenGuard-Ray")
-			if ray == "" {
-				ray = "unknown"
+			reqID := r.Header.Get(cfg.Stealth.RequestIDHeader)
+			if reqID == "" {
+				reqID = "unknown"
 			}
-			slog.Debug("upstream error", "err", err, "ray", logging.Safe(ray))
-			sentryRep.CaptureUpstreamError(err, ray)
-			pages.RenderUpstream(w, ray)
+			slog.Debug("upstream error", "err", err, "request_id", logging.Safe(reqID))
+			sentryRep.CaptureUpstreamError(err, reqID)
+			pages.RenderUpstream(w, reqID)
 		},
 	})
 
 	routeTable := router.New(ctx)
 	routeTable.SetErrorHandler(func(w http.ResponseWriter, r *http.Request, err error) {
-		ray := r.Header.Get("X-RavenGuard-Ray")
-		if ray == "" {
-			ray = "unknown"
+		reqID := r.Header.Get(cfg.Stealth.RequestIDHeader)
+		if reqID == "" {
+			reqID = "unknown"
 		}
-		slog.Debug("upstream error", "err", err, "ray", logging.Safe(ray))
-		sentryRep.CaptureUpstreamError(err, ray)
-		pages.RenderUpstream(w, ray)
+		slog.Debug("upstream error", "err", err, "request_id", logging.Safe(reqID))
+		sentryRep.CaptureUpstreamError(err, reqID)
+		pages.RenderUpstream(w, reqID)
 	})
 	routeTable.SetFallback(up, hc)
 	defer routeTable.Close()
@@ -388,8 +389,8 @@ func runEdge(cfg config.Config, proxyOnly bool, configPath string, sentryRep *rg
 		if rt == nil {
 			return
 		}
-		rt.RequestByRay = func(ray string) (any, bool) {
-			e, ok := reqLog.GetByRay(ray)
+		rt.RequestByID = func(reqID string) (any, bool) {
+			e, ok := reqLog.GetByID(reqID)
 			if !ok {
 				return nil, false
 			}
@@ -700,8 +701,8 @@ func runEdge(cfg config.Config, proxyOnly bool, configPath string, sentryRep *rg
 				}
 				return ring.Snapshot(limit, level)
 			},
-			RequestByRay: func(ray string) (any, bool) {
-				e, ok := reqLog.GetByRay(ray)
+			RequestByID: func(reqID string) (any, bool) {
+				e, ok := reqLog.GetByID(reqID)
 				if !ok {
 					return nil, false
 				}

@@ -1391,16 +1391,16 @@ func (u *UI) handleRequests(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if r.FormValue("action") == "lookup" {
-			ray := strings.TrimSpace(r.FormValue("ray"))
-			if ray == "" {
-				u.renderError(w, r, http.StatusBadRequest, "ray required")
+			reqID := strings.TrimSpace(r.FormValue("request_id"))
+			if reqID == "" {
+				u.renderError(w, r, http.StatusBadRequest, "request_id required")
 				return
 			}
 			q := url.Values{}
 			if v := strings.TrimSpace(r.FormValue("proxy_id")); v != "" {
 				q.Set("proxy_id", v)
 			}
-			target := "/requests/" + url.PathEscape(ray)
+			target := "/requests/" + url.PathEscape(reqID)
 			if len(q) > 0 {
 				target += "?" + q.Encode()
 			}
@@ -1428,9 +1428,9 @@ func (u *UI) renderRequests(w http.ResponseWriter, r *http.Request, user *User, 
 		"proxy_id": r.URL.Query().Get("proxy_id"),
 		"limit":    queryInt(r, "limit", 50),
 	}
-	ray := pathTail(u.trimBase(r.URL.Path), "/requests")
-	if ray != "" {
-		status, body, _, err := u.apiGET(r, "/requests/"+url.PathEscape(ray))
+	reqID := pathTail(u.trimBase(r.URL.Path), "/requests")
+	if reqID != "" {
+		status, body, _, err := u.apiGET(r, "/requests/"+url.PathEscape(reqID))
 		if err != nil || status != http.StatusOK {
 			u.renderError(w, r, http.StatusBadGateway, parseAPIError(body))
 			return
@@ -1438,7 +1438,7 @@ func (u *UI) renderRequests(w http.ResponseWriter, r *http.Request, user *User, 
 		var detail map[string]any
 		if json.Unmarshal(body, &detail) == nil {
 			data["detail"] = detail
-			data["ray"] = ray
+			data["request_id"] = reqID
 		}
 	}
 	maps.Copy(data, extra)
@@ -1496,15 +1496,15 @@ func appearanceMaps(r *http.Request) (map[string]any, map[string]any) {
 		"foreground", "accent", "font_sans", "font_mono", "challenge_title",
 		"challenge_subtitle", "block_title", "rate_limit_title", "upstream_title",
 		"error_title", "footer_text", "contact", "custom_css", "description", "lang",
-		"robots", "privacy_notice_url", "og_image", "ray_label",
+		"robots", "privacy_notice_url", "og_image", "request_id_label",
 	}
 	uiMap := map[string]any{}
 	for _, f := range uiFields {
 		uiMap[f] = r.FormValue("ui." + f)
 	}
 	stealth := map[string]any{"hide_brand_mark": formBool(r, "stealth.hide_brand_mark")}
-	if v := strings.TrimSpace(r.FormValue("stealth.ray_header")); v != "" {
-		stealth["ray_header"] = v
+	if v := strings.TrimSpace(r.FormValue("stealth.request_id_header")); v != "" {
+		stealth["request_id_header"] = v
 	}
 	return uiMap, stealth
 }

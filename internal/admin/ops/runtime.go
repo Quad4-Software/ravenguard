@@ -65,7 +65,7 @@ type Runtime struct {
 	CertStatus     func() any
 	CertRenew      func(ctx context.Context, host string) error
 	LogSnapshot    func(limit int, level string) any
-	RequestByRay   func(ray string) (any, bool)
+	RequestByID    func(reqID string) (any, bool)
 	RequestsRecent func(limit int) any
 	// WAFStats returns (interval since last take, lifetime totals) for stderr stats.
 	// Call only from StartStatsLog so TakeInterval is not drained by admin Status.
@@ -586,11 +586,11 @@ type UISafe struct {
 	Robots            string `json:"robots"`
 	PrivacyNoticeURL  string `json:"privacy_notice_url"`
 	OGImage           string `json:"og_image"`
-	RayLabel          string `json:"ray_label"`
+	RequestIDLabel    string `json:"request_id_label"`
 }
 
 type StealthSafe struct {
-	RayHeader        string `json:"ray_header"`
+	RequestIDHeader  string `json:"request_id_header"`
 	ElementName      string `json:"element_name"`
 	BootstrapGlobal  string `json:"bootstrap_global"`
 	AccessCookieName string `json:"access_cookie_name"`
@@ -727,7 +727,7 @@ func (r *Runtime) ConfigView() ConfigView {
 				FooterText: cfg.UI.FooterText, Contact: cfg.UI.Contact, CustomCSS: cfg.UI.CustomCSS,
 				Description: cfg.Site.Description, Lang: cfg.Site.Lang, Robots: cfg.Site.Robots,
 				PrivacyNoticeURL: cfg.Privacy.PrivacyNoticeURL, OGImage: cfg.Site.OGImage,
-				RayLabel: cfg.UI.RayLabel,
+				RequestIDLabel: cfg.UI.RequestIDLabel,
 			},
 			Trust: TrustSafe{
 				Mode: cfg.Trust.Mode, TrustedProxies: append([]string(nil), cfg.Trust.TrustedProxies...),
@@ -735,7 +735,7 @@ func (r *Runtime) ConfigView() ConfigView {
 				ProxyProtocol: cfg.Trust.ProxyProtocol,
 			},
 			Stealth: StealthSafe{
-				RayHeader: cfg.Stealth.RayHeader, ElementName: cfg.Stealth.ElementName,
+				RequestIDHeader: cfg.Stealth.RequestIDHeader, ElementName: cfg.Stealth.ElementName,
 				BootstrapGlobal: cfg.Stealth.BootstrapGlobal, AccessCookieName: cfg.Stealth.AccessCookieName,
 				HideBrandMark: cfg.Stealth.HideBrandMark, GenericCopy: cfg.Stealth.GenericCopy,
 				ServeManifest: cfg.Stealth.ServeManifest, ServeRootIcons: cfg.Stealth.ServeRootIcons,
@@ -1199,7 +1199,7 @@ func applyUISafe(cfg *config.Config, ui UISafe) {
 	setNonEmpty(&cfg.UI.FooterText, ui.FooterText)
 	setNonEmpty(&cfg.UI.Contact, ui.Contact)
 	setNonEmpty(&cfg.UI.CustomCSS, ui.CustomCSS)
-	setNonEmpty(&cfg.UI.RayLabel, ui.RayLabel)
+	setNonEmpty(&cfg.UI.RequestIDLabel, ui.RequestIDLabel)
 	setNonEmpty(&cfg.Site.Description, ui.Description)
 	setNonEmpty(&cfg.Site.Lang, ui.Lang)
 	setNonEmpty(&cfg.Site.Robots, ui.Robots)
@@ -1221,11 +1221,11 @@ func applyTrustSafe(cfg *config.Config, safe TrustSafe) {
 }
 
 func applyStealthSafe(cfg *config.Config, safe StealthSafe) {
-	if safe.RayHeader == "" && safe.ElementName == "" && safe.BootstrapGlobal == "" &&
+	if safe.RequestIDHeader == "" && safe.ElementName == "" && safe.BootstrapGlobal == "" &&
 		safe.AccessCookieName == "" && safe.WidgetInputName == "" {
 		return
 	}
-	setNonEmpty(&cfg.Stealth.RayHeader, safe.RayHeader)
+	setNonEmpty(&cfg.Stealth.RequestIDHeader, safe.RequestIDHeader)
 	setNonEmpty(&cfg.Stealth.ElementName, safe.ElementName)
 	setNonEmpty(&cfg.Stealth.BootstrapGlobal, safe.BootstrapGlobal)
 	setNonEmpty(&cfg.Stealth.AccessCookieName, safe.AccessCookieName)

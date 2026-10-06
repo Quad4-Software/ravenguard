@@ -12,7 +12,7 @@ import (
 
 // Sample is one shadow observation for labeling / adapt.
 type Sample struct {
-	Ray        string              `json:"ray"`
+	RequestID  string              `json:"request_id"`
 	CreatedAt  time.Time           `json:"created_at"`
 	Prob       float64             `json:"prob"`
 	Points     int                 `json:"points"`

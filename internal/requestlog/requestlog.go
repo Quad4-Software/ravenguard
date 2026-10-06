@@ -21,9 +21,9 @@ const (
 	ActionML        = "ml"
 )
 
-// Event is one WAF deny (or challenge) outcome keyed by Ray ID.
+// Event is one WAF deny (or challenge) outcome keyed by request ID.
 type Event struct {
-	Ray       string            `json:"ray"`
+	RequestID string            `json:"request_id"`
 	Action    string            `json:"action"`
 	Reason    string            `json:"reason"`
 	Method    string            `json:"method"`
@@ -57,7 +57,7 @@ func (c Counters) Sum() uint64 {
 // Persister stores events durably (optional).
 type Persister interface {
 	InsertWAFEvent(e Event) error
-	GetWAFEventByRay(ray string) (Event, bool, error)
+	GetWAFEventByID(reqID string) (Event, bool, error)
 	ListWAFEvents(limit int) ([]Event, error)
 	PurgeWAFEventsOlderThan(cutoff time.Time) (int64, error)
 }
@@ -65,7 +65,7 @@ type Persister interface {
 // Logger keeps a hot in-memory index and optional SQLite dual-write.
 type Logger struct {
 	mu      sync.RWMutex
-	byRay   map[string]Event
+	byID    map[string]Event
 	order   []string
 	head    int
 	len     int
@@ -97,7 +97,7 @@ func New(hotCapacity int) *Logger {
 		hotCapacity = 2000
 	}
 	return &Logger{
-		byRay:  make(map[string]Event, hotCapacity),
+		byID:   make(map[string]Event, hotCapacity),
 		order:  make([]string, hotCapacity),
 		maxHot: hotCapacity,
 	}
@@ -113,9 +113,9 @@ func (l *Logger) SetPersister(p Persister) {
 	l.mu.Unlock()
 }
 
-// Record stores a deny event. Empty ray is ignored.
+// Record stores a deny event. Empty reqID is ignored.
 func (l *Logger) Record(e Event) {
-	if l == nil || e.Ray == "" {
+	if l == nil || e.RequestID == "" {
 		return
 	}
 	if e.CreatedAt.IsZero() {
@@ -125,23 +125,23 @@ func (l *Logger) Record(e Event) {
 		e.Details = map[string]string{}
 	}
 	l.mu.Lock()
-	if prev, ok := l.byRay[e.Ray]; ok && prev.BindID != "" && e.BindID != "" && prev.BindID != e.BindID {
+	if prev, ok := l.byID[e.RequestID]; ok && prev.BindID != "" && e.BindID != "" && prev.BindID != e.BindID {
 		l.mu.Unlock()
 		return
 	}
-	if _, ok := l.byRay[e.Ray]; !ok {
+	if _, ok := l.byID[e.RequestID]; !ok {
 		if l.len >= l.maxHot {
 			old := l.order[l.head]
-			delete(l.byRay, old)
-			l.order[l.head] = e.Ray
+			delete(l.byID, old)
+			l.order[l.head] = e.RequestID
 			l.head = (l.head + 1) % l.maxHot
 		} else {
 			idx := (l.head + l.len) % l.maxHot
-			l.order[idx] = e.Ray
+			l.order[idx] = e.RequestID
 			l.len++
 		}
 	}
-	l.byRay[e.Ray] = e
+	l.byID[e.RequestID] = e
 	p := l.persist
 	l.mu.Unlock()
 	l.bump(e.Action)
@@ -216,13 +216,13 @@ func (l *Logger) TakeInterval() Counters {
 	}
 }
 
-// GetByRay returns the newest matching event from hot index or persister.
-func (l *Logger) GetByRay(ray string) (Event, bool) {
-	if l == nil || ray == "" {
+// GetByID returns the newest matching event from hot index or persister.
+func (l *Logger) GetByID(reqID string) (Event, bool) {
+	if l == nil || reqID == "" {
 		return Event{}, false
 	}
 	l.mu.RLock()
-	e, ok := l.byRay[ray]
+	e, ok := l.byID[reqID]
 	p := l.persist
 	l.mu.RUnlock()
 	if ok {
@@ -231,7 +231,7 @@ func (l *Logger) GetByRay(ray string) (Event, bool) {
 	if p == nil {
 		return Event{}, false
 	}
-	ev, found, err := p.GetWAFEventByRay(ray)
+	ev, found, err := p.GetWAFEventByID(reqID)
 	if err != nil || !found {
 		return Event{}, false
 	}
@@ -254,8 +254,8 @@ func (l *Logger) Recent(limit int) []Event {
 	out := make([]Event, 0, limit)
 	for i := 0; i < l.len && len(out) < limit; i++ {
 		idx := (l.head + l.len - 1 - i) % l.maxHot
-		ray := l.order[idx]
-		if e, ok := l.byRay[ray]; ok {
+		reqID := l.order[idx]
+		if e, ok := l.byID[reqID]; ok {
 			out = append(out, e)
 		}
 	}

@@ -30,7 +30,7 @@ func TestConcurrentScoreAndAdapt(t *testing.T) {
 			}
 			_ = s.Evaluate(r, ml.Input{SemanticSQLi: (i % 2) * 80})
 			if sh := s.Shadow(); sh != nil {
-				sh.Offer(ml.Sample{Ray: "r", Prob: 0.1})
+				sh.Offer(ml.Sample{RequestID: "r", Prob: 0.1})
 			}
 		}(i)
 	}

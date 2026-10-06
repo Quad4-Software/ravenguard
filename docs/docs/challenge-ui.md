@@ -68,7 +68,7 @@ The challenge interstitial loads short-named static assets under `{path_prefix}/
 | c.js | Obfuscated challenge page bootstrap |
 | c.css | Challenge page stylesheet |
 
-The page defines a bootstrap object (default window.__g__) with prefix, ray, and captcha. c.js reads window.__g__ (with a window.__RG__ fallback). Override the global name with stealth.bootstrap_global.
+The page defines a bootstrap object (default window.__g__) with prefix, request_id, and captcha. c.js reads window.__g__ (with a window.__RG__ fallback). Override the global name with stealth.bootstrap_global.
 
 The custom element defaults to rg-check (stealth.element_name). Theme tokens are injected as CSS variables:
 
@@ -141,7 +141,7 @@ make widget
 
 ```toml
 [stealth]
-# ray_header = ""            # omit ray response header
+# request_id_header = ""   # omit request ID response header
 # element_name = "rg-check"
 # bootstrap_global = "__g__"
 # hide_brand_mark = true
@@ -151,7 +151,7 @@ make widget
 # widget_input_name = "rg"
 ```
 
-Empty ray_header omits the ray response header. generic_copy swaps branded titles for generic copy and uses Ref instead of Ray ID. hide_brand_mark removes the footer logo. Turning off serve_manifest / serve_root_icons drops those public fingerprint paths.
+Empty request_id_header omits the request ID response header. generic_copy swaps branded titles for generic copy and uses Ref instead of Request ID. hide_brand_mark removes the footer logo. Turning off serve_manifest / serve_root_icons drops those public fingerprint paths.
 
 ## Branding and copy
 

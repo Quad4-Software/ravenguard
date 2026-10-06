@@ -96,8 +96,8 @@ func TestAllowCleanRequest(t *testing.T) {
 	if rr.Body.String() != "ok" {
 		t.Fatalf("body=%q", rr.Body.String())
 	}
-	if rr.Header().Get("X-RavenGuard-Ray") == "" {
-		t.Fatal("missing ray")
+	if rr.Header().Get("X-RavenGuard-Request-ID") == "" {
+		t.Fatal("missing reqID")
 	}
 }
 
@@ -184,7 +184,7 @@ func TestChallengeAndClearance(t *testing.T) {
 	bindID := priv.ClientKey("192.0.2.30")
 	m := &challenge.Manager{Secret: []byte(testSecret), Difficulty: 8, CookieName: "rg_clear", CookieTTL: time.Hour, Algorithm: "sha256"}
 	raw := solvedPayload(t, m, bindID, challenge.GateInteractive, challenge.EnvAttestation{Interacted: true, SolveMs: 200})
-	payloadJSON, _ := json.Marshal(map[string]any{"payload": raw, "ray": "test"})
+	payloadJSON, _ := json.Marshal(map[string]any{"payload": raw, "request_id": "test"})
 	creq := httptest.NewRequest(http.MethodPost, "/_rg/challenge", bytes.NewReader(payloadJSON))
 	creq.Header.Set("Content-Type", "application/json")
 	creq.RemoteAddr = "192.0.2.30:1"
@@ -703,7 +703,7 @@ func TestWebSocketWithClearance(t *testing.T) {
 	h := pipeline.New(cfg, lists, nil, nil, chal, pages, upstream, nil, nil, nil, testPriv(cfg), nil, nil)
 
 	bindID := "192.0.2.41"
-	cookie := chal.ClearanceCookie(bindID, "ray-ws", false)
+	cookie := chal.ClearanceCookie(bindID, "reqID-ws", false)
 	req := wsUpgradeRequest("/ws", "192.0.2.41:1")
 	req.AddCookie(cookie)
 	rr := httptest.NewRecorder()
@@ -924,11 +924,11 @@ func TestHealthzBypassesGuard(t *testing.T) {
 	}
 }
 
-func TestStealthOmitsRayHeaderAndBrandFingerprints(t *testing.T) {
+func TestStealthOmitsRequestIDHeaderAndBrandFingerprints(t *testing.T) {
 	h := testHandler(t, func(cfg *config.Config) {
 		cfg.Challenge.Mode = "always"
 		cfg.Detect.Enabled = false
-		cfg.Stealth.RayHeader = ""
+		cfg.Stealth.RequestIDHeader = ""
 		cfg.Stealth.GenericCopy = true
 		cfg.Stealth.HideBrandMark = true
 		cfg.Stealth.ElementName = "rg-check"
@@ -944,8 +944,8 @@ func TestStealthOmitsRayHeaderAndBrandFingerprints(t *testing.T) {
 	if rr.Code != http.StatusForbidden {
 		t.Fatalf("code=%d", rr.Code)
 	}
-	if rr.Header().Get("X-RavenGuard-Ray") != "" {
-		t.Fatal("expected no X-RavenGuard-Ray header")
+	if rr.Header().Get("X-RavenGuard-Request-ID") != "" {
+		t.Fatal("expected no X-RavenGuard-Request-ID header")
 	}
 	body := rr.Body.String()
 	if strings.Contains(body, "ravenguard-widget") {

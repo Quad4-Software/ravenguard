@@ -14,14 +14,14 @@
 <section class="page-head">
   <div>
     <h1 class="page-title">Requests</h1>
-    <p class="page-sub">Recent WAF events and ray lookup.</p>
+    <p class="page-sub">Recent WAF events and request ID lookup.</p>
   </div>
 </section>
 
 {{if $detail}}
 <section class="section">
   <div class="section-head">
-    <h2 class="page-sub">Ray {{index .Data "ray"}}</h2>
+    <h2 class="page-sub">Request {{index .Data "request_id"}}</h2>
   </div>
   <pre class="mono">{{json $detail}}</pre>
 </section>
@@ -31,7 +31,7 @@
   <h2 class="page-sub">Lookup</h2>
   <form method="post" action="{{$base}}/requests" hx-post="{{$base}}/requests" hx-target="#main" hx-swap="outerHTML" class="field-row">
     <input type="hidden" name="action" value="lookup">
-    <div class="field"><label>Ray</label><input name="ray" required></div>
+    <div class="field"><label>Request ID</label><input name="request_id" required></div>
     <div class="field"><label>Proxy</label>
       <select name="proxy_id">
         <option value="">Any</option>
@@ -60,18 +60,18 @@
   </form>
   <div class="table-wrap">
     <table>
-      <thead><tr><th>Time</th><th>Ray</th><th>Method</th><th>Host</th><th>Path</th><th>Action</th><th>Score</th><th></th></tr></thead>
+      <thead><tr><th>Time</th><th>Request</th><th>Method</th><th>Host</th><th>Path</th><th>Action</th><th>Score</th><th></th></tr></thead>
       <tbody>
       {{range $e := index .Data "requests"}}
         <tr>
           <td class="mono">{{$e.created_at}}</td>
-          <td class="mono">{{$e.ray}}</td>
+          <td class="mono">{{$e.request_id}}</td>
           <td class="mono">{{$e.method}}</td>
           <td class="mono">{{$e.host}}</td>
           <td class="mono cell-wrap">{{$e.path}}</td>
           <td class="mono"><span class="badge">{{$e.action}}</span></td>
           <td class="mono">{{$e.score}}</td>
-          <td class="actions"><a class="btn btn-sm" href="{{$base}}/requests/{{$e.ray}}">View</a></td>
+          <td class="actions"><a class="btn btn-sm" href="{{$base}}/requests/{{$e.request_id}}">View</a></td>
         </tr>
       {{else}}
         <tr><td colspan="8" class="muted">No events</td></tr>

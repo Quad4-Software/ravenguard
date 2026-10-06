@@ -63,8 +63,8 @@ func TestRenderPages(t *testing.T) {
 			if !strings.Contains(body, "favicon.ico") {
 				t.Fatal("missing favicon")
 			}
-			if !strings.Contains(body, "Ray ID") {
-				t.Fatal("missing ray")
+			if !strings.Contains(body, "Request ID") {
+				t.Fatal("missing reqID")
 			}
 			if !strings.Contains(body, "c.css") {
 				t.Fatal("missing challenge css asset")
@@ -141,7 +141,7 @@ func TestUpdateSiteAndAccessForm(t *testing.T) {
 		BlockTitle:     "Denied",
 	})
 	site := pages.Site()
-	if site.Brand != "Gate" || site.RayLabel != "Ref" || site.ChallengeTitle != "VERIFY" {
+	if site.Brand != "Gate" || site.RequestIDLabel != "Ref" || site.ChallengeTitle != "VERIFY" {
 		t.Fatalf("site=%+v", site)
 	}
 
@@ -155,7 +155,7 @@ func TestUpdateSiteAndAccessForm(t *testing.T) {
 		t.Fatal("brand mark should be hidden")
 	}
 	if !strings.Contains(body, "Ref:") {
-		t.Fatal("missing generic ray label")
+		t.Fatal("missing generic reqID label")
 	}
 	if !strings.Contains(body, "--bg: #111111") {
 		t.Fatal("missing theme var")
@@ -200,7 +200,7 @@ func TestSiteFromConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 	rr := httptest.NewRecorder()
-	pages.ServeChallenge(rr, ui.Data{RayID: "abc", ChallengeURL: "/x/v1/challenge", Gate: "interactive"})
+	pages.ServeChallenge(rr, ui.Data{RequestID: "abc", ChallengeURL: "/x/v1/challenge", Gate: "interactive"})
 	body := rr.Body.String()
 	if !strings.Contains(body, "VERIFY") {
 		t.Fatal("missing verify title")
@@ -219,7 +219,7 @@ func TestSiteFromConfig(t *testing.T) {
 	}
 
 	rr2 := httptest.NewRecorder()
-	pages.ServeChallenge(rr2, ui.Data{RayID: "inv", ChallengeURL: "/x/v1/challenge", Gate: "invisible"})
+	pages.ServeChallenge(rr2, ui.Data{RequestID: "inv", ChallengeURL: "/x/v1/challenge", Gate: "invisible"})
 	body2 := rr2.Body.String()
 	if !strings.Contains(body2, `auto="onload"`) || !strings.Contains(body2, `display="invisible"`) {
 		t.Fatal("expected invisible widget attrs")
@@ -235,7 +235,7 @@ func TestSiteFromConfig(t *testing.T) {
 	}
 
 	rr3 := httptest.NewRecorder()
-	pages.RenderBlock(rr3, "ray-c", "blocked")
+	pages.RenderBlock(rr3, "reqID-c", "blocked")
 	block := rr3.Body.String()
 	if !strings.Contains(block, `href="mailto:help@example.com"`) {
 		t.Fatalf("missing contact mailto: %s", block[:min(300, len(block))])

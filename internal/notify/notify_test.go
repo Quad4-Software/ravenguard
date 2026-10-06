@@ -31,8 +31,8 @@ func TestNotifyDeliversSubscribedAction(t *testing.T) {
 
 	n := notify.New(srv.URL, []string{requestlog.ActionBlock}, time.Second)
 	defer n.Close()
-	n.Notify(requestlog.Event{Action: requestlog.ActionChallenge, Ray: "c"})
-	n.Notify(requestlog.Event{Action: requestlog.ActionBlock, Ray: "b1"})
+	n.Notify(requestlog.Event{Action: requestlog.ActionChallenge, RequestID: "c"})
+	n.Notify(requestlog.Event{Action: requestlog.ActionBlock, RequestID: "b1"})
 
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
@@ -62,7 +62,7 @@ func TestNotifyDropsWhenFull(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		for i := 0; i < 300; i++ {
-			n.Notify(requestlog.Event{Action: requestlog.ActionBlock, Ray: "x"})
+			n.Notify(requestlog.Event{Action: requestlog.ActionBlock, RequestID: "x"})
 		}
 		close(done)
 	}()

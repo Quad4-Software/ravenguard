@@ -32,9 +32,9 @@ func (s *Store) InsertMLSample(sample ml.Sample) error {
 		wc = 1
 	}
 	_, err := s.db.Exec(
-		`INSERT INTO ml_samples(ray_id, created_at, prob, points, would_block, would_challenge, features_json, label, method, path, host)
+		`INSERT INTO ml_samples(request_id, created_at, prob, points, would_block, would_challenge, features_json, label, method, path, host)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		sample.Ray, created.UTC().Format(time.RFC3339Nano), sample.Prob, sample.Points, wb, wc,
+		sample.RequestID, created.UTC().Format(time.RFC3339Nano), sample.Prob, sample.Points, wb, wc,
 		ml.SampleJSON(sample.Features), sample.Label, sample.Method, sample.Path, sample.Host,
 	)
 	return err
@@ -51,7 +51,7 @@ func (s *Store) ListMLSamples(limit int, unlabeledOnly bool) ([]MLSampleRow, err
 	if limit <= 0 || limit > 500 {
 		limit = 50
 	}
-	q := `SELECT id, ray_id, created_at, prob, points, would_block, would_challenge, features_json, label, method, path, host
+	q := `SELECT id, request_id, created_at, prob, points, would_block, would_challenge, features_json, label, method, path, host
 	      FROM ml_samples`
 	if unlabeledOnly {
 		q += ` WHERE label = ''`
@@ -70,7 +70,7 @@ func (s *Store) ListMLSamples(limit int, unlabeledOnly bool) ([]MLSampleRow, err
 			featuresJSON string
 			row          MLSampleRow
 		)
-		if err := rows.Scan(&row.ID, &row.Ray, &created, &row.Prob, &row.Points, &wb, &wc, &featuresJSON, &row.Label, &row.Method, &row.Path, &row.Host); err != nil {
+		if err := rows.Scan(&row.ID, &row.RequestID, &created, &row.Prob, &row.Points, &wb, &wc, &featuresJSON, &row.Label, &row.Method, &row.Path, &row.Host); err != nil {
 			return nil, err
 		}
 		row.WouldBlock = wb == 1
@@ -90,7 +90,7 @@ func (s *Store) ListLabeledMLSamples(limit int) ([]ml.Sample, error) {
 		limit = 1000
 	}
 	rows, err := s.db.Query(
-		`SELECT ray_id, created_at, prob, points, would_block, would_challenge, features_json, label, method, path, host
+		`SELECT request_id, created_at, prob, points, would_block, would_challenge, features_json, label, method, path, host
 		 FROM ml_samples WHERE label IN ('fp','tp') ORDER BY created_at DESC LIMIT ?`, limit,
 	)
 	if err != nil {
@@ -105,7 +105,7 @@ func (s *Store) ListLabeledMLSamples(limit int) ([]ml.Sample, error) {
 			featuresJSON string
 			sample       ml.Sample
 		)
-		if err := rows.Scan(&sample.Ray, &created, &sample.Prob, &sample.Points, &wb, &wc, &featuresJSON, &sample.Label, &sample.Method, &sample.Path, &sample.Host); err != nil {
+		if err := rows.Scan(&sample.RequestID, &created, &sample.Prob, &sample.Points, &wb, &wc, &featuresJSON, &sample.Label, &sample.Method, &sample.Path, &sample.Host); err != nil {
 			return nil, err
 		}
 		sample.WouldBlock = wb == 1
@@ -119,10 +119,10 @@ func (s *Store) ListLabeledMLSamples(limit int) ([]ml.Sample, error) {
 	return out, rows.Err()
 }
 
-// MLSampleIDByRay finds newest sample id for a ray.
-func (s *Store) MLSampleIDByRay(ray string) (int64, bool, error) {
+// MLSampleIDByRequestID finds newest sample id for a reqID.
+func (s *Store) MLSampleIDByRequestID(reqID string) (int64, bool, error) {
 	var id int64
-	err := s.db.QueryRow(`SELECT id FROM ml_samples WHERE ray_id = ? ORDER BY created_at DESC LIMIT 1`, ray).Scan(&id)
+	err := s.db.QueryRow(`SELECT id FROM ml_samples WHERE request_id = ? ORDER BY created_at DESC LIMIT 1`, reqID).Scan(&id)
 	if errors.Is(err, sql.ErrNoRows) {
 		return 0, false, nil
 	}

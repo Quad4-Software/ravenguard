@@ -38,7 +38,7 @@ const (
 	OpQFeedsPut        = "qfeeds.put"
 	OpQFeedsRefresh    = "qfeeds.refresh"
 	OpLogsSnapshot     = "logs.snapshot"
-	OpRequestByRay     = "request.by_ray"
+	OpRequestByID      = "request.by_id"
 	OpRequestsRecent   = "requests.recent"
 	OpCertsStatus      = "certs.status"
 	OpCertsDetail      = "certs.detail"
@@ -126,8 +126,8 @@ type LogsPayload struct {
 	Level string `json:"level"`
 }
 
-type RequestByRayPayload struct {
-	Ray string `json:"ray"`
+type RequestByIDPayload struct {
+	RequestID string `json:"request_id"`
 }
 
 type RequestsRecentPayload struct {

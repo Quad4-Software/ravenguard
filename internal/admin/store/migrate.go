@@ -139,7 +139,7 @@ var migrations = []string{
 	)`,
 	`ALTER TABLE routes ADD COLUMN proxy_id TEXT NOT NULL DEFAULT ''`,
 	`CREATE TABLE IF NOT EXISTS waf_events (
-		ray_id TEXT PRIMARY KEY,
+		request_id TEXT PRIMARY KEY,
 		created_at TEXT NOT NULL,
 		action TEXT NOT NULL,
 		reason TEXT NOT NULL DEFAULT '',
@@ -164,7 +164,7 @@ var migrations = []string{
 	`ALTER TABLE routes ADD COLUMN openapi_schema_id TEXT REFERENCES api_schemas(id) ON DELETE SET NULL`,
 	`CREATE TABLE IF NOT EXISTS ml_samples (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		ray_id TEXT NOT NULL DEFAULT '',
+		request_id TEXT NOT NULL DEFAULT '',
 		created_at TEXT NOT NULL,
 		prob REAL NOT NULL DEFAULT 0,
 		points INTEGER NOT NULL DEFAULT 0,
@@ -254,5 +254,42 @@ func migrate(db *sql.DB) error {
 			return err
 		}
 	}
+	return renameLegacyRayColumns(db)
+}
+
+// renameLegacyRayColumns upgrades databases created before the Ray ID era to
+// Request ID. The CREATE TABLE migrations above already emit
+// request_id, so this only fires on pre-existing deployments.
+func renameLegacyRayColumns(db *sql.DB) error {
+	for _, table := range []string{"waf_events", "ml_samples"} {
+		has, err := hasColumn(db, table, "ray_id")
+		if err != nil {
+			return err
+		}
+		if !has {
+			continue
+		}
+		if _, err := db.Exec(`ALTER TABLE ` + table + ` RENAME COLUMN ray_id TO request_id`); err != nil {
+			return fmt.Errorf("rename %s.ray_id: %w", table, err)
+		}
+	}
 	return nil
+}
+
+func hasColumn(db *sql.DB, table, column string) (bool, error) {
+	rows, err := db.Query(`SELECT name FROM pragma_table_info(?)`, table)
+	if err != nil {
+		return false, err
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return false, err
+		}
+		if name == column {
+			return true, nil
+		}
+	}
+	return false, rows.Err()
 }

@@ -62,7 +62,7 @@
   }
 
   async function submitPayload(payload, captcha) {
-    var body = { payload: payload, ray: cfg.ray || "" };
+    var body = { payload: payload, request_id: cfg.request_id || "" };
     if (cfg.captcha) body.captcha = captcha || "";
     var res = await fetch((cfg.prefix || "/_rg") + "/challenge", {
       method: "POST",

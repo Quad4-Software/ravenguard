@@ -71,7 +71,7 @@ body {
   color: var(--accent);
 }
 
-.ray {
+.rid {
   margin: 0;
   font-family: var(--font-mono);
   font-size: 0.8rem;

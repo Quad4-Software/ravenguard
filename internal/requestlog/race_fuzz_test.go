@@ -16,10 +16,10 @@ func TestLoggerRaceRecordRecent(t *testing.T) {
 		go func(n int) {
 			defer wg.Done()
 			for j := range 200 {
-				ray := string(rune('a'+(n%26))) + string(rune('0'+j%10))
-				l.Record(Event{Ray: ray, Action: ActionBlock, Reason: "x", BindID: "b1"})
+				reqID := string(rune('a'+(n%26))) + string(rune('0'+j%10))
+				l.Record(Event{RequestID: reqID, Action: ActionBlock, Reason: "x", BindID: "b1"})
 				_ = l.Recent(20)
-				_, _ = l.GetByRay(ray)
+				_, _ = l.GetByID(reqID)
 			}
 		}(i)
 	}
@@ -30,14 +30,14 @@ func FuzzLoggerRecord(f *testing.F) {
 	f.Add("ray1", "bind-a", "reason")
 	f.Add("", "bind-a", "reason")
 	f.Add("ray2", "", "block")
-	f.Fuzz(func(t *testing.T, ray, bind, reason string) {
+	f.Fuzz(func(t *testing.T, reqID, bind, reason string) {
 		l := New(8)
-		l.Record(Event{Ray: ray, Action: ActionBlock, Reason: reason, BindID: bind})
-		l.Record(Event{Ray: ray, Action: ActionChallenge, Reason: reason + "2", BindID: bind})
+		l.Record(Event{RequestID: reqID, Action: ActionBlock, Reason: reason, BindID: bind})
+		l.Record(Event{RequestID: reqID, Action: ActionChallenge, Reason: reason + "2", BindID: bind})
 		if bind != "" {
-			l.Record(Event{Ray: ray, Action: ActionBlock, Reason: "spoof", BindID: bind + "-other"})
+			l.Record(Event{RequestID: reqID, Action: ActionBlock, Reason: "spoof", BindID: bind + "-other"})
 		}
-		_, _ = l.GetByRay(ray)
+		_, _ = l.GetByID(reqID)
 		_ = l.Recent(5)
 	})
 }

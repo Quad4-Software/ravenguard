@@ -52,7 +52,7 @@ type Site struct {
 	FooterText        string
 	Contact           string
 	CustomCSS         template.CSS
-	RayLabel          string
+	RequestIDLabel    string
 
 	ElementName     string
 	BootstrapGlobal string
@@ -84,7 +84,7 @@ type viewBase struct {
 	WidgetInputName   string
 	ChallengeTitle    string
 	ChallengeSubtitle string
-	RayLabel          string
+	RequestIDLabel    string
 	FooterText        string
 	Contact           string
 	ContactHref       template.URL
@@ -109,7 +109,7 @@ type viewBase struct {
 type Data struct {
 	viewBase
 	StatusText       string
-	RayID            string
+	RequestID        string
 	ChallengeURL     string
 	Token            string
 	Difficulty       int
@@ -122,10 +122,10 @@ type Data struct {
 // PageData is a status page view model.
 type PageData struct {
 	viewBase
-	RayID  string
-	Code   int
-	Title  string
-	Detail string
+	RequestID string
+	Code      int
+	Title     string
+	Detail    string
 }
 
 // AccessData is the password or PIN gate form view model.
@@ -147,8 +147,8 @@ type TestLink struct {
 
 type TestIndexData struct {
 	viewBase
-	RayID string
-	Links []TestLink
+	RequestID string
+	Links     []TestLink
 }
 
 // Pages serves challenge and status HTML with live site branding.
@@ -197,7 +197,7 @@ func SiteFromConfig(cfg config.Config) Site {
 		FooterText:        cfg.UI.FooterText,
 		Contact:           cfg.UI.Contact,
 		CustomCSS:         template.CSS(cfg.UI.CustomCSS), // #nosec G203 -- operator CSS from config
-		RayLabel:          cfg.UI.RayLabel,
+		RequestIDLabel:    cfg.UI.RequestIDLabel,
 		ElementName:       cfg.Stealth.ElementName,
 		BootstrapGlobal:   cfg.Stealth.BootstrapGlobal,
 		WidgetInputName:   cfg.Stealth.WidgetInputName,
@@ -270,11 +270,11 @@ func normalizeSite(site Site) Site {
 	if site.ChallengeSubtitle == "" {
 		site.ChallengeSubtitle = "Click the checkbox to verify. Your browser will redirect shortly."
 	}
-	if site.RayLabel == "" {
+	if site.RequestIDLabel == "" {
 		if site.GenericCopy {
-			site.RayLabel = "Ref"
+			site.RequestIDLabel = "Ref"
 		} else {
-			site.RayLabel = "Ray ID"
+			site.RequestIDLabel = "Request ID"
 		}
 	}
 	if site.FooterText == "" {
@@ -376,7 +376,7 @@ func (p *Pages) base(site Site, pageTitle, pathSuffix string) viewBase {
 		WidgetInputName:   site.WidgetInputName,
 		ChallengeTitle:    site.ChallengeTitle,
 		ChallengeSubtitle: site.ChallengeSubtitle,
-		RayLabel:          site.RayLabel,
+		RequestIDLabel:    site.RequestIDLabel,
 		FooterText:        site.FooterText,
 		Contact:           site.Contact,
 		ContactHref:       template.URL(contactHref(site.Contact)), // #nosec G203 -- schemes limited by contactHref
@@ -529,21 +529,21 @@ func (p *Pages) ServeChallenge(w http.ResponseWriter, data Data) {
 	p.render(w, p.challenge, data, http.StatusForbidden, nil)
 }
 
-func (p *Pages) RenderBlock(w http.ResponseWriter, ray, reason string) {
+func (p *Pages) RenderBlock(w http.ResponseWriter, reqID, reason string) {
 	site := p.Site()
 	title := site.BlockTitle
 	if title == "" {
 		title = "Access denied"
 	}
 	p.RenderPage(w, PageData{
-		RayID:  ray,
-		Code:   http.StatusForbidden,
-		Title:  title,
-		Detail: reason,
+		RequestID: reqID,
+		Code:      http.StatusForbidden,
+		Title:     title,
+		Detail:    reason,
 	})
 }
 
-func (p *Pages) RenderRateLimit(w http.ResponseWriter, ray string) {
+func (p *Pages) RenderRateLimit(w http.ResponseWriter, reqID string) {
 	site := p.Site()
 	title := site.RateLimitTitle
 	if title == "" {
@@ -552,14 +552,14 @@ func (p *Pages) RenderRateLimit(w http.ResponseWriter, ray string) {
 	detail := "You have sent too many requests in a short period. Wait a moment and try again."
 	w.Header().Set("Retry-After", "60")
 	p.RenderPage(w, PageData{
-		RayID:  ray,
-		Code:   http.StatusTooManyRequests,
-		Title:  title,
-		Detail: detail,
+		RequestID: reqID,
+		Code:      http.StatusTooManyRequests,
+		Title:     title,
+		Detail:    detail,
 	})
 }
 
-func (p *Pages) RenderUpstream(w http.ResponseWriter, ray string) {
+func (p *Pages) RenderUpstream(w http.ResponseWriter, reqID string) {
 	site := p.Site()
 	title := site.UpstreamTitle
 	if title == "" {
@@ -570,14 +570,14 @@ func (p *Pages) RenderUpstream(w http.ResponseWriter, ray string) {
 		detail = "RavenGuard could not reach the upstream service. The origin may be offline or misconfigured."
 	}
 	p.RenderPage(w, PageData{
-		RayID:  ray,
-		Code:   http.StatusBadGateway,
-		Title:  title,
-		Detail: detail,
+		RequestID: reqID,
+		Code:      http.StatusBadGateway,
+		Title:     title,
+		Detail:    detail,
 	})
 }
 
-func (p *Pages) RenderError(w http.ResponseWriter, ray, title, detail string, code int) {
+func (p *Pages) RenderError(w http.ResponseWriter, reqID, title, detail string, code int) {
 	site := p.Site()
 	if code < 400 {
 		code = http.StatusInternalServerError
@@ -589,10 +589,10 @@ func (p *Pages) RenderError(w http.ResponseWriter, ray, title, detail string, co
 		title = "Something went wrong"
 	}
 	p.RenderPage(w, PageData{
-		RayID:  ray,
-		Code:   code,
-		Title:  title,
-		Detail: detail,
+		RequestID: reqID,
+		Code:      code,
+		Title:     title,
+		Detail:    detail,
 	})
 }
 
@@ -633,11 +633,11 @@ func (p *Pages) ServeAccessForm(w http.ResponseWriter, kind, action string) {
 	p.render(w, p.access, data, http.StatusUnauthorized, nil)
 }
 
-func (p *Pages) RenderTestIndex(w http.ResponseWriter, ray string) {
+func (p *Pages) RenderTestIndex(w http.ResponseWriter, reqID string) {
 	site := p.Site()
 	data := TestIndexData{
-		viewBase: p.base(site, "UI preview", site.Prefix+"/test"),
-		RayID:    ray,
+		viewBase:  p.base(site, "UI preview", site.Prefix+"/test"),
+		RequestID: reqID,
 		Links: []TestLink{
 			{Href: site.Prefix + "/test/challenge", Label: "Challenge", Hint: "JS + PoW interstitial"},
 			{Href: site.Prefix + "/test/block", Label: "Blocked", Hint: "403 access denied"},

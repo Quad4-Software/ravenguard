@@ -16,7 +16,7 @@
       <input id="captcha" name="captcha" type="text" autocomplete="off" placeholder="type ok">
     </label>
     {{end}}
-    <p class="ray">{{.RayLabel}}: <span id="ray">{{.RayID}}</span></p>
+    <p class="rid">{{.RequestIDLabel}}: <span id="request-id">{{.RequestID}}</span></p>
     {{if .PrivacyNoticeURL}}
     <p class="sub"><a href="{{.PrivacyNoticeURL}}">Privacy notice</a></p>
     {{end}}
@@ -28,7 +28,7 @@
   <script>
     window[{{.BootstrapGlobal}}] = {
       prefix: {{.Prefix}},
-      ray: {{.RayID}},
+      request_id: {{.RequestID}},
       gate: {{.Gate}},
       captcha: {{if .CaptchaEnabled}}true{{else}}false{{end}},
       next: {{.Next}}

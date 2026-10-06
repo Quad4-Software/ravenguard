@@ -541,7 +541,7 @@ func (s *Server) handleRequests(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"events": events})
 }
 
-func (s *Server) handleRequestRay(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleRequestByID(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		writeErr(w, http.StatusMethodNotAllowed, "method")
 		return
@@ -551,15 +551,15 @@ func (s *Server) handleRequestRay(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusForbidden, "forbidden")
 		return
 	}
-	ray := pathID(r, "requests")
-	if ray == "" {
-		writeErr(w, http.StatusBadRequest, "ray required")
+	reqID := pathID(r, "requests")
+	if reqID == "" {
+		writeErr(w, http.StatusBadRequest, "request_id required")
 		return
 	}
 	proxyID := strings.TrimSpace(r.URL.Query().Get("proxy_id"))
 	if proxyID != "" && proxyID != "local" {
 		target := s.targetFor(proxyID)
-		env, err := target.Call(r.Context(), agentprotocol.OpRequestByRay, agentprotocol.RequestByRayPayload{Ray: ray})
+		env, err := target.Call(r.Context(), agentprotocol.OpRequestByID, agentprotocol.RequestByIDPayload{RequestID: reqID})
 		if err != nil {
 			if strings.Contains(err.Error(), "not found") {
 				writeErr(w, http.StatusNotFound, "not found")
@@ -573,7 +573,7 @@ func (s *Server) handleRequestRay(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{"event": event})
 		return
 	}
-	ev, ok := s.requestByRay(ray)
+	ev, ok := s.requestByID(reqID)
 	if !ok {
 		writeErr(w, http.StatusNotFound, "not found")
 		return
@@ -581,12 +581,12 @@ func (s *Server) handleRequestRay(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"event": ev})
 }
 
-func (s *Server) requestByRay(ray string) (any, bool) {
-	if s.RequestByRay != nil {
-		return s.RequestByRay(ray)
+func (s *Server) requestByID(reqID string) (any, bool) {
+	if s.RequestByID != nil {
+		return s.RequestByID(reqID)
 	}
-	if s.Runtime != nil && s.Runtime.RequestByRay != nil {
-		return s.Runtime.RequestByRay(ray)
+	if s.Runtime != nil && s.Runtime.RequestByID != nil {
+		return s.Runtime.RequestByID(reqID)
 	}
 	return nil, false
 }

@@ -189,6 +189,10 @@ behavior_strike_score = 25
 # that shuffle User-Agent strings per request) per client key.
 behavior_ua_variety_limit = 4
 behavior_ua_variety_score = 30
+# forge_flavor picks the forge URL layout: auto (gitea/forgejo plus
+# shallow cgit), gitea, or cgit (scans all segments, for deep-nested
+# cgit repos like /pub/scm/group/repo.git/cmd).
+forge_flavor = "auto"
 forge_expensive_score = 40
 behavior_forge_burst_limit = 24
 behavior_forge_burst_score = 35
@@ -302,11 +306,11 @@ test_mode = false
 # footer_text = ""
 # contact = ""  # email, phone, URL, or free text on block/denied pages
 # custom_css = ""
-# ray_label = ""
+# request_id_label = ""
 
-# Public fingerprint controls. Empty ray_header omits the response header.
+# Public fingerprint controls. Empty request_id_header omits the response header.
 # [stealth]
-# ray_header = "X-RavenGuard-Ray"
+# request_id_header = "X-RavenGuard-Request-ID"
 # element_name = "rg-check"
 # bootstrap_global = "__g__"
 # access_cookie_name = "rg_access"

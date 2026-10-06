@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LicenseRef-QSL-1.0-0BSD
 // Copyright (c) 2026 Quad4
 
-package rayid
+package requestid
 
 import (
 	"encoding/binary"
@@ -24,7 +24,7 @@ const hexdigits = "0123456789abcdef"
 
 func New() string {
 	var rb [8]byte
-	binary.LittleEndian.PutUint64(rb[:], rand.Uint64()) // #nosec G404 ray id is not a cryptographic secret
+	binary.LittleEndian.PutUint64(rb[:], rand.Uint64()) // #nosec G404 request id is not a cryptographic secret
 	n := counter.Add(1)
 	ts := uint64(time.Now().UnixNano()) // #nosec G115
 

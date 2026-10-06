@@ -104,6 +104,10 @@ behavior_path_fanout = 40
 behavior_path_fanout_score = 30
 behavior_strike_limit = 3
 behavior_strike_score = 25
+# forge_flavor picks the forge URL layout: auto (gitea/forgejo plus
+# shallow cgit), gitea, or cgit (scans all segments, for deep-nested
+# cgit repos like /pub/scm/group/repo.git/cmd).
+forge_flavor = "auto"
 forge_expensive_score = 40
 behavior_forge_burst_limit = 24
 behavior_forge_burst_score = 35

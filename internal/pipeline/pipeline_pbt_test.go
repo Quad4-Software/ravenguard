@@ -575,7 +575,7 @@ func TestDifferentialAccessPolicyChallengeDecision(t *testing.T) {
 			req.Header.Set("X-Token", "secret")
 		}
 		if c.hasClearance {
-			cookie := pbtChallengeManager(cfg).ClearanceCookie("192.0.2.1", "ray", false)
+			cookie := pbtChallengeManager(cfg).ClearanceCookie("192.0.2.1", "reqID", false)
 			req.AddCookie(cookie)
 		}
 

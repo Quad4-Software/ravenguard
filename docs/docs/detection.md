@@ -42,27 +42,30 @@ block_score = 90
 | */* Accept as browser | star_accept_browser_score | Overly generic Accept |
 | Empty form context | empty_form_context_score | Browser-like POST/PUT/PATCH missing Origin and Referer |
 | Forum write path | forum_write_path_score | Suspicious POSTs to comment/register/reply style paths |
-| Forge expensive (hot) | forge_expensive_score | Gitea/Forgejo compare, blame, archive (and API git trees/blobs) |
+| Forge expensive (hot) | forge_expensive_score | Gitea/Forgejo compare, blame, archive (and API git trees/blobs); cgit snapshot, diff, patch, blame |
 
 Raise challenge_score to challenge less often. Lower it to challenge earlier.
 
 ## Forge expensive routes
 
-Gitea, Forgejo, Codeberg, and Gogs-style paths are tiered so normal browsing is not challenged by default.
+Gitea, Forgejo, Codeberg, Gogs-style, and cgit paths are tiered so normal browsing is not challenged by default.
 
 ```toml
 [detect]
+forge_flavor = "auto"
 forge_expensive_score = 40
 behavior_forge_burst_limit = 24
 behavior_forge_burst_score = 35
 forge_rate_cost = 4
 ```
 
-| Tier | Paths | Default effect |
-|------|-------|----------------|
-| Hot | `/{owner}/{repo}/compare`, blame, archive, API git/trees, git/blobs | Per-request score (default 40) plus elevated rate-limit cost |
-| Browse | src, raw, media, commit, commits | Counts toward forge burst only |
-| Never | repo home, issues, pulls, explore, smart-HTTP | No forge signal |
+forge_flavor selects the URL layout: `auto` (default) covers Gitea/Forgejo `/{owner}/{repo}/{action}` plus cgit `/{repo}/{cmd}` and `/{group}/{repo}/{cmd}`; `gitea` restricts to Gitea/Forgejo; `cgit` scans every segment for a cgit command, which deep-nested cgit trees need (for example /pub/scm/linux/kernel/git/torvalds/linux.git/commit).
+
+| Tier | Gitea/Forgejo | cgit | Default effect |
+|------|---------------|------|----------------|
+| Hot | `/{owner}/{repo}/compare`, blame, archive, API git/trees, git/blobs | snapshot, diff, patch, blame | Per-request score (default 40) plus elevated rate-limit cost |
+| Browse | src, raw, media, commit, commits | tree, plain, blob, commit, log, refs, tag, about, atom, summary, graph, clone, stats, branch | Counts toward forge burst only |
+| Never | repo home, issues, pulls, explore, smart-HTTP | repo list, smart-HTTP | No forge signal |
 
 - One hot hit reaches challenge_score under defaults (intended against rotating scrapers on compare/blame/archive)
 - Browse paths such as /src do not score alone. Burst fires after behavior_forge_burst_limit hot or browse hits in the window
